@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json.schemastore.org/mcp.json",
+  "mcpServers": {
+    "_comment": "Add MCP servers here. Common ones for this project will be added as we scale: Postgres MCP for read-only DB inspection, Sentry MCP for error context, GitHub MCP for PR work. Start empty — only add what you'll actually use within a week."
+  }
+}

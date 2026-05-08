@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(npm run *)",
+      "Bash(npx prisma *)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(rg *)",
+      "Bash(fd *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(node *)",
+      "Bash(tsc *)",
+      "Bash(vitest *)",
+      "Bash(playwright *)",
+      "Edit(apps/**)",
+      "Edit(packages/**)",
+      "Edit(prompts/**)",
+      "Edit(docs/**)",
+      "Edit(.claude/**)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)",
+      "Edit(.env*)",
+      "Edit(packages/db/prisma/migrations/**)"
+    ]
+  },
+  "model": "claude-sonnet-4-7",
+  "thinkingMode": true,
+  "outputStyle": "explanatory",
+  "checkpointing": {
+    "enabled": true
+  },
+  "memory": {
+    "rulesDir": ".claude/rules"
+  }
+}
