@@ -9,7 +9,8 @@
       "Bash(echo \"exit: $?\")",
       "Bash(curl *)",
       "Bash(git check-ignore *)",
-      "Bash(xargs -I {} du -h {})"
+      "Bash(xargs -I {} du -h {})",
+      "Bash(grep -E \"\\\\.env\\(\\\\s|$\\)\")"
     ]
   },
   "model": "opus"
