@@ -1,0 +1,256 @@
+// eLanguage Center — canonical Prisma schema.
+//
+// Source of truth for the data model. If this file disagrees with anything in
+// docs/Brief.md or docs/ARCHITECTURE.md, this file wins — flag the drift.
+//
+// Conventions:
+//   - cuid IDs everywhere.
+//   - Tenant-scoped tables carry `org_id` + a relation back to Organization
+//     with onDelete: Cascade. They are also listed in TENANT_SCOPED_MODELS in
+//     src/tenancy.ts. The fuzzer in src/tenancy.test.ts asserts these match.
+//   - Global tables (Organization, Test, Question) are NOT tenant-scoped.
+//   - Field naming: snake_case for business fields (org_id, started_at);
+//     camelCase for Prisma-managed timestamps (createdAt, updatedAt) to match
+//     the canonical pattern in .claude/skills/multi-tenant-prisma/SKILL.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────
+
+enum Role {
+  SuperAdmin
+  OrgAdmin
+  Learner
+  // Reviewer is a Phase 2 role and is intentionally omitted in MVP.
+  // Adding it later is a single-line enum migration.
+}
+
+enum Track {
+  Academic
+  GeneralTraining
+}
+
+enum Section {
+  Reading
+  Listening
+  Writing
+  Speaking
+}
+
+enum AttemptStatus {
+  InProgress
+  Submitted
+  Graded
+  Abandoned
+}
+
+enum TestStatus {
+  Draft
+  PendingReview
+  Approved
+  Rejected
+}
+
+enum GraderKind {
+  AI
+  Human
+}
+
+enum OrgStatus {
+  Active
+  Suspended
+  Archived
+}
+
+// ─── Models — global (NOT tenant-scoped) ──────────────────────────────────
+
+model Organization {
+  id            String    @id @default(cuid())
+  name          String
+  seat_limit    Int       @default(0)
+  quota_daily   Int       @default(0)
+  quota_monthly Int       @default(0)
+  status        OrgStatus @default(Active)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  users         User[]
+  attempts      Attempt[]
+  answers       Answer[]
+  grades        Grade[]
+  recordings    Recording[]
+  quotaUsages   QuotaUsage[]
+  activityLogs  ActivityLog[]
+}
+
+model Test {
+  id          String     @id @default(cuid())
+  track       Track
+  section     Section
+  difficulty  Int        @default(5)
+  status      TestStatus @default(Draft)
+  approved_by String?
+  approver    User?      @relation("TestApprover", fields: [approved_by], references: [id], onDelete: SetNull)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  questions   Question[]
+  attempts    Attempt[]
+
+  @@index([track, section, status])
+  @@index([approved_by])
+}
+
+model Question {
+  id             String   @id @default(cuid())
+  test_id        String
+  test           Test     @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  type           String
+  prompt         String
+  correct_answer Json?
+  points         Int      @default(1)
+  position       Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  answers        Answer[]
+
+  @@index([test_id])
+}
+
+// ─── Models — tenant-scoped ───────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  org_id       String
+  org          Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  email        String   @unique
+  name         String?
+  role         Role     @default(Learner)
+  ielts_track  Track    @default(Academic)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  attempts       Attempt[]
+  quotaUsages    QuotaUsage[]
+  activityLogs   ActivityLog[]
+  approved_tests Test[]    @relation("TestApprover")
+
+  @@index([org_id])
+  @@index([org_id, createdAt])
+  @@index([org_id, role])
+}
+
+model Attempt {
+  id           String        @id @default(cuid())
+  org_id       String
+  org          Organization  @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  user_id      String
+  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  test_id      String
+  test         Test          @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  section      Section
+  status       AttemptStatus @default(InProgress)
+  started_at   DateTime      @default(now())
+  submitted_at DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  answers      Answer[]
+  grade        Grade?
+  recording    Recording?
+
+  @@index([org_id])
+  @@index([org_id, user_id])
+  @@index([org_id, createdAt])
+  @@index([org_id, submitted_at])
+}
+
+model Answer {
+  id          String   @id @default(cuid())
+  org_id      String
+  org         Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  attempt_id  String
+  attempt     Attempt  @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  question_id String
+  question    Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  response    Json
+  is_correct  Boolean?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([org_id])
+  @@index([attempt_id])
+  @@index([question_id])
+}
+
+model Grade {
+  id                   String     @id @default(cuid())
+  org_id               String
+  org                  Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  attempt_id           String     @unique
+  attempt              Attempt    @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  band_overall         Decimal    @db.Decimal(3, 1)
+  criteria_scores_json Json
+  feedback_text        String?
+  graded_by            GraderKind @default(AI)
+  graded_at            DateTime   @default(now())
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  @@index([org_id])
+  @@index([org_id, createdAt])
+}
+
+model Recording {
+  id           String   @id @default(cuid())
+  org_id       String
+  org          Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  attempt_id   String   @unique
+  attempt      Attempt  @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  storage_url  String
+  duration_sec Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([org_id])
+  @@index([org_id, createdAt])
+}
+
+model QuotaUsage {
+  id             String   @id @default(cuid())
+  org_id         String
+  org            Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  user_id        String
+  user           User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  date           DateTime @db.Date
+  ai_calls_count Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([user_id, date])
+  @@index([org_id])
+  @@index([org_id, date])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  org_id    String
+  org       Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  user_id   String?
+  user      User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  action    String
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  @@index([org_id])
+  @@index([org_id, timestamp])
+  @@index([org_id, user_id])
+}

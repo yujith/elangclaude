@@ -1,0 +1,56 @@
+@import "tailwindcss";
+@import "@elc/ui/tokens.css";
+
+/*
+ * Tailwind 4 scans the entry CSS file's project automatically. Add explicit
+ * sources for any code that lives outside apps/web — otherwise classes used
+ * inside @elc/ui components get tree-shaken from the production CSS.
+ */
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+
+/*
+ * Rubik — self-hosted. Drop the three woff2 files into apps/web/public/fonts/
+ * to activate. Until they land, `font-display: swap` falls back to system-ui
+ * (per --brand-font-* in @elc/ui/tokens.css).
+ *
+ * Source: Google Fonts → Rubik → 500 (Medium), 700 (Bold), 700 italic
+ * (Extra Bold Italic — Rubik does not ship a true 800; 700 italic is the
+ * canonical display weight per docs/BRAND.md).
+ */
+@font-face {
+  font-family: "Rubik";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/rubik-medium.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Rubik";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/rubik-bold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Rubik";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/rubik-extrabold-italic.woff2") format("woff2");
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--brand-font-body);
+  font-weight: 500;
+  background: var(--brand-white);
+  color: var(--brand-black);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+}

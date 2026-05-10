@@ -107,6 +107,8 @@ git commit -m "chore: project scaffold with Next.js shell and Prisma tenancy"
 
 Then in Claude Code: `/ship-feature` to verify everything passes the gate.
 
+> **Status note (2026-05-09):** Steps 5 and 6 are both done — `apps/web` runs on Next 16 + Tailwind 4 (see `docs/adr/0001-next16-tailwind4.md`), and `packages/db` is wired with the canonical schema, the `withOrg()` proxy, the tenancy fuzzer, and a 2-org seed (see `docs/adr/0002-neon-test-branch-for-fuzzer.md` and `packages/db/README.md`). The next session targets the auth + AI gateway scaffold.
+
 ## 8. Now you're ready to build features
 
 From here, every feature follows the loop:

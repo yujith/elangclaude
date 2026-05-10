@@ -1,0 +1,22 @@
+{
+  "name": "elanguage-center",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm -r build",
+    "start": "pnpm --filter web start",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm -r test:e2e",
+    "db:generate": "pnpm -r db:generate",
+    "db:migrate:dev": "pnpm -r db:migrate:dev",
+    "db:seed": "pnpm -r db:seed"
+  }
+}

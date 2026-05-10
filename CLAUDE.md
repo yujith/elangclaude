@@ -1,6 +1,6 @@
 # eLanguage Center — Claude Code Memory
 
-> Last updated: 2026-05-08. If this file contradicts newer code, code wins — flag the drift.
+> Last updated: 2026-05-09. If this file contradicts newer code, code wins — flag the drift.
 
 ## What we're building
 
@@ -10,18 +10,33 @@ A B2B SaaS for IELTS prep. Orgs (language schools, migration agencies, the Briti
 
 ## Run-the-tests-on-day-one commands
 
+Currently working:
+
 ```bash
 pnpm install
-pnpm db:generate          # Prisma client
-pnpm db:migrate:dev       # Apply migrations to local Postgres
-pnpm db:seed              # Seed orgs, users, sample tests
 pnpm dev                  # Next.js dev server on :3000
-pnpm test                 # Vitest unit + integration
-pnpm test:e2e             # Playwright
-pnpm lint && pnpm typecheck
+pnpm lint
+pnpm typecheck
+pnpm build                # Static prerender of the homepage
+pnpm db:generate          # Generates the Prisma client (no DB connection needed)
+pnpm db:migrate:dev       # Applies migrations to DATABASE_URL — needs packages/db/.env
+pnpm db:seed              # Idempotent: 1 SuperAdmin + 2 demo orgs
+pnpm test                 # Vitest — runs the tenancy fuzzer against DATABASE_URL_TEST
 ```
 
-If any of the above fails on a fresh clone, **fix this file first**, then the code.
+See `packages/db/README.md` for the Neon dev + test-branch setup that `db:migrate:dev` and `pnpm test` depend on, and `docs/adr/0002-neon-test-branch-for-fuzzer.md` for the rationale behind the test-branch deviation from the architecture rule.
+
+Wired but deferred:
+
+```bash
+pnpm test:e2e             # → Playwright. Lands in the auth/learner-flow scaffold.
+```
+
+If any of the *currently working* commands fails on a fresh clone, **fix this file first**, then the code.
+
+## Stack version note (2026-05-08 scaffold)
+
+`apps/web` runs on Next.js 16 + React 19 + Tailwind 4. Tailwind 4 uses CSS-first config (no `tailwind.config.ts`) — design tokens live in `packages/ui/src/tokens.css` via `@theme inline`. See `docs/adr/0001-next16-tailwind4.md` for the deviation from the Tailwind 3 shape shown in `.claude/skills/brand-system/SKILL.md`. The skill itself is on the follow-up list to update.
 
 ## Architecture in one paragraph
 

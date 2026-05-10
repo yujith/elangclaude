@@ -7,15 +7,14 @@ A B2B SaaS for IELTS preparation. Organizations license seats; learners practice
 ## Quickstart
 
 ```bash
-# Prereqs: Node 20+, pnpm 9+, Postgres 15+ (or Neon dev branch), Docker (for local R2-compatible storage).
+# Prereqs: Node 20+, pnpm 9+ (via `corepack enable && corepack prepare pnpm@9 --activate`).
+# Postgres / R2 / external services not yet required — they land with the DB scaffold session.
 
 pnpm install
-cp .env.example .env.local        # then fill in keys — see docs/ARCHITECTURE.md
-pnpm db:generate
-pnpm db:migrate:dev
-pnpm db:seed
-pnpm dev                          # http://localhost:3000
+pnpm dev                          # http://localhost:3000 — homepage shell
 ```
+
+> **Phase 0 status:** the scaffold currently ships only the static homepage shell. `pnpm db:*`, `pnpm test`, and `pnpm test:e2e` are stubbed with informative non-zero exits and land in the next scaffold sessions. See `CLAUDE.md` for the current working command list and `docs/adr/0001-next16-tailwind4.md` for the Next 16 / Tailwind 4 stack notes.
 
 ## Working with Claude Code
 

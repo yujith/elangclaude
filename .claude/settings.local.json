@@ -1,3 +1,16 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/yujithperera/Documents/eLanguageCenter_ClaudeV1/elanguage-center/node_modules/.pnpm/next@16.2.6*/node_modules/next -maxdepth 3 -type d)",
+      "Bash(curl --silent --show-error --retry 30 --retry-delay 1 --retry-connrefused --max-time 60 http://localhost:3000/ -o /tmp/elc-home.html -w \"HTTP %{http_code}\\\\n\")",
+      "Bash(curl --silent --max-time 30 http://localhost:3000/ -o /tmp/elc-home.html -w \"HTTP %{http_code}\\\\n\")",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(curl *)",
+      "Bash(git check-ignore *)",
+      "Bash(xargs -I {} du -h {})"
+    ]
+  },
   "model": "opus"
 }
