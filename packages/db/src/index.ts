@@ -5,8 +5,8 @@
 // helpers and a handful of types — no `export * from "./client"` glob — so the
 // rule's intent (avoid pulling in the world to read one symbol) holds.
 
-export { withOrg, withSuperAdminContext, RoleRequiredError, TENANT_SCOPED_MODELS } from "./tenancy.js";
-export type { OrgContext } from "./tenancy.js";
+export { withOrg, withSuperAdminContext, RoleRequiredError, TENANT_SCOPED_MODELS } from "./tenancy";
+export type { OrgContext } from "./tenancy";
 
 export {
   Prisma,

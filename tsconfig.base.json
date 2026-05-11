@@ -19,7 +19,9 @@
       "@elc/ui": ["packages/ui/src/index.ts"],
       "@elc/ui/*": ["packages/ui/src/*"],
       "@elc/db": ["packages/db/src/index.ts"],
-      "@elc/db/*": ["packages/db/src/*"]
+      "@elc/db/*": ["packages/db/src/*"],
+      "@elc/ai": ["packages/ai/src/index.ts"],
+      "@elc/ai/*": ["packages/ai/src/*"]
     }
   }
 }

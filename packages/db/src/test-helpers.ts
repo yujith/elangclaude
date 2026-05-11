@@ -1,7 +1,7 @@
 import { Prisma, type Section, type Track } from "@prisma/client";
-import { prisma } from "./client.js";
-import type { OrgContext } from "./tenancy.js";
-import { TENANT_SCOPED_MODELS } from "./tenancy.js";
+import { prisma } from "./client";
+import type { OrgContext } from "./tenancy";
+import { TENANT_SCOPED_MODELS } from "./tenancy";
 
 // ─── Truncate everything between tests ────────────────────────────────────
 //

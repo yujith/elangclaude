@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
-import { prisma } from "./client.js";
+import { prisma } from "./client";
 import {
   RoleRequiredError,
   withOrg,
   withSuperAdminContext,
-} from "./tenancy.js";
+} from "./tenancy";
 import {
   createTestOrg,
   ctxFor,
   findTenantSetDrift,
   resetDatabase,
   seedActivity,
-} from "./test-helpers.js";
+} from "./test-helpers";
 
 beforeEach(async () => {
   await resetDatabase();

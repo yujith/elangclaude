@@ -1,5 +1,5 @@
 import { Prisma, type Role } from "@prisma/client";
-import { prisma } from "./client.js";
+import { prisma } from "./client";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 

@@ -10,10 +10,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@elc/ai": "workspace:*",
+    "@elc/db": "workspace:*",
     "@elc/ui": "workspace:*",
     "next": "16.2.6",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "recharts": "^2.15.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
