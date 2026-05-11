@@ -115,6 +115,10 @@ model Question {
   type           String
   prompt         String
   correct_answer Json?
+  // Optional visual payload for Academic T1 (bar/line/pie/table/process).
+  // Shape validated in app code (apps/web/lib/writing/visual.ts) — kept as
+  // Json so we can iterate on chart types without a schema migration each time.
+  visual         Json?
   points         Int      @default(1)
   position       Int      @default(0)
   createdAt      DateTime @default(now())
@@ -186,6 +190,7 @@ model Answer {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@unique([attempt_id, question_id])
   @@index([org_id])
   @@index([attempt_id])
   @@index([question_id])
