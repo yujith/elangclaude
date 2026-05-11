@@ -4,8 +4,10 @@
  * These mirror the values in .claude/skills/brand-system/SKILL.md.
  * Do not edit either file without updating the other.
  *
- * The exact red hex was not numerically published in Brand_Guidelines.pdf;
- * #E63027 is a visual match. Confirm with the design source file before launch.
+ * Brand red is #EE2346 — confirmed against the source SVG logos
+ * (docs/Logo-0{1,2,3}.svg, stroke="#ee2346"). The earlier #E63027 was a
+ * visual approximation; it has been retired everywhere in favor of the
+ * design-file value.
  *
  * Stack note: Tailwind 4 reads design tokens from CSS via @theme directives.
  * The skill currently shows the older Tailwind 3 JS-preset shape — see
@@ -14,9 +16,9 @@
  */
 
 :root {
-  --brand-red:        #E63027;
-  --brand-red-dark:   #C2231A;
-  --brand-red-soft:   #FDEAE8;
+  --brand-red:        #EE2346;
+  --brand-red-dark:   #CC1239;
+  --brand-red-soft:   #FDE8EC;
 
   --brand-black:      #0A0A0A;
   --brand-grey-50:    #F5F5F5;

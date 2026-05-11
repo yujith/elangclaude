@@ -1,10 +1,31 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://elanguagecenter.com";
+const TITLE = "eLanguage Center — Skills That Open Doorways";
+const DESCRIPTION =
+  "IELTS preparation across Reading, Listening, Writing, and Speaking. AI-generated practice, AI-graded feedback. Free. Fun. Effective.";
+
 export const metadata: Metadata = {
-  title: "eLanguage Center — Skills That Open Doorways",
-  description:
-    "IELTS preparation across Reading, Listening, Writing, and Speaking. Free. Fun. Effective.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: TITLE,
+    template: "%s | eLanguage Center",
+  },
+  description: DESCRIPTION,
+  applicationName: "eLanguage Center",
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    siteName: "eLanguage Center",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({

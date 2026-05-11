@@ -53,7 +53,7 @@ Next.js 14 App Router (TypeScript) on Vercel. Postgres via Prisma. Auth via Cler
 </important>
 
 <important if="building UI">
-**Use the brand system.** Red `#E63027` + black `#0A0A0A` are the only primaries. Rubik is the only font (Extra Bold Italic display, Bold headlines, Medium body). Never introduce a new color or font without updating `.claude/skills/brand-system/SKILL.md` first. See `docs/BRAND.md`.
+**Use the brand system.** Red `#EE2346` + black `#0A0A0A` are the only primaries. Rubik is the only font (Extra Bold Italic display, Bold headlines, Medium body). Never introduce a new color or font without updating `.claude/skills/brand-system/SKILL.md` first. See `docs/BRAND.md`.
 </important>
 
 <important if="generating IELTS content or grading prompts">

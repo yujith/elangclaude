@@ -26,14 +26,17 @@ Wordmark "eLanguage Center" + checkered grid icon + red accent rectangle.
 
 | Role | Token | Hex | Use |
 |---|---|---|---|
-| Primary accent | `--brand-red` | `#E63027` | CTAs, focus, highlights |
-| Hover/active | `--brand-red-dark` | `#C2231A` | Hover state of red CTAs |
-| Soft tint | `--brand-red-soft` | `#FDEAE8` | Alert/notification backgrounds |
+| Primary accent | `--brand-red` | `#EE2346` | CTAs, focus, highlights |
+| Hover/active | `--brand-red-dark` | `#CC1239` | Hover state of red CTAs |
+| Soft tint | `--brand-red-soft` | `#FDE8EC` | Alert/notification backgrounds |
 | Primary surface | `--brand-black` | `#0A0A0A` | Hero, dark mode backgrounds |
 | Light surface | `--brand-white` | `#FFFFFF` | Body backgrounds |
 | Greys | `--brand-grey-{50–900}` | various | Borders, dividers, secondary text |
 
-> ⚠️ The exact red hex was not numerically specified in the source PDF. `#E63027` is a visual match. **Confirm with the original Figma/Illustrator file before launch** and update the token files in lockstep.
+Brand red is `#EE2346`, sourced from the SVG logos at `docs/Logo-0{1,2,3}.svg`
+(`stroke="#ee2346"`). An earlier `#E63027` placeholder has been retired. When
+changing the red, update `packages/ui/src/tokens.css`, `.claude/rules/brand.md`,
+and `.claude/skills/brand-system/SKILL.md` in lockstep with this table.
 
 ## Typography
 

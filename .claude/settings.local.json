@@ -10,7 +10,24 @@
       "Bash(curl *)",
       "Bash(git check-ignore *)",
       "Bash(xargs -I {} du -h {})",
-      "Bash(grep -E \"\\\\.env\\(\\\\s|$\\)\")"
+      "Bash(grep -E \"\\\\.env\\(\\\\s|$\\)\")",
+      "Bash(file *.woff2)",
+      "Bash(grep *)",
+      "Bash(magick -version)",
+      "Bash(convert -version)",
+      "Bash(tee /tmp/dev.log)",
+      "Bash(PORT=3010 nohup pnpm start)",
+      "Bash(disown)",
+      "Bash(git -C . diff --stat)",
+      "Bash(/usr/bin/grep -n \"EE2346\\\\|E63027\" .claude/rules/brand.md)",
+      "Bash(git -C . diff -- .claude/rules/brand.md)",
+      "Bash(/usr/bin/grep -n \"EE2346\\\\|E63027\\\\|EE 23\" .claude/rules/brand.md)",
+      "Bash(/usr/bin/grep -rn \"E63027\" --include=\"*.md\" --include=\"*.tsx\" --include=\"*.ts\" --include=\"*.css\" .)",
+      "Bash(/usr/bin/grep -rnE \"font-family\" --include=\"*.tsx\" --include=\"*.ts\" --include=\"*.css\" apps packages)",
+      "Bash(/usr/bin/grep -rnE \"#[0-9A-Fa-f]{3,8}\\\\b\" --include=\"*.tsx\" --include=\"*.ts\" --include=\"*.css\" apps packages)",
+      "Bash(/usr/bin/grep -rn \"ai/gateway\\\\|@elc/ai\" apps/web/components apps/web/app)",
+      "Bash(/usr/bin/grep -lE \"focus-visible:ring-brand-red\" apps/web/components/*.tsx apps/web/app/sign-*/page.tsx)",
+      "Bash(yes)"
     ]
   },
   "model": "opus"

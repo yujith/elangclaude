@@ -10,9 +10,9 @@ description: Use this skill whenever designing or styling any UI surface — pag
 ```css
 /* packages/ui/src/tokens.css */
 :root {
-  --brand-red:        #E63027;
-  --brand-red-dark:   #C2231A;   /* hover/active */
-  --brand-red-soft:   #FDEAE8;   /* tinted backgrounds, alerts */
+  --brand-red:        #EE2346;
+  --brand-red-dark:   #CC1239;   /* hover/active */
+  --brand-red-soft:   #FDE8EC;   /* tinted backgrounds, alerts */
 
   --brand-black:      #0A0A0A;
   --brand-grey-50:    #F5F5F5;
@@ -35,7 +35,7 @@ description: Use this skill whenever designing or styling any UI surface — pag
 }
 ```
 
-⚠️ The exact red hex was not numerically published in `Brand_Guidelines.pdf`. `#E63027` is a visual match. Confirm with the design source file before launch.
+Brand red is `#EE2346`, sourced from the design SVG logos in `docs/Logo-0{1,2,3}.svg`. An earlier `#E63027` placeholder has been retired — when changing the red, update `packages/ui/src/tokens.css`, `docs/BRAND.md`, `.claude/rules/brand.md`, and this file in lockstep.
 
 ## Tailwind config
 

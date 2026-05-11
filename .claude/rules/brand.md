@@ -5,7 +5,7 @@
 ## Core tokens (locked)
 
 ```css
---brand-red:       #E63027;   /* Primary accent — CTAs, highlights, focus rings */
+--brand-red:       #EE2346;   /* Primary accent — CTAs, highlights, focus rings */
 --brand-black:     #0A0A0A;   /* Primary surface — hero, cards, dark mode bg */
 --brand-white:     #FFFFFF;   /* Light surface */
 --brand-grey-50:   #F5F5F5;
@@ -18,7 +18,10 @@
 --font-body:     "Rubik", sans-serif;  /* Medium, 500 */
 ```
 
-> ⚠️ The exact red hex was not numerically specified in `Brand_Guidelines.pdf` — `#E63027` is a close match to the visual. **Verify with the design source file (Figma/AI/PSD) before launch** and update both this file and `packages/ui/src/tokens.css`.
+Brand red is `#EE2346`, taken from the source SVG logos in `docs/Logo-0{1,2,3}.svg`
+(`stroke="#ee2346"`). An earlier `#E63027` placeholder has been retired — keep this
+file, `packages/ui/src/tokens.css`, `docs/BRAND.md`, and `.claude/skills/brand-system/SKILL.md`
+in lockstep when changing it.
 
 ## Voice
 

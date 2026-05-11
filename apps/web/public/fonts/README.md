@@ -1,19 +1,32 @@
 # Rubik woff2 fonts
 
-Drop the three Rubik weights here for self-hosted brand typography. The `@font-face` declarations in `apps/web/app/globals.css` reference these exact filenames:
+Self-hosted from Google Fonts (SIL OFL). Two files cover the brand:
 
 ```
-rubik-medium.woff2            # weight 500, normal
-rubik-bold.woff2              # weight 700, normal
-rubik-extrabold-italic.woff2  # weight 700, italic — the display weight
+rubik-variable.woff2      # variable upright — covers Medium 500 and Bold 700
+rubik-italic-bold.woff2   # static italic 700 — the display weight (Extra Bold Italic)
 ```
 
-## Where to source them
+Google Fonts serves the same variable woff2 for both 500 and 700 upright, so we
+declare a single `@font-face` with `font-weight: 100 900` in `apps/web/app/globals.css`
+and the browser instances the right weight at render time.
 
-Use [google-webfonts-helper](https://gwfh.mranftl.com/fonts/rubik) → pick weights `500`, `700`, `700italic` → Modern Browsers → download → unzip → rename the three woff2 files to match the names above.
+## Refreshing
 
-Until these files land, the homepage falls back to `system-ui` per `--brand-font-*` in `packages/ui/src/tokens.css`. Hero typography will look wrong (no Extra Bold Italic) but pages will render.
+If the font version changes, re-fetch with a modern Chrome User-Agent so the
+CSS endpoint returns woff2 (not legacy woff):
+
+```bash
+UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 \
+  (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+curl -sL -A "$UA" \
+  "https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,500;0,700;1,700&display=swap"
+```
+
+The latin-subset URL ending in `…iJWKBXyIfDnIV7nBrXyw023e.woff2` is the upright
+variable; the italic 700 latin URL ends in `…FHU3f4LnlY1PK6w.woff2`.
 
 ## License
 
-Rubik is licensed under the SIL Open Font License v1.1 — free for commercial use. The license text travels with the font in the Google Fonts download.
+Rubik is licensed under the SIL Open Font License v1.1 — free for commercial
+use. The license text travels with the font in the Google Fonts download.

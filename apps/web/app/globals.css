@@ -9,28 +9,19 @@
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
 
 /*
- * Rubik — self-hosted. Drop the three woff2 files into apps/web/public/fonts/
- * to activate. Until they land, `font-display: swap` falls back to system-ui
- * (per --brand-font-* in @elc/ui/tokens.css).
+ * Rubik — self-hosted from Google Fonts (SIL OFL).
  *
- * Source: Google Fonts → Rubik → 500 (Medium), 700 (Bold), 700 italic
- * (Extra Bold Italic — Rubik does not ship a true 800; 700 italic is the
- * canonical display weight per docs/BRAND.md).
+ * Upright weights ship as a single variable woff2 (Google Fonts serves the
+ * same file for 500 and 700), so we declare one face spanning the weight
+ * axis. Italic 700 is a separate static woff2 — it's the display weight per
+ * docs/BRAND.md ("Extra Bold Italic" — Rubik tops out at 700i).
  */
 @font-face {
   font-family: "Rubik";
   font-style: normal;
-  font-weight: 500;
+  font-weight: 100 900;
   font-display: swap;
-  src: url("/fonts/rubik-medium.woff2") format("woff2");
-}
-
-@font-face {
-  font-family: "Rubik";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("/fonts/rubik-bold.woff2") format("woff2");
+  src: url("/fonts/rubik-variable.woff2") format("woff2");
 }
 
 @font-face {
@@ -38,7 +29,7 @@
   font-style: italic;
   font-weight: 700;
   font-display: swap;
-  src: url("/fonts/rubik-extrabold-italic.woff2") format("woff2");
+  src: url("/fonts/rubik-italic-bold.woff2") format("woff2");
 }
 
 html, body {
