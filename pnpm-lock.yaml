@@ -88,6 +88,9 @@ importers:
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
     devDependencies:
+      '@elc/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@types/node':
         specifier: ^20.17.6
         version: 20.19.40

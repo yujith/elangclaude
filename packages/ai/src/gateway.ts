@@ -11,6 +11,7 @@
 
 import { withOrg, type OrgContext } from "@elc/db";
 import { anthropicProvider, type Provider, type ProviderMessage } from "./adapters/anthropic";
+import { openrouterProvider } from "./adapters/openrouter";
 import { ModelNotAllowedError } from "./errors";
 import {
   allowedModelsFor,
@@ -98,11 +99,7 @@ export function createAI(deps: GatewayDeps) {
 export const ai = createAI({
   providers: {
     anthropic: anthropicProvider,
-    // Placeholder until the OpenRouter adapter lands in Phase 5. The model
-    // registry currently routes nothing here, so this is unreachable.
-    openrouter: () => {
-      throw new Error("OpenRouter adapter not wired yet (Phase 5).");
-    },
+    openrouter: openrouterProvider,
   },
   db: (ctx) => withOrg(ctx) as unknown as QuotaDb,
 });

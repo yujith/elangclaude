@@ -242,7 +242,7 @@ function SaveIndicator({
   }
   if (status === "error") {
     return (
-      <span className="text-brand-red">Couldn't save — keep writing</span>
+      <span className="text-brand-red">Couldn&apos;t save — keep writing</span>
     );
   }
   if (status === "saved") {

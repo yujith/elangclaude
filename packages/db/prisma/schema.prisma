@@ -98,6 +98,10 @@ model Test {
   status      TestStatus @default(Draft)
   approved_by String?
   approver    User?      @relation("TestApprover", fields: [approved_by], references: [id], onDelete: SetNull)
+  // Optional passage payload for Reading (and, later, Listening transcripts).
+  // Shape parsed in packages/ai/src/reading/passage.ts. Null for Writing /
+  // Speaking rows. See docs/adr/0003-reading-data-shape.md.
+  body_json   Json?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

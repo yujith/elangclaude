@@ -24,12 +24,28 @@ export type ModelEntry = {
   provider: ProviderName;
 };
 
-// Anthropic model IDs are the SDK-canonical names. When we add OpenRouter
-// adapters in Phase 5 those entries land here with provider "openrouter".
+// Anthropic model IDs are the SDK-canonical names. OpenRouter model IDs
+// match the slugs OpenRouter publishes; see docs/adr/0004-openrouter-
+// reading-generate.md for the choice rationale.
 
 const ANTHROPIC_SONNET: ModelEntry = {
   id: "claude-sonnet-4-5-20250929",
   provider: "anthropic",
+};
+
+const OPENROUTER_GEMINI_FLASH: ModelEntry = {
+  id: "google/gemini-2.0-flash-001",
+  provider: "openrouter",
+};
+
+const OPENROUTER_LLAMA_3_70B: ModelEntry = {
+  id: "meta-llama/llama-3.3-70b-instruct",
+  provider: "openrouter",
+};
+
+const OPENROUTER_MISTRAL_LARGE: ModelEntry = {
+  id: "mistralai/mistral-large-2411",
+  provider: "openrouter",
 };
 
 const REGISTRY: Record<Purpose, { default: ModelEntry; allowed: ModelEntry[] }> = {
@@ -41,11 +57,18 @@ const REGISTRY: Record<Purpose, { default: ModelEntry; allowed: ModelEntry[] }> 
     default: ANTHROPIC_SONNET,
     allowed: [ANTHROPIC_SONNET],
   },
-  // Generation purposes are wired in Phase 5 alongside the OpenRouter
-  // adapter. Listed here so the type union compiles and a stray caller
-  // gets a clear "model not allowed" error rather than a silent default.
+  // Generation purposes that are not yet activated keep `allowed: []` so a
+  // stray caller gets a clear "model not allowed" error rather than a
+  // silent default. They wake up when their phase lands.
   "writing-generate": { default: ANTHROPIC_SONNET, allowed: [] },
-  "reading-generate": { default: ANTHROPIC_SONNET, allowed: [] },
+  "reading-generate": {
+    default: OPENROUTER_GEMINI_FLASH,
+    allowed: [
+      OPENROUTER_GEMINI_FLASH,
+      OPENROUTER_LLAMA_3_70B,
+      OPENROUTER_MISTRAL_LARGE,
+    ],
+  },
   "listening-generate": { default: ANTHROPIC_SONNET, allowed: [] },
   "speaking-cue-generate": { default: ANTHROPIC_SONNET, allowed: [] },
 };

@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { withOrg } from "@elc/db";
-import { writingGradeSchema } from "@elc/ai";
+import { parseReadingGrade, writingGradeSchema } from "@elc/ai";
 import { requireOrgContext } from "@/lib/auth/context";
 import { isWritingTaskType, taskShortLabel } from "@/lib/writing/task";
 import { parseVisual } from "@/lib/writing/visual";
 import { regradeAttempt } from "@/lib/attempts/actions";
+import { regradeReadingAttempt } from "@/lib/reading/actions";
 import { GradeSummary } from "@/components/grade-summary";
 import { TaskVisual } from "@/components/task-visual";
+import { ReadingResult } from "@/components/reading-result";
 
 export const metadata: Metadata = {
   title: "Result",
@@ -35,6 +37,7 @@ export default async function ResultsPage({
     select: {
       id: true,
       user_id: true,
+      section: true,
       status: true,
       submitted_at: true,
       test: {
@@ -58,6 +61,33 @@ export default async function ResultsPage({
 
   if (!attempt || attempt.user_id !== ctx.user_id) notFound();
 
+  // ─── Reading branch ───────────────────────────────────────────────────
+  if (attempt.section === "Reading") {
+    if (attempt.grade) {
+      const reading = parseReadingGrade(attempt.grade.criteria_scores_json);
+      if (reading) {
+        return <ReadingResult grade={reading} />;
+      }
+    }
+    return (
+      <FailureCard
+        title="Grading hit a snag."
+        body="We couldn't read the grading payload for this Reading attempt. Try grading it again, or come back to the picker."
+        retry={
+          attempt.grade ? null : (
+            <form action={regradeReadingAttempt}>
+              <input type="hidden" name="attemptId" value={attempt.id} />
+              <RetryButton />
+            </form>
+          )
+        }
+        backHref="/practice/reading"
+        backLabel="Back to Reading"
+      />
+    );
+  }
+
+  // ─── Writing branch (existing) ────────────────────────────────────────
   const question = attempt.test.questions[0];
   const taskTypeRaw = question?.type;
   const taskLabel =
@@ -68,10 +98,6 @@ export default async function ResultsPage({
   const promptText = question?.prompt ?? "";
   const responseText = readResponseText(attempt.answers[0]?.response);
 
-  // Happy path: we have a Grade row and its JSON parses through the
-  // canonical schema. (The grader validates before persisting, but we
-  // re-parse here as a belt-and-suspenders against any drift between the
-  // grader version that wrote the row and the schema we read it with.)
   if (attempt.grade) {
     const parsed = writingGradeSchema.safeParse(
       attempt.grade.criteria_scores_json,
@@ -85,7 +111,7 @@ export default async function ResultsPage({
                 Result
               </p>
               <h1 className="mt-2 font-display italic font-bold text-4xl md:text-5xl text-brand-black leading-tight">
-                Here's where you landed.
+                Here&apos;s where you landed.
               </h1>
             </header>
 
@@ -127,11 +153,9 @@ export default async function ResultsPage({
         </section>
       );
     }
-    // Persisted row is malformed — surface as a grading error and let the
-    // learner retry rather than render half-broken UI.
+    // Persisted row is malformed — fall through to the failure UI below.
   }
 
-  // No grade yet. Decide which non-graded state we're in.
   const errorKind = sp.error;
   return (
     <section className="px-6 py-16 md:py-24">
@@ -166,7 +190,7 @@ export default async function ResultsPage({
         ) : (
           <div className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6 space-y-4">
             <p className="font-body text-base text-brand-grey-900">
-              Our AI examiner couldn't finish grading this attempt. Your
+              Our AI examiner couldn&apos;t finish grading this attempt. Your
               response is saved — you can try grading it again. If it keeps
               failing, your admin will see it in the logs.
             </p>
@@ -191,6 +215,58 @@ export default async function ResultsPage({
         )}
       </div>
     </section>
+  );
+}
+
+function FailureCard({
+  title,
+  body,
+  retry,
+  backHref,
+  backLabel,
+}: {
+  title: string;
+  body: string;
+  retry: React.ReactNode | null;
+  backHref: string;
+  backLabel: string;
+}) {
+  return (
+    <section className="px-6 py-16 md:py-24">
+      <div className="mx-auto max-w-2xl">
+        <header className="mb-6">
+          <p className="font-body text-sm uppercase tracking-widest text-brand-red">
+            Reading
+          </p>
+          <h1 className="mt-2 font-display italic font-bold text-4xl md:text-5xl text-brand-black leading-tight">
+            {title}
+          </h1>
+        </header>
+        <div className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6 space-y-4">
+          <p className="font-body text-base text-brand-grey-900">{body}</p>
+          <div className="flex flex-wrap gap-3">
+            {retry}
+            <Link
+              href={backHref}
+              className="inline-flex items-center gap-2 rounded-pill bg-brand-black px-5 py-2.5 font-heading font-bold text-white transition-colors hover:bg-brand-grey-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+            >
+              {backLabel}
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function RetryButton() {
+  return (
+    <button
+      type="submit"
+      className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+    >
+      Try grading again
+    </button>
   );
 }
 

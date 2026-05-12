@@ -53,6 +53,33 @@ export class GradeShapeError extends Error {
   }
 }
 
+// Phase 5 — generation pipeline failure modes.
+//
+//   GenerationShapeError → output didn't parse / didn't match the Zod
+//     schema after the one retry. Route handlers map to 502.
+//   GenerationValidationError → output parsed cleanly but the semantic
+//     validator rejected it (answer not in passage, passage out of
+//     length window, etc.). Route handlers map to 422 — re-rolling is
+//     expected. The `issues` array is the same shape returned by
+//     `validateGeneratedReading`.
+
+export class GenerationShapeError extends Error {
+  constructor(
+    public readonly issues: unknown,
+    public readonly raw: string,
+  ) {
+    super(`Generation response failed schema validation.`);
+    this.name = "GenerationShapeError";
+  }
+}
+
+export class GenerationValidationError extends Error {
+  constructor(public readonly issues: unknown) {
+    super(`Generation response failed content validation.`);
+    this.name = "GenerationValidationError";
+  }
+}
+
 function describeCause(cause: unknown): string {
   if (cause instanceof Error) return cause.message;
   if (typeof cause === "string") return cause;
