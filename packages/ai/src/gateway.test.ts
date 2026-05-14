@@ -76,7 +76,8 @@ describe("gateway: allowlist", () => {
   });
 
   it("rejects any model on a purpose with no allowed models", async () => {
-    // writing-generate has an empty allowlist in Phase 1.
+    // listening-generate still has an empty allowlist — it wakes up when
+    // the Listening section lands.
     const ai = createAI({
       providers: {
         anthropic: fakeProvider(),
@@ -87,7 +88,7 @@ describe("gateway: allowlist", () => {
     await expect(
       ai.chat({
         ctx: CTX,
-        purpose: "writing-generate",
+        purpose: "listening-generate",
         messages: [{ role: "user", content: "hi" }],
         maxTokens: 100,
       }),

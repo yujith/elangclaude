@@ -127,3 +127,37 @@ export type {
 
 export { loadGenerationPrompt } from "./generation/prompts";
 export type { GenerationKind, GenerationPromptLoader } from "./generation/prompts";
+
+// ─── Writing generation ─────────────────────────────────────────────────
+export {
+  createWritingGenerator,
+  writingGenerator,
+} from "./generation/writing";
+export type {
+  GenerateWritingRequest,
+  GenerateWritingResult,
+  WritingGeneratorDeps,
+} from "./generation/writing";
+
+export {
+  generatedWritingSchema,
+  parseGeneratedWriting,
+} from "./generation/writing-schema";
+export type {
+  GeneratedWriting,
+  GeneratedWritingTask1Academic,
+  GeneratedWritingTask1General,
+  GeneratedWritingTask2,
+  GeneratedWritingVisual,
+} from "./generation/writing-schema";
+
+export { validateGeneratedWriting } from "./generation/writing-validate";
+export type {
+  WritingValidationIssue,
+  WritingValidationResult,
+} from "./generation/writing-validate";
+
+export { persistGeneratedWriting } from "./generation/writing-persist";
+export type {
+  PersistWritingResult as GeneratedWritingPersistResult,
+} from "./generation/writing-persist";

@@ -48,6 +48,16 @@ const OPENROUTER_MISTRAL_LARGE: ModelEntry = {
   provider: "openrouter",
 };
 
+// OpenRouter free tier. Free models are heavily rate-limited and can be
+// deprioritised under load — acceptable for low-volume, SuperAdmin-
+// moderated Writing generation. If OpenRouter 404s this slug, the
+// gateway surfaces a ProviderError; double-check the id on
+// openrouter.ai/models.
+const OPENROUTER_NEMOTRON_3_SUPER: ModelEntry = {
+  id: "nvidia/nemotron-3-super-120b-a12b:free",
+  provider: "openrouter",
+};
+
 const REGISTRY: Record<Purpose, { default: ModelEntry; allowed: ModelEntry[] }> = {
   "writing-grade": {
     default: ANTHROPIC_SONNET,
@@ -57,10 +67,23 @@ const REGISTRY: Record<Purpose, { default: ModelEntry; allowed: ModelEntry[] }> 
     default: ANTHROPIC_SONNET,
     allowed: [ANTHROPIC_SONNET],
   },
+  // Writing task generation is bulk, SuperAdmin-moderated content — it
+  // runs on the cheap OpenRouter tier per ai-cost-control.md. Sonnet is
+  // deliberately NOT on this allowlist: grading reasons about a rubric,
+  // generation does not, and the cost gap is large. Default is the free
+  // Nemotron tier; Gemini Flash and Mistral Large stay on the allowlist
+  // as paid fallbacks if the free tier is rate-limited.
+  "writing-generate": {
+    default: OPENROUTER_NEMOTRON_3_SUPER,
+    allowed: [
+      OPENROUTER_NEMOTRON_3_SUPER,
+      OPENROUTER_GEMINI_FLASH,
+      OPENROUTER_MISTRAL_LARGE,
+    ],
+  },
   // Generation purposes that are not yet activated keep `allowed: []` so a
   // stray caller gets a clear "model not allowed" error rather than a
   // silent default. They wake up when their phase lands.
-  "writing-generate": { default: ANTHROPIC_SONNET, allowed: [] },
   "reading-generate": {
     default: OPENROUTER_GEMINI_FLASH,
     allowed: [

@@ -49,6 +49,12 @@ export default async function SuperAdminLayout({
             >
               Reading content
             </Link>
+            <Link
+              href="/content/writing"
+              className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"
+            >
+              Writing content
+            </Link>
             <form action={devLogout}>
               <button
                 type="submit"

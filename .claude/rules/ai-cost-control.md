@@ -35,7 +35,7 @@ The gateway:
 | Purpose | Model | Why |
 |---|---|---|
 | Reading/Listening question generation | OpenRouter → Llama 3 / Gemini Flash | Cheap, bulk, SuperAdmin-moderated |
-| Writing prompt generation | OpenRouter → Mistral / Gemini Flash | Cheap |
+| Writing prompt generation | OpenRouter → Nemotron 3 Super (free) default, Gemini Flash / Mistral Large fallback | Cheap; free tier is rate-limited |
 | TTS for Listening audio | ElevenLabs (variety of accents) | Cache aggressively |
 | Writing grading | Claude Sonnet | Rubric reasoning matters |
 | Speaking grading (transcript pass) | Claude Sonnet | Rubric reasoning matters |
