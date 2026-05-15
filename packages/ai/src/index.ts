@@ -183,3 +183,37 @@ export { persistGeneratedWriting } from "./generation/writing-persist";
 export type {
   PersistWritingResult as GeneratedWritingPersistResult,
 } from "./generation/writing-persist";
+
+// ─── Speaking generation ────────────────────────────────────────────────
+export {
+  createSpeakingGenerator,
+  speakingGenerator,
+} from "./generation/speaking";
+export type {
+  GenerateSpeakingRequest,
+  GenerateSpeakingResult,
+  SpeakingGeneratorDeps,
+} from "./generation/speaking";
+
+export {
+  generatedSpeakingSchema,
+  parseGeneratedSpeaking,
+} from "./generation/speaking-schema";
+export type {
+  GeneratedSpeaking,
+  GeneratedSpeakingPart1,
+  GeneratedSpeakingPart2,
+  GeneratedSpeakingPart3,
+} from "./generation/speaking-schema";
+
+export { validateGeneratedSpeaking } from "./generation/speaking-validate";
+export type {
+  SpeakingValidationIssue,
+  SpeakingValidationResult,
+} from "./generation/speaking-validate";
+
+export { persistGeneratedSpeaking } from "./generation/speaking-persist";
+export type {
+  PersistGeneratedSpeakingDb,
+  PersistSpeakingResult,
+} from "./generation/speaking-persist";

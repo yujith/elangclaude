@@ -7,11 +7,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stripFrontmatter } from "../grading/prompts";
 
-export type GenerationKind = "reading" | "writing";
+export type GenerationKind = "reading" | "writing" | "speaking";
 
 const FILENAMES: Record<GenerationKind, string> = {
   reading: "reading.md",
   writing: "writing.md",
+  speaking: "speaking.md",
 };
 
 const cache = new Map<GenerationKind, string>();
