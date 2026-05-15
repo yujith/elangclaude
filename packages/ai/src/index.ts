@@ -217,3 +217,16 @@ export type {
   PersistGeneratedSpeakingDb,
   PersistSpeakingResult,
 } from "./generation/speaking-persist";
+
+// ─── Speaking examiner (realtime session instruction builder) ───────────
+export {
+  buildExaminerScript,
+  loadExaminerPrompt,
+} from "./speaking/examiner-prompt";
+export type {
+  ExaminerScript,
+  ExaminerStageName,
+  ExaminerStageConfig,
+  ExaminerScriptContent,
+  ExaminerTurnDetectionMode,
+} from "./speaking/examiner-prompt";
