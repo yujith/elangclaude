@@ -260,13 +260,23 @@ export function SpeakingPractice({
     const script = scriptRef.current;
     if (!dc || dc.readyState !== "open" || !script) return;
     const cfg = script[stageName];
+    // GA session.update shape: `session` carries the `type: "realtime"`
+    // discriminator and turn-detection lives under `audio.input`. The Beta
+    // top-level `turn_detection` is no longer accepted.
     dc.send(
       JSON.stringify({
         type: "session.update",
         session: {
+          type: "realtime",
           instructions: cfg.instructions,
-          turn_detection:
-            cfg.turn_detection === "server_vad" ? { type: "server_vad" } : null,
+          audio: {
+            input: {
+              turn_detection:
+                cfg.turn_detection === "server_vad"
+                  ? { type: "server_vad" }
+                  : null,
+            },
+          },
         },
       }),
     );
@@ -358,8 +368,11 @@ export function SpeakingPractice({
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
+      // GA WebRTC SDP-exchange endpoint. The Beta `/v1/realtime?model=...`
+      // path is retired with the same `beta_api_shape_disabled` error as
+      // the old `/v1/realtime/sessions` token-mint path.
       const sdpResponse = await fetch(
-        `https://api.openai.com/v1/realtime?model=${encodeURIComponent(outcome.model)}`,
+        `https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(outcome.model)}`,
         {
           method: "POST",
           body: offer.sdp,
@@ -390,7 +403,9 @@ export function SpeakingPractice({
   function onDataChannelMessage(e: MessageEvent<string>) {
     // Light-weight: just toggle the examiner-speaking indicator. We don't
     // act on individual events — the IELTS structure is driven by the
-    // runner via session.update.
+    // runner via session.update. `response.created` and `response.done`
+    // reliably bracket each examiner turn in the GA Realtime event stream,
+    // regardless of the audio chunk event names.
     let parsed: { type?: string } | null = null;
     try {
       parsed = JSON.parse(e.data) as { type?: string };
@@ -398,13 +413,9 @@ export function SpeakingPractice({
       return;
     }
     const t = parsed.type;
-    if (t === "response.created" || t === "response.audio.delta") {
+    if (t === "response.created") {
       setExaminerSpeaking(true);
-    } else if (
-      t === "response.done" ||
-      t === "response.audio.done" ||
-      t === "response.cancelled"
-    ) {
+    } else if (t === "response.done" || t === "response.cancelled") {
       setExaminerSpeaking(false);
     }
   }
@@ -713,8 +724,13 @@ function Header({
           <div
             className="font-heading font-bold text-xl tabular-nums text-white"
             aria-live="polite"
+            // suppressHydrationWarning is a belt-and-braces backstop —
+            // useElapsed already returns null on first render so the
+            // strings match, but Safari sometimes ticks the interval
+            // slightly out of phase with React's hydration.
+            suppressHydrationWarning
           >
-            {formatElapsed(elapsed)}
+            {elapsed !== null ? formatElapsed(elapsed) : "0:00"}
           </div>
         </div>
       </div>
@@ -1213,13 +1229,20 @@ async function putBlobWithRetry(
   return false;
 }
 
-function useElapsed(startedAtIso: string): number {
-  const [now, setNow] = useState(() => Date.now());
+// SSR-safe: the elapsed time is `null` on the first render so the server
+// and the client's hydration pass agree (the server has no clock running on
+// the page). The effect populates the real elapsed value after mount and
+// then ticks every second.
+function useElapsed(startedAtIso: string): number | null {
+  const [elapsed, setElapsed] = useState<number | null>(null);
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const tick = () =>
+      setElapsed(Math.max(0, Date.now() - new Date(startedAtIso).getTime()));
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, []);
-  return Math.max(0, now - new Date(startedAtIso).getTime());
+  }, [startedAtIso]);
+  return elapsed;
 }
 
 function formatElapsed(ms: number): string {

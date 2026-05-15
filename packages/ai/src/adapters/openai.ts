@@ -15,13 +15,18 @@ import { ProviderError } from "../errors";
 import { requireEnv } from "../env";
 import type { TranscriptSegment } from "../audio/features";
 
-const REALTIME_SESSIONS_ENDPOINT = "https://api.openai.com/v1/realtime/sessions";
+// GA Realtime endpoint for minting ephemeral client tokens. The Beta path
+// `/v1/realtime/sessions` was retired (`beta_api_shape_disabled`) — the GA
+// API ships under `/v1/realtime/client_secrets`, takes a wrapped `session`
+// object, and returns a flat `{ value, expires_at, session }` response.
+const REALTIME_SESSIONS_ENDPOINT =
+  "https://api.openai.com/v1/realtime/client_secrets";
 const TRANSCRIPTIONS_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions";
 
 // Pinned model IDs. Realtime + Whisper are NOT on the chat allowlist in
 // models.ts — they are not chat purposes — so the IDs live here, next to
 // the only code that calls them.
-export const OPENAI_REALTIME_MODEL = "gpt-4o-realtime-preview-2024-12-17";
+export const OPENAI_REALTIME_MODEL = "gpt-realtime";
 export const OPENAI_TRANSCRIBE_MODEL = "whisper-1";
 
 // Neutral default voice. Phase 5 ("feels human" polish) selects per-test for
@@ -79,6 +84,10 @@ export const openaiAdapter: OpenAIAdapter = {
   async mintRealtimeSession(req) {
     const apiKey = requireEnv("OPENAI_API_KEY");
 
+    // GA Realtime request shape: everything is wrapped in `session` with a
+    // `type: "realtime"` discriminator, voice lives under `audio.output`,
+    // and the model is the GA alias `gpt-realtime`. The Beta shape ({model,
+    // voice, instructions} at top level) returns `beta_api_shape_disabled`.
     let res: Response;
     try {
       res = await fetch(REALTIME_SESSIONS_ENDPOINT, {
@@ -88,9 +97,14 @@ export const openaiAdapter: OpenAIAdapter = {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: OPENAI_REALTIME_MODEL,
-          voice: req.voice ?? DEFAULT_REALTIME_VOICE,
-          instructions: req.instructions,
+          session: {
+            type: "realtime",
+            model: OPENAI_REALTIME_MODEL,
+            instructions: req.instructions,
+            audio: {
+              output: { voice: req.voice ?? DEFAULT_REALTIME_VOICE },
+            },
+          },
         }),
       });
     } catch (cause) {
@@ -101,11 +115,13 @@ export const openaiAdapter: OpenAIAdapter = {
       throw new ProviderError("openai", new Error(await describeHttpError(res)));
     }
 
+    // GA response: { value, expires_at, session: { id, model, ... } }. The
+    // `value` is the ephemeral client secret; no longer nested under
+    // `client_secret`.
     let body: {
-      id?: string;
-      model?: string;
+      value?: string;
       expires_at?: number;
-      client_secret?: { value?: string; expires_at?: number };
+      session?: { id?: string; model?: string };
     };
     try {
       body = (await res.json()) as typeof body;
@@ -113,19 +129,19 @@ export const openaiAdapter: OpenAIAdapter = {
       throw new ProviderError("openai", cause);
     }
 
-    const secret = body.client_secret?.value;
+    const secret = body.value;
     if (!secret) {
       throw new ProviderError(
         "openai",
-        new Error("Realtime session response had no client_secret."),
+        new Error("Realtime session response had no client_secret value."),
       );
     }
 
     return {
       client_secret: secret,
-      expires_at: body.client_secret?.expires_at ?? body.expires_at ?? 0,
-      session_id: body.id ?? "",
-      model: body.model ?? OPENAI_REALTIME_MODEL,
+      expires_at: body.expires_at ?? 0,
+      session_id: body.session?.id ?? "",
+      model: body.session?.model ?? OPENAI_REALTIME_MODEL,
     };
   },
 
