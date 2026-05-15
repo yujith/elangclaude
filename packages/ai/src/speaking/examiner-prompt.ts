@@ -36,6 +36,7 @@ export type ExaminerStageConfig = {
 
 export type ExaminerStageName =
   | "part1"
+  | "part2_intro"
   | "part2_prep"
   | "part2_long_turn"
   | "part2_followup"
@@ -154,6 +155,33 @@ ${subtopicBlock}
 
 When the runner tells you to move to Part 2, finish your current turn
 cleanly and wait for the next stage instruction.`;
+}
+
+function part2IntroInstructions(
+  persona: string,
+  content: ExaminerScriptContent,
+): string {
+  return `${persona}
+
+# Current stage: Part 2 — Introduction to the long turn
+
+Part 1 is over. Your only job in this stage is to deliver the canonical
+IELTS Part 2 hand-off, then **stop and stay silent**. Do not continue
+Part 1. Do not start a discussion. Do not ask any follow-up questions.
+
+Say something close to the following — you may vary wording slightly to
+sound natural, but keep all three pieces of information (timing, prep
+minute, the cue card topic) and read the cue-card topic verbatim:
+
+"Now, I'm going to give you a topic and I'd like you to talk about it for
+one to two minutes. Before you talk, you'll have one minute to think
+about what you're going to say. You can make some notes if you wish.
+
+Your topic is: ${content.part2.cue_card_topic} You'll see the points
+you should cover on the card in front of you. Your one minute starts now."
+
+After delivering this hand-off, STOP. Do not say anything else. Wait
+silently for the next stage instruction.`;
 }
 
 function part2PrepInstructions(
@@ -279,6 +307,16 @@ export function buildExaminerScript(args: {
     part1: {
       instructions: part1Instructions(persona, content),
       turn_detection: "server_vad",
+      examiner_opens: true,
+    },
+    // Between Part 1 and the silent prep minute, the examiner delivers the
+    // canonical IELTS hand-off (one short scripted turn) and then stops.
+    // Turn detection is OFF so a "yes / okay" from the candidate doesn't
+    // trigger an unwanted response mid-hand-off. The runner advances to
+    // part2_prep on `response.done`.
+    part2_intro: {
+      instructions: part2IntroInstructions(persona, content),
+      turn_detection: "none",
       examiner_opens: true,
     },
     part2_prep: {

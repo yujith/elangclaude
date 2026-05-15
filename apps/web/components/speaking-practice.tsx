@@ -35,6 +35,7 @@ type Stage =
   | "idle"
   | "connecting"
   | "part1"
+  | "part2_intro"
   | "part2_prep"
   | "part2_long_turn"
   | "part2_followup"
@@ -45,19 +46,29 @@ type Stage =
   | "submit_error"
   | "error";
 
-// The five script-driven stages whose instructions the server returns;
+// The six script-driven stages whose instructions the server returns;
 // everything else is a runner-only state.
 type ScriptStage = Extract<
   Stage,
-  "part1" | "part2_prep" | "part2_long_turn" | "part2_followup" | "part3"
+  | "part1"
+  | "part2_intro"
+  | "part2_prep"
+  | "part2_long_turn"
+  | "part2_followup"
+  | "part3"
 >;
 
 const PART2_PREP_SECONDS = 60;
+// If the examiner's intro hand-off doesn't end (response.done never fires)
+// within this window, the runner advances to the silent prep minute
+// anyway. The hand-off itself is normally ~12–15s.
+const PART2_INTRO_SAFETY_MS = 25_000;
 
 const STAGE_LABEL: Record<Stage, string> = {
   idle: "Ready to begin",
   connecting: "Connecting…",
   part1: "Part 1 — Interview",
+  part2_intro: "Part 2 — Hand-off",
   part2_prep: "Part 2 — Preparation (1 min)",
   part2_long_turn: "Part 2 — Long turn",
   part2_followup: "Part 2 — Follow-up",
@@ -71,6 +82,7 @@ const STAGE_LABEL: Record<Stage, string> = {
 
 const STAGE_INDEX: Record<ScriptStage, number> = {
   part1: 0,
+  part2_intro: 1,
   part2_prep: 1,
   part2_long_turn: 1,
   part2_followup: 1,
@@ -103,6 +115,14 @@ export function SpeakingPractice({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scriptRef = useRef<ExaminerScript | null>(null);
   const prepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Part 2 hand-off → prep auto-advance. Set when the runner enters
+  // part2_intro; the next `response.done` (= examiner finished the
+  // hand-off) flips to part2_prep + starts the 60s timer. The safety
+  // timeout fires the same transition if response.done never arrives.
+  const pendingPart2PrepAdvanceRef = useRef<boolean>(false);
+  const introSafetyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   // ── Recording state (Phase 3) ──────────────────────────────────────────
   // `mediaRecorderRef` is the MediaRecorder running on the mic-only stream.
@@ -140,6 +160,11 @@ export function SpeakingPractice({
       clearInterval(prepTimerRef.current);
       prepTimerRef.current = null;
     }
+    if (introSafetyTimeoutRef.current) {
+      clearTimeout(introSafetyTimeoutRef.current);
+      introSafetyTimeoutRef.current = null;
+    }
+    pendingPart2PrepAdvanceRef.current = false;
     if (dcRef.current) {
       try {
         dcRef.current.close();
@@ -418,10 +443,51 @@ export function SpeakingPractice({
     } else if (t === "response.done" || t === "response.cancelled") {
       setExaminerSpeaking(false);
     }
+    // Auto-advance from the hand-off into the silent prep minute as soon
+    // as the examiner finishes their canonical Part 2 intro. response.cancelled
+    // never fires here (we don't send response.cancel after entering intro),
+    // so a normal response.done is the right edge to trigger on.
+    if (t === "response.done" && pendingPart2PrepAdvanceRef.current) {
+      pendingPart2PrepAdvanceRef.current = false;
+      advanceToPart2Prep();
+    }
   }
 
-  function moveToPart2Prep() {
+  function moveToPart2Intro() {
     markBoundary("part1End");
+    // Cut any in-flight Part 1 response so the examiner doesn't keep
+    // answering a sub-topic through the hand-off. response.cancel emits
+    // response.cancelled (not response.done) so it can't trigger the
+    // pending auto-advance below.
+    const dc = dcRef.current;
+    if (dc && dc.readyState === "open") {
+      try {
+        dc.send(JSON.stringify({ type: "response.cancel" }));
+      } catch {
+        /* noop */
+      }
+    }
+    setStage("part2_intro");
+    sendStageUpdate("part2_intro");
+    // Arm the auto-advance: the NEXT response.done = examiner finished
+    // the hand-off → switch to the silent 60s prep.
+    pendingPart2PrepAdvanceRef.current = true;
+    if (introSafetyTimeoutRef.current) {
+      clearTimeout(introSafetyTimeoutRef.current);
+    }
+    introSafetyTimeoutRef.current = setTimeout(() => {
+      if (pendingPart2PrepAdvanceRef.current) {
+        pendingPart2PrepAdvanceRef.current = false;
+        advanceToPart2Prep();
+      }
+    }, PART2_INTRO_SAFETY_MS);
+  }
+
+  function advanceToPart2Prep() {
+    if (introSafetyTimeoutRef.current) {
+      clearTimeout(introSafetyTimeoutRef.current);
+      introSafetyTimeoutRef.current = null;
+    }
     setStage("part2_prep");
     sendStageUpdate("part2_prep");
     setPrepRemaining(PART2_PREP_SECONDS);
@@ -598,6 +664,7 @@ export function SpeakingPractice({
 
   const stageIndex =
     stage === "part1" ||
+    stage === "part2_intro" ||
     stage === "part2_prep" ||
     stage === "part2_long_turn" ||
     stage === "part2_followup" ||
@@ -625,7 +692,13 @@ export function SpeakingPractice({
           <Part1View
             content={content}
             examinerSpeaking={examinerSpeaking}
-            onNext={moveToPart2Prep}
+            onNext={moveToPart2Intro}
+            onEnd={endTest}
+          />
+        ) : stage === "part2_intro" ? (
+          <Part2IntroView
+            content={content}
+            examinerSpeaking={examinerSpeaking}
             onEnd={endTest}
           />
         ) : stage === "part2_prep" ? (
@@ -966,6 +1039,34 @@ function Part1View({
       </Panel>
       <div className="flex flex-wrap gap-3 items-center">
         <PrimaryButton onClick={onNext}>Move to Part 2 →</PrimaryButton>
+        <SecondaryButton onClick={onEnd}>End test</SecondaryButton>
+      </div>
+    </div>
+  );
+}
+
+function Part2IntroView({
+  content,
+  examinerSpeaking,
+  onEnd,
+}: {
+  content: SpeakingContent;
+  examinerSpeaking: boolean;
+  onEnd: () => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <Panel>
+        <ExaminerIndicator speaking={examinerSpeaking} />
+        <p className="font-body text-base text-brand-grey-700">
+          The examiner is handing you the cue card. Your one minute of prep
+          will start as soon as they finish reading the instructions.
+        </p>
+        <pre className="font-body text-base text-brand-grey-900 leading-relaxed whitespace-pre-wrap bg-brand-grey-50 rounded-md ring-1 ring-brand-grey-200 p-4">
+          {renderCueCard(content.part2)}
+        </pre>
+      </Panel>
+      <div className="flex flex-wrap gap-3 items-center">
         <SecondaryButton onClick={onEnd}>End test</SecondaryButton>
       </div>
     </div>

@@ -74,15 +74,29 @@ describe("buildExaminerScript", () => {
   const persona = "PERSONA";
   const script = buildExaminerScript({ persona, content: CONTENT });
 
-  it("produces all five stages", () => {
+  it("produces all six stages", () => {
     expect(Object.keys(script).sort()).toEqual(
       [
         "part1",
         "part2_followup",
+        "part2_intro",
         "part2_long_turn",
         "part2_prep",
         "part3",
       ].sort(),
+    );
+  });
+
+  it("Part 2 intro has the examiner deliver the canonical hand-off then stop", () => {
+    expect(script.part2_intro.turn_detection).toBe("none");
+    expect(script.part2_intro.examiner_opens).toBe(true);
+    // Includes the cue card so the examiner reads it verbatim.
+    expect(script.part2_intro.instructions).toContain(
+      "Describe a book you recently read",
+    );
+    expect(script.part2_intro.instructions).toMatch(/one to two minutes/i);
+    expect(script.part2_intro.instructions).toMatch(
+      /one minute to think|one minute starts/i,
     );
   });
 
