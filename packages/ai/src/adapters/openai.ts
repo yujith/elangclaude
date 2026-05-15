@@ -13,6 +13,7 @@
 
 import { ProviderError } from "../errors";
 import { requireEnv } from "../env";
+import type { TranscriptSegment } from "../audio/features";
 
 const REALTIME_SESSIONS_ENDPOINT = "https://api.openai.com/v1/realtime/sessions";
 const TRANSCRIPTIONS_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions";
@@ -54,6 +55,11 @@ export type TranscribeRequest = {
 
 export type TranscribeResult = {
   text: string;
+  // Whisper segment timestamps + per-segment text. We always request
+  // `verbose_json` so the Speaking transcript can be split by IELTS part
+  // boundary. Plain-text callers ignore segments.
+  segments: TranscriptSegment[];
+  duration_sec: number;
 };
 
 export type OpenAIAdapter = {
@@ -128,6 +134,10 @@ export const openaiAdapter: OpenAIAdapter = {
 
     const form = new FormData();
     form.append("model", OPENAI_TRANSCRIBE_MODEL);
+    // verbose_json adds `segments` (timestamps + text) and `duration` —
+    // both required to split a Speaking transcript by IELTS part boundary
+    // and to compute audio features (wpm, pauses).
+    form.append("response_format", "verbose_json");
     if (req.language) form.append("language", req.language);
     form.append(
       "file",
@@ -154,7 +164,11 @@ export const openaiAdapter: OpenAIAdapter = {
       throw new ProviderError("openai", new Error(await describeHttpError(res)));
     }
 
-    let body: { text?: string };
+    let body: {
+      text?: string;
+      duration?: number;
+      segments?: { start?: number; end?: number; text?: string }[];
+    };
     try {
       body = (await res.json()) as typeof body;
     } catch (cause) {
@@ -168,6 +182,24 @@ export const openaiAdapter: OpenAIAdapter = {
       );
     }
 
-    return { text: body.text };
+    const segments: TranscriptSegment[] = Array.isArray(body.segments)
+      ? body.segments
+          .filter(
+            (s): s is { start: number; end: number; text: string } =>
+              typeof s.start === "number" &&
+              typeof s.end === "number" &&
+              typeof s.text === "string",
+          )
+          .map((s) => ({ start: s.start, end: s.end, text: s.text }))
+      : [];
+
+    return {
+      text: body.text,
+      segments,
+      duration_sec:
+        typeof body.duration === "number" && Number.isFinite(body.duration)
+          ? body.duration
+          : 0,
+    };
   },
 };

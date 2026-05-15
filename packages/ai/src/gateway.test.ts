@@ -42,7 +42,7 @@ function fakeOpenAI(): OpenAIAdapter & {
     },
     transcribe: async () => {
       transcribeCalls++;
-      return { text: "transcribed text" };
+      return { text: "transcribed text", segments: [], duration_sec: 0 };
     },
   };
   Object.defineProperty(adapter, "realtimeCalls", { get: () => realtimeCalls });
@@ -254,7 +254,7 @@ describe("gateway: realtimeSession", () => {
         mintRealtimeSession: async () => {
           throw new ProviderError("openai", new Error("realtime 500"));
         },
-        transcribe: async () => ({ text: "" }),
+        transcribe: async () => ({ text: "", segments: [], duration_sec: 0 }),
       },
       db,
     });

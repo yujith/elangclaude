@@ -3,14 +3,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { withOrg } from "@elc/db";
 import { parseReadingGrade, writingGradeSchema } from "@elc/ai";
+import { signedDownloadUrl } from "@elc/storage";
 import { requireOrgContext } from "@/lib/auth/context";
 import { isWritingTaskType, taskShortLabel } from "@/lib/writing/task";
 import { parseVisual } from "@/lib/writing/visual";
+import { parseSpeakingContent } from "@/lib/speaking/content";
 import { regradeAttempt } from "@/lib/attempts/actions";
 import { regradeReadingAttempt } from "@/lib/reading/actions";
 import { GradeSummary } from "@/components/grade-summary";
 import { TaskVisual } from "@/components/task-visual";
 import { ReadingResult } from "@/components/reading-result";
+import { SpeakingResult } from "@/components/speaking-result";
 
 export const metadata: Metadata = {
   title: "Result",
@@ -42,14 +45,19 @@ export default async function ResultsPage({
       submitted_at: true,
       test: {
         select: {
+          body_json: true,
           questions: {
-            select: { type: true, prompt: true, visual: true },
+            select: { id: true, type: true, prompt: true, visual: true },
             orderBy: { position: "asc" },
-            take: 1,
           },
         },
       },
-      answers: { select: { response: true }, take: 1 },
+      answers: {
+        select: { question_id: true, response: true },
+      },
+      recording: {
+        select: { storage_url: true, duration_sec: true },
+      },
       grade: {
         select: {
           band_overall: true,
@@ -60,6 +68,43 @@ export default async function ResultsPage({
   });
 
   if (!attempt || attempt.user_id !== ctx.user_id) notFound();
+
+  // ─── Speaking branch ──────────────────────────────────────────────────
+  if (attempt.section === "Speaking") {
+    const content = parseSpeakingContent(attempt.test.body_json);
+    const transcripts = readSpeakingTranscripts(
+      attempt.test.questions,
+      attempt.answers,
+    );
+
+    // Try to mint a signed download URL for playback. If R2 credentials
+    // aren't configured (Phase 3 dev environments without R2 set up) the
+    // call throws — render the page without playback rather than 500.
+    let audioUrl: string | null = null;
+    if (attempt.recording?.storage_url) {
+      try {
+        audioUrl = await signedDownloadUrl({
+          key: attempt.recording.storage_url,
+          org_id: ctx.org_id,
+        });
+      } catch (err) {
+        console.warn(
+          "[results] signedDownloadUrl failed — playback disabled",
+          err,
+        );
+      }
+    }
+
+    return (
+      <SpeakingResult
+        content={content}
+        transcripts={transcripts}
+        audioUrl={audioUrl}
+        durationSec={attempt.recording?.duration_sec ?? null}
+        graded={attempt.status === "Graded"}
+      />
+    );
+  }
 
   // ─── Reading branch ───────────────────────────────────────────────────
   if (attempt.section === "Reading") {
@@ -276,4 +321,24 @@ function readResponseText(raw: unknown): string {
     if (typeof obj.text === "string") return obj.text;
   }
   return "";
+}
+
+function readSpeakingTranscripts(
+  questions: { id: string; type: string }[],
+  answers: { question_id: string; response: unknown }[],
+): { part1: string; part2: string; part3: string } {
+  const idByType = new Map<string, string>();
+  for (const q of questions) idByType.set(q.type, q.id);
+  const textByQuestion = new Map<string, string>();
+  for (const a of answers) {
+    textByQuestion.set(a.question_id, readResponseText(a.response));
+  }
+  return {
+    part1:
+      textByQuestion.get(idByType.get("speaking-part-1") ?? "") ?? "",
+    part2:
+      textByQuestion.get(idByType.get("speaking-part-2-cue") ?? "") ?? "",
+    part3:
+      textByQuestion.get(idByType.get("speaking-part-3") ?? "") ?? "",
+  };
 }

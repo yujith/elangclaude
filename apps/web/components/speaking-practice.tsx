@@ -16,11 +16,15 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ExaminerScript } from "@elc/ai";
 import {
   createRealtimeSession,
   endSpeakingAttempt,
+  finalizeSpeakingAttempt,
+  requestRecordingUpload,
   type CreateRealtimeSessionResult,
+  type StageBoundariesMs,
 } from "@/lib/speaking/actions";
 import {
   renderCueCard,
@@ -35,12 +39,18 @@ type Stage =
   | "part2_long_turn"
   | "part2_followup"
   | "part3"
+  | "uploading"
+  | "finalizing"
   | "ended"
+  | "submit_error"
   | "error";
 
-// The five stages whose script the server returns; "idle"/"connecting"/
-// "ended"/"error" are runner-only states.
-type ScriptStage = Exclude<Stage, "idle" | "connecting" | "ended" | "error">;
+// The five script-driven stages whose instructions the server returns;
+// everything else is a runner-only state.
+type ScriptStage = Extract<
+  Stage,
+  "part1" | "part2_prep" | "part2_long_turn" | "part2_followup" | "part3"
+>;
 
 const PART2_PREP_SECONDS = 60;
 
@@ -52,7 +62,10 @@ const STAGE_LABEL: Record<Stage, string> = {
   part2_long_turn: "Part 2 — Long turn",
   part2_followup: "Part 2 — Follow-up",
   part3: "Part 3 — Discussion",
+  uploading: "Uploading your recording…",
+  finalizing: "Transcribing your conversation…",
   ended: "Test complete",
+  submit_error: "Submission failed",
   error: "Something went wrong",
 };
 
@@ -82,12 +95,34 @@ export function SpeakingPractice({
   const [prepRemaining, setPrepRemaining] = useState(PART2_PREP_SECONDS);
   const [examinerSpeaking, setExaminerSpeaking] = useState(false);
 
+  const router = useRouter();
+
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const scriptRef = useRef<ExaminerScript | null>(null);
   const prepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Recording state (Phase 3) ──────────────────────────────────────────
+  // `mediaRecorderRef` is the MediaRecorder running on the mic-only stream.
+  // We capture only the candidate's mic — the examiner's audio is on the
+  // remote WebRTC track, not the local stream — so the transcript is the
+  // candidate's words alone (which is what grading needs).
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingMimeTypeRef = useRef<string | null>(null);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  // Filled in at each stage transition; missing entries mean the learner
+  // ended before reaching that stage (handled in finalize).
+  const boundariesMsRef = useRef<Partial<StageBoundariesMs>>({});
+  // The recorded blob is kept in memory so the upload can be retried on
+  // network failure without re-running the conversation.
+  const recordedBlobRef = useRef<Blob | null>(null);
+  const recordedDurationMsRef = useRef<number>(0);
+  const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(
+    null,
+  );
 
   // ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -121,12 +156,101 @@ export function SpeakingPractice({
       }
       pcRef.current = null;
     }
+    // Mic stream is stopped only AFTER the recorder finishes; otherwise we
+    // truncate the last few hundred ms of the candidate's audio.
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") {
+      try {
+        mr.stop();
+      } catch {
+        /* noop */
+      }
+    }
     if (localStreamRef.current) {
       for (const t of localStreamRef.current.getTracks()) t.stop();
       localStreamRef.current = null;
     }
     if (audioRef.current) audioRef.current.srcObject = null;
     setExaminerSpeaking(false);
+  }
+
+  // ── MediaRecorder helpers ──────────────────────────────────────────────
+
+  function pickRecorderMime(): string | null {
+    if (typeof MediaRecorder === "undefined") return null;
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+    ];
+    for (const m of candidates) {
+      try {
+        if (MediaRecorder.isTypeSupported(m)) return m;
+      } catch {
+        /* noop */
+      }
+    }
+    return null;
+  }
+
+  function startRecorder(stream: MediaStream): boolean {
+    const mime = pickRecorderMime();
+    if (!mime) return false;
+    try {
+      const mr = new MediaRecorder(stream, { mimeType: mime });
+      recordedChunksRef.current = [];
+      recordingMimeTypeRef.current = mime;
+      mr.addEventListener("dataavailable", (e) => {
+        if (e.data && e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      });
+      mr.start();
+      mediaRecorderRef.current = mr;
+      recordingStartedAtRef.current = Date.now();
+      boundariesMsRef.current = {};
+      return true;
+    } catch (err) {
+      console.error("Failed to start MediaRecorder", err);
+      return false;
+    }
+  }
+
+  function stopRecorderAndCollect(): Promise<Blob | null> {
+    const mr = mediaRecorderRef.current;
+    if (!mr) return Promise.resolve(null);
+    if (mr.state === "inactive") {
+      const mime = recordingMimeTypeRef.current ?? "audio/webm";
+      const blob = new Blob(recordedChunksRef.current, { type: mime });
+      return Promise.resolve(blob.size > 0 ? blob : null);
+    }
+    return new Promise((resolve) => {
+      const handleStop = () => {
+        mr.removeEventListener("stop", handleStop);
+        const mime = recordingMimeTypeRef.current ?? "audio/webm";
+        const blob = new Blob(recordedChunksRef.current, { type: mime });
+        resolve(blob.size > 0 ? blob : null);
+      };
+      mr.addEventListener("stop", handleStop);
+      try {
+        mr.stop();
+      } catch (err) {
+        console.error("MediaRecorder.stop threw", err);
+        mr.removeEventListener("stop", handleStop);
+        resolve(null);
+      }
+    });
+  }
+
+  function elapsedSinceRecordingStart(): number {
+    const start = recordingStartedAtRef.current;
+    if (start === null) return 0;
+    return Math.max(0, Date.now() - start);
+  }
+
+  function markBoundary(key: keyof StageBoundariesMs): void {
+    if (recordingStartedAtRef.current === null) return;
+    boundariesMsRef.current[key] = elapsedSinceRecordingStart();
   }
 
   // ── Data-channel send helpers ──────────────────────────────────────────
@@ -193,6 +317,19 @@ export function SpeakingPractice({
       return;
     }
     localStreamRef.current = micStream;
+
+    // Start recording the candidate's mic. We do this BEFORE the WebRTC
+    // connect so the first words (the examiner's greeting + our reply)
+    // are captured.
+    const recorderStarted = startRecorder(micStream);
+    if (!recorderStarted) {
+      // No usable MediaRecorder — the conversation can still run, but we
+      // can't submit a graded attempt. Surface the limitation up front
+      // rather than letting the learner finish and discover it at End.
+      console.warn(
+        "MediaRecorder unavailable — Speaking session will run without recording.",
+      );
+    }
 
     // WebRTC.
     try {
@@ -273,6 +410,7 @@ export function SpeakingPractice({
   }
 
   function moveToPart2Prep() {
+    markBoundary("part1End");
     setStage("part2_prep");
     sendStageUpdate("part2_prep");
     setPrepRemaining(PART2_PREP_SECONDS);
@@ -285,6 +423,7 @@ export function SpeakingPractice({
             prepTimerRef.current = null;
           }
           // Auto-advance to the long turn.
+          markBoundary("part2PrepEnd");
           setStage("part2_long_turn");
           sendStageUpdate("part2_long_turn");
           return 0;
@@ -300,29 +439,148 @@ export function SpeakingPractice({
       prepTimerRef.current = null;
     }
     setPrepRemaining(0);
+    markBoundary("part2PrepEnd");
     setStage("part2_long_turn");
     sendStageUpdate("part2_long_turn");
   }
 
   function finishLongTurn() {
+    markBoundary("part2LongTurnEnd");
     setStage("part2_followup");
     sendStageUpdate("part2_followup");
   }
 
   function moveToPart3() {
+    markBoundary("part2FollowupEnd");
     setStage("part3");
     sendStageUpdate("part3");
   }
 
+  // ── End-of-test: recording → upload → finalize → results ──────────────
+
   async function endTest() {
+    // 1. Stop the recorder and wait for the blob. Tear down the WebRTC
+    //    side; we keep the mic stream alive until the recorder confirms it
+    //    has flushed (stopRecorderAndCollect handles that).
+    if (dcRef.current) {
+      try {
+        dcRef.current.close();
+      } catch {
+        /* noop */
+      }
+      dcRef.current = null;
+    }
+    if (pcRef.current) {
+      try {
+        pcRef.current.close();
+      } catch {
+        /* noop */
+      }
+      pcRef.current = null;
+    }
+    if (prepTimerRef.current) {
+      clearInterval(prepTimerRef.current);
+      prepTimerRef.current = null;
+    }
+
+    const recordingActive = mediaRecorderRef.current !== null;
+    const elapsed = elapsedSinceRecordingStart();
+    recordedDurationMsRef.current = elapsed;
+
+    const blob = await stopRecorderAndCollect();
+
+    // Stop the mic AFTER the recorder is done.
+    if (localStreamRef.current) {
+      for (const t of localStreamRef.current.getTracks()) t.stop();
+      localStreamRef.current = null;
+    }
+    if (audioRef.current) audioRef.current.srcObject = null;
+    setExaminerSpeaking(false);
+
+    if (!recordingActive || !blob) {
+      // No usable recording — fall back to the Abandoned path.
+      const res = await endSpeakingAttempt(attemptId);
+      if (!res.ok) {
+        console.warn("endSpeakingAttempt failed", res.error);
+      }
+      setStage("ended");
+      return;
+    }
+
+    recordedBlobRef.current = blob;
+    await runUploadAndFinalize();
+  }
+
+  async function runUploadAndFinalize() {
+    const blob = recordedBlobRef.current;
+    const mime = recordingMimeTypeRef.current;
+    if (!blob || !mime) {
+      setStage("submit_error");
+      setSubmitErrorMessage(
+        "The recording wasn't captured. End the test to mark the attempt as abandoned.",
+      );
+      return;
+    }
+    setSubmitErrorMessage(null);
+    setStage("uploading");
+
+    const upReq = await requestRecordingUpload({
+      attemptId,
+      mimeType: mime,
+    });
+    if (!upReq.ok) {
+      setStage("submit_error");
+      setSubmitErrorMessage(submitErrorFor(upReq.error));
+      return;
+    }
+
+    const uploaded = await putBlobWithRetry(upReq.uploadUrl, blob, mime);
+    if (!uploaded) {
+      setStage("submit_error");
+      setSubmitErrorMessage(
+        "We couldn't upload your recording. Check your connection and try again.",
+      );
+      return;
+    }
+
+    setStage("finalizing");
+
+    // Fill any unset boundaries with the recording's end timestamp so the
+    // server-side validation (monotonic + within duration) holds even when
+    // the learner ended mid-test.
+    const elapsed = recordedDurationMsRef.current;
+    const b = boundariesMsRef.current;
+    const boundaries: StageBoundariesMs = {
+      part1End: b.part1End ?? elapsed,
+      part2PrepEnd: b.part2PrepEnd ?? elapsed,
+      part2LongTurnEnd: b.part2LongTurnEnd ?? elapsed,
+      part2FollowupEnd: b.part2FollowupEnd ?? elapsed,
+      part3End: elapsed,
+    };
+
+    const finalize = await finalizeSpeakingAttempt({
+      attemptId,
+      mimeType: mime,
+      durationMs: elapsed,
+      boundariesMs: boundaries,
+    });
+    if (!finalize.ok) {
+      setStage("submit_error");
+      setSubmitErrorMessage(submitErrorFor(finalize.error));
+      return;
+    }
+
+    // Recording uploaded + transcribed; navigate to the results page.
+    router.push(`/results/${attemptId}`);
+  }
+
+  async function abandonAndEnd() {
     teardownWebRTC();
-    setStage("ended");
     const res = await endSpeakingAttempt(attemptId);
     if (!res.ok) {
-      // We've already torn down the connection — surface the error but stay
-      // on the ended screen.
       console.warn("endSpeakingAttempt failed", res.error);
     }
+    setStage("ended");
   }
 
   // ── Render ─────────────────────────────────────────────────────────────
@@ -383,6 +641,26 @@ export function SpeakingPractice({
             content={content}
             examinerSpeaking={examinerSpeaking}
             onEnd={endTest}
+          />
+        ) : stage === "uploading" ? (
+          <ProcessingView
+            title="Uploading your recording…"
+            body="Hang tight — this usually takes a few seconds."
+          />
+        ) : stage === "finalizing" ? (
+          <ProcessingView
+            title="Transcribing your conversation…"
+            body="The examiner's grading the conversation. This can take 20–40 seconds."
+          />
+        ) : stage === "submit_error" ? (
+          <SubmitErrorView
+            message={submitErrorMessage}
+            onRetry={() => {
+              void runUploadAndFinalize();
+            }}
+            onAbandon={() => {
+              void abandonAndEnd();
+            }}
           />
         ) : stage === "ended" ? (
           <EndedView />
@@ -590,6 +868,51 @@ function ConnectingView() {
   );
 }
 
+function ProcessingView({ title, body }: { title: string; body: string }) {
+  return (
+    <Panel>
+      <div className="flex items-center gap-3">
+        <span
+          className="inline-block w-3 h-3 rounded-full bg-brand-red animate-pulse"
+          aria-hidden="true"
+        />
+        <h2 className="font-heading font-bold text-xl text-brand-black">
+          {title}
+        </h2>
+      </div>
+      <p className="font-body text-base text-brand-grey-700">{body}</p>
+    </Panel>
+  );
+}
+
+function SubmitErrorView({
+  message,
+  onRetry,
+  onAbandon,
+}: {
+  message: string | null;
+  onRetry: () => void;
+  onAbandon: () => void;
+}) {
+  return (
+    <Panel>
+      <h2 className="font-heading font-bold text-xl text-brand-black">
+        Submission hit a snag
+      </h2>
+      <p className="font-body text-base text-brand-grey-700">
+        {message ??
+          "We couldn't submit your recording. Your conversation audio is still in memory — try again."}
+      </p>
+      <div className="flex flex-wrap gap-3">
+        <PrimaryButton onClick={onRetry}>Try submitting again</PrimaryButton>
+        <SecondaryButton onClick={onAbandon}>
+          Give up — mark as abandoned
+        </SecondaryButton>
+      </div>
+    </Panel>
+  );
+}
+
 function Part1View({
   content,
   examinerSpeaking,
@@ -766,12 +1089,12 @@ function EndedView() {
   return (
     <Panel>
       <h2 className="font-display italic font-bold text-3xl text-brand-black leading-tight">
-        Test complete.
+        Attempt ended.
       </h2>
       <p className="font-body text-base text-brand-grey-700">
-        That&apos;s the end of your Speaking test. Recording capture,
-        transcription, and AI grading land in the next release — for now the
-        attempt is logged as completed without a band score.
+        This attempt was ended without a recording, so there&apos;s nothing
+        to grade — it&apos;s logged as abandoned. Start a fresh test from the
+        picker whenever you&apos;re ready.
       </p>
       <div>
         <Link
@@ -838,6 +1161,56 @@ function messageFor(
     default:
       return "Something went wrong starting the session.";
   }
+}
+
+function submitErrorFor(error: string): string {
+  switch (error) {
+    case "not_found":
+      return "This attempt is no longer available.";
+    case "wrong_status":
+      return "This attempt has already been submitted.";
+    case "bad_mime":
+      return "Your browser produced an unsupported recording format.";
+    case "bad_boundaries":
+      return "The stage timing data is invalid. Refresh and start again.";
+    case "missing_questions":
+      return "The Speaking test is missing one of its parts — please pick another.";
+    case "storage_unavailable":
+      return "Recording storage is unavailable. Try again in a moment.";
+    case "quota":
+      return "You've reached your daily AI quota. It resets at midnight UTC.";
+    case "transcribe":
+      return "The transcription service is having a moment. Try again.";
+    default:
+      return "Something went wrong submitting your recording.";
+  }
+}
+
+const UPLOAD_RETRIES = 1;
+
+async function putBlobWithRetry(
+  url: string,
+  blob: Blob,
+  contentType: string,
+): Promise<boolean> {
+  for (let attempt = 0; attempt <= UPLOAD_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "PUT",
+        body: blob,
+        headers: { "Content-Type": contentType },
+      });
+      if (res.ok) return true;
+      // 4xx is a hard failure — don't retry (the URL is wrong, expired, or
+      // the bucket rejected the upload). 5xx is worth one retry.
+      if (res.status >= 400 && res.status < 500) return false;
+    } catch {
+      // Network error — retry.
+    }
+    // Small backoff before retry.
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return false;
 }
 
 function useElapsed(startedAtIso: string): number {

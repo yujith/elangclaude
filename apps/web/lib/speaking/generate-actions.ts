@@ -102,9 +102,17 @@ export async function generateSpeakingTest(input: {
     };
     if (err instanceof QuotaExceededError) return { ok: false, error: "quota" };
     if (err instanceof GenerationShapeError) {
+      // Include a truncated `raw` so the failing field is visible without a
+      // second round-trip. err.raw is the post-retry model output.
+      const raw =
+        typeof err.raw === "string"
+          ? err.raw.length > 1500
+            ? err.raw.slice(0, 1500) + "…[truncated]"
+            : err.raw
+          : "(no raw)";
       console.error(
         "[speaking-cue-generate] schema rejection — model output did not parse",
-        { ...tag, issues: err.issues },
+        { ...tag, issues: err.issues, raw },
       );
       return { ok: false, error: "schema" };
     }

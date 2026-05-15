@@ -16,6 +16,9 @@ importers:
       '@elc/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@elc/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@elc/ui':
         specifier: workspace:*
         version: link:../../packages/ui

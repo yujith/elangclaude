@@ -230,3 +230,17 @@ export type {
   ExaminerScriptContent,
   ExaminerTurnDetectionMode,
 } from "./speaking/examiner-prompt";
+
+// ─── Audio / transcript analysis (Phase 3) ──────────────────────────────
+export { extractAudioFeatures } from "./audio/features";
+export type {
+  AudioFeatures,
+  TranscriptSegment,
+} from "./audio/features";
+
+export { splitTranscriptByParts } from "./audio/split-transcript";
+export type {
+  PartRangeSec,
+  PartTranscript,
+  SplitTranscriptResult,
+} from "./audio/split-transcript";

@@ -19,6 +19,7 @@ import { withOrg, type OrgContext } from "@elc/db";
 import { anthropicProvider, type Provider, type ProviderMessage } from "./adapters/anthropic";
 import { openrouterProvider } from "./adapters/openrouter";
 import { openaiAdapter, type OpenAIAdapter } from "./adapters/openai";
+import type { TranscriptSegment } from "./audio/features";
 import { ModelNotAllowedError } from "./errors";
 import {
   allowedModelsFor,
@@ -80,6 +81,10 @@ export type TranscribeRequest = {
 
 export type TranscribeResponse = {
   text: string;
+  // Whisper `verbose_json` segments and duration — used to split per IELTS
+  // part boundary and to compute audio features.
+  segments: TranscriptSegment[];
+  duration_sec: number;
 };
 
 export type GatewayDeps = {
@@ -180,7 +185,11 @@ export function createAI(deps: GatewayDeps) {
           mimeType: req.mimeType,
           language: req.language,
         });
-        return { text: res.text };
+        return {
+          text: res.text,
+          segments: res.segments,
+          duration_sec: res.duration_sec,
+        };
       } catch (err) {
         await refundQuota(db, req.ctx, TRANSCRIBE_QUOTA_WEIGHT);
         throw err;

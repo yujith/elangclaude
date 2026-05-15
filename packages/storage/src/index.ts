@@ -4,8 +4,12 @@
 // are the first and only consumer in v1. Keep this file thin — only the
 // symbols consumers actually use.
 
-export { recordingKey, assertKeyBelongsToOrg } from "./keys";
-export type { RecordingKeyParts } from "./keys";
+export {
+  recordingKey,
+  assertKeyBelongsToOrg,
+  extensionForMimeType,
+} from "./keys";
+export type { RecordingKeyParts, RecordingExtension } from "./keys";
 
 export {
   signedUploadUrl,

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { assertKeyBelongsToOrg, recordingKey } from "./keys";
+import {
+  assertKeyBelongsToOrg,
+  extensionForMimeType,
+  recordingKey,
+} from "./keys";
 
 describe("recordingKey", () => {
   it("prefixes org → user → attempt and ends in .webm", () => {
@@ -43,6 +47,55 @@ describe("recordingKey", () => {
     expect(() =>
       recordingKey({ org_id: "o", user_id: " ", attempt_id: "a" }),
     ).toThrow();
+  });
+});
+
+describe("recordingKey — extension", () => {
+  it("defaults to .webm when no extension is passed", () => {
+    expect(
+      recordingKey({ org_id: "org_1", user_id: "u", attempt_id: "a" }),
+    ).toBe("recordings/org_1/u/a.webm");
+  });
+
+  it("uses .mp4 when requested", () => {
+    expect(
+      recordingKey({
+        org_id: "org_1",
+        user_id: "u",
+        attempt_id: "a",
+        extension: "mp4",
+      }),
+    ).toBe("recordings/org_1/u/a.mp4");
+  });
+
+  it("rejects an unsupported extension", () => {
+    expect(() =>
+      recordingKey({
+        org_id: "org_1",
+        user_id: "u",
+        attempt_id: "a",
+        // @ts-expect-error — exercising the runtime guard.
+        extension: "ogg",
+      }),
+    ).toThrow(/Unsupported recording extension/);
+  });
+});
+
+describe("extensionForMimeType", () => {
+  it("maps audio/webm and its codec variants to webm", () => {
+    expect(extensionForMimeType("audio/webm")).toBe("webm");
+    expect(extensionForMimeType("audio/webm;codecs=opus")).toBe("webm");
+    expect(extensionForMimeType("video/webm")).toBe("webm");
+  });
+  it("maps audio/mp4 family to mp4", () => {
+    expect(extensionForMimeType("audio/mp4")).toBe("mp4");
+    expect(extensionForMimeType("audio/m4a")).toBe("mp4");
+    expect(extensionForMimeType("video/mp4")).toBe("mp4");
+  });
+  it("returns null for unsupported types", () => {
+    expect(extensionForMimeType("audio/ogg")).toBeNull();
+    expect(extensionForMimeType("application/pdf")).toBeNull();
+    expect(extensionForMimeType("")).toBeNull();
   });
 });
 

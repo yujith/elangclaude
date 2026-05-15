@@ -46,9 +46,11 @@ export default async function SpeakingPracticeAttemptPage({
     notFound();
   }
 
-  // Re-entering a finished session sends them back to the picker — grading +
-  // results display land in Phase 4. (Phase 3 will redirect graded attempts
-  // to /results/[attemptId] like Writing.)
+  // Re-entering a finished session: Submitted / Graded → results page;
+  // Abandoned → back to picker (there's nothing to grade).
+  if (attempt.status === "Submitted" || attempt.status === "Graded") {
+    redirect(`/results/${attempt.id}`);
+  }
   if (attempt.status !== "InProgress") {
     redirect("/practice/speaking");
   }

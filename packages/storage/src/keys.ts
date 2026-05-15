@@ -22,18 +22,50 @@ function assertIdSafe(label: string, value: string): void {
   }
 }
 
+// The file extension to suffix on the R2 key. We accept the two MediaRecorder
+// outputs the browser emits: `webm` (Chromium / Firefox / Brave) and `mp4`
+// (Safari). The extension is purely a label — R2 doesn't infer content type
+// from it — but a sensible suffix helps when a recording is downloaded
+// later for inspection.
+export type RecordingExtension = "webm" | "mp4";
+
+const ALLOWED_EXTENSIONS: ReadonlySet<RecordingExtension> = new Set([
+  "webm",
+  "mp4",
+]);
+
 export type RecordingKeyParts = {
   org_id: string;
   user_id: string;
   attempt_id: string;
+  extension?: RecordingExtension;
 };
 
-// recordings/{org_id}/{user_id}/{attempt_id}.webm
+// recordings/{org_id}/{user_id}/{attempt_id}.{webm|mp4}
 export function recordingKey(parts: RecordingKeyParts): string {
   assertIdSafe("org_id", parts.org_id);
   assertIdSafe("user_id", parts.user_id);
   assertIdSafe("attempt_id", parts.attempt_id);
-  return `recordings/${parts.org_id}/${parts.user_id}/${parts.attempt_id}.webm`;
+  const extension = parts.extension ?? "webm";
+  if (!ALLOWED_EXTENSIONS.has(extension)) {
+    throw new Error(`Unsupported recording extension: ${extension}`);
+  }
+  return `recordings/${parts.org_id}/${parts.user_id}/${parts.attempt_id}.${extension}`;
+}
+
+// Maps a recording MIME type to the file extension we store under. Returns
+// null when the MIME isn't one of the supported recorder outputs — the
+// caller surfaces a friendly error rather than smuggling a bad key in.
+export function extensionForMimeType(
+  mime: string,
+): RecordingExtension | null {
+  // Normalize: strip codec parameters and lower-case.
+  const base = mime.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (base === "audio/webm" || base === "video/webm") return "webm";
+  if (base === "audio/mp4" || base === "video/mp4" || base === "audio/m4a") {
+    return "mp4";
+  }
+  return null;
 }
 
 // Guards against signing a key from one org under another org's ctx. Every
