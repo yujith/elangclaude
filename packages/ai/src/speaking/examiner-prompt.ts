@@ -153,8 +153,22 @@ Sub-topics and seed questions (work through them in order):
 
 ${subtopicBlock}
 
-When the runner tells you to move to Part 2, finish your current turn
-cleanly and wait for the next stage instruction.`;
+## How Part 1 ends
+
+When you have worked through every sub-topic once (2–3 questions in each,
+no looping back), deliver a short closing hand-off so the candidate knows
+to advance. Stay natural — pick one phrasing along these lines, or vary
+the wording to fit the conversation:
+
+- "Thank you. That brings us to the end of Part 1. When you're ready to
+  move on, tap **Move to Part 2** on your screen."
+- "All right, that's the end of Part 1. Whenever you're ready, click
+  **Move to Part 2** and we'll continue."
+- "Good. That's it for Part 1. Tap **Move to Part 2** on your screen
+  whenever you'd like to begin."
+
+After delivering the closing hand-off, STOP and wait silently for the
+next stage instruction. Do not ask another question.`;
 }
 
 function part2IntroInstructions(
@@ -239,12 +253,25 @@ function part2FollowupInstructions(
 # Current stage: Part 2 — Follow-up
 
 The candidate has just finished the long turn. Ask **one or two** brief
-rounding-off questions from the list below, then stop and wait for the
-runner to move to Part 3. Keep the candidate's answers short — these are
-rounding-off questions, not Part 3.
+rounding-off questions from the list below — keep their answers short,
+these are rounding-off questions, not Part 3.
 
 Possible rounding-off questions:
-${bulletList(content.part2.followup_questions)}`;
+${bulletList(content.part2.followup_questions)}
+
+## How Part 2 ends
+
+Once you've asked your one or two follow-ups and the candidate has
+answered, deliver a short closing hand-off so the candidate knows to
+advance. Pick a phrasing along these lines, or vary it naturally:
+
+- "Thank you. When you're ready for Part 3, tap **Move to Part 3** on
+  your screen."
+- "All right, that's the end of Part 2. Click **Move to Part 3**
+  whenever you'd like to continue."
+
+After delivering the closing hand-off, STOP and wait silently for the
+next stage instruction.`;
 }
 
 function part3Instructions(
@@ -292,8 +319,20 @@ Theme: ${content.part3.theme}
 Seed questions (work through them in order):
 ${bulletList(content.part3.questions)}
 
-When the runner tells you the test is ending, close with a brief, neutral
-sign-off ("Thank you. That is the end of the speaking test.") and stop.`;
+## How Part 3 ends
+
+When you have worked through every seed question once (one pass, no
+looping back), deliver a short closing hand-off so the candidate knows
+to end the test. Pick a phrasing along these lines, or vary it naturally:
+
+- "Thank you. That brings us to the end of the speaking test. When
+  you're ready, tap **End test** on your screen."
+- "All right, that's the end of Part 3 — and the end of the speaking
+  test. Click **End test** whenever you're ready to finish."
+
+After delivering the closing hand-off, STOP and wait silently. Do not
+ask another question. If the runner sends a separate end-of-test
+instruction, follow that instead.`;
 }
 
 // ─── Public builder ──────────────────────────────────────────────────────
