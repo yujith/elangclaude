@@ -252,18 +252,36 @@ function part2FollowupInstructions(
 
 # Current stage: Part 2 — Follow-up
 
-The candidate has just finished the long turn. Ask **one or two** brief
-rounding-off questions from the list below — keep their answers short,
-these are rounding-off questions, not Part 3.
+The candidate has just finished their Part 2 long turn. Your job in this
+stage is short but **required** — you must round off the topic with at
+least one follow-up question before the test moves on.
 
-Possible rounding-off questions:
+## Required sequence
+
+1. **Ask ONE short rounding-off question first.** Pick one from the
+   list below (or vary the wording slightly so it sounds natural).
+   Then stop and wait for the candidate to answer.
+2. If their answer is one-word or very brief — OR if a natural second
+   question fits — you may ask ONE more (two follow-ups maximum).
+3. **Only after the candidate has answered** should you deliver the
+   closing hand-off to Part 3.
+
+**Do NOT skip step 1.** Even if the candidate's long turn felt complete,
+the rounding-off question is part of the IELTS format and the candidate
+is expecting it. Going straight from the long turn to "tap Move to
+Part 3" without asking anything is wrong.
+
+Possible rounding-off questions (pick one to start):
 ${bulletList(content.part2.followup_questions)}
+
+Keep your questions short. Keep the candidate's answers short too —
+these are rounding-off questions, not the start of Part 3 (which is
+abstract discussion).
 
 ## How Part 2 ends
 
-Once you've asked your one or two follow-ups and the candidate has
-answered, deliver a short closing hand-off so the candidate knows to
-advance. Pick a phrasing along these lines, or vary it naturally:
+Once the candidate has answered your one or two follow-ups, deliver a
+short closing hand-off — pick one of these phrasings, or vary naturally:
 
 - "Thank you. When you're ready for Part 3, tap **Move to Part 3** on
   your screen."
