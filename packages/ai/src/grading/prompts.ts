@@ -52,3 +52,20 @@ export function loadWritingPrompt(kind: WritingTaskKind): string {
 }
 
 export type PromptLoader = (kind: WritingTaskKind) => string;
+
+// ─── Speaking grading prompt ─────────────────────────────────────────────
+//
+// Speaking has one canonical grading prompt (unlike Writing's three
+// task-kinds) so the loader takes no arguments.
+
+let speakingPromptCache: string | null = null;
+
+export function loadSpeakingPrompt(): string {
+  if (speakingPromptCache !== null) return speakingPromptCache;
+  const path = resolve(promptsDir(), "speaking.md");
+  const raw = readFileSync(path, "utf-8");
+  speakingPromptCache = stripFrontmatter(raw).trim();
+  return speakingPromptCache;
+}
+
+export type SpeakingPromptLoader = () => string;

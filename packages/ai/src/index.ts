@@ -48,7 +48,30 @@ export type {
   WritingGraderDeps,
 } from "./grading/writing";
 export type { WritingTaskKind } from "./grading/prompts";
-export { loadWritingPrompt, stripFrontmatter } from "./grading/prompts";
+export {
+  loadSpeakingPrompt,
+  loadWritingPrompt,
+  stripFrontmatter,
+} from "./grading/prompts";
+export type { SpeakingPromptLoader } from "./grading/prompts";
+
+// ─── Speaking grading (Phase 4) ─────────────────────────────────────────
+export {
+  parseSpeakingGrade,
+  speakingGradeSchema,
+} from "./grading/speaking-schema";
+export type {
+  SpeakingGrade,
+  SpeakingParseResult,
+} from "./grading/speaking-schema";
+
+export { createSpeakingGrader, speakingGrader } from "./grading/speaking";
+export type {
+  SpeakingGradeRequest,
+  SpeakingGradeOutput,
+  SpeakingGraderDeps,
+  SpeakingPartKey,
+} from "./grading/speaking";
 
 // ─── Reading (deterministic, no AI on submit) ───────────────────────────
 export {

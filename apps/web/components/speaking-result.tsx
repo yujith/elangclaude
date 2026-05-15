@@ -1,24 +1,46 @@
 // Result view for a finished Speaking attempt.
 //
-// Phase 3: shows the submitted state — playback (if R2 is wired) + the per-
-// part transcripts the learner produced. The actual band-score breakdown is
-// Phase 4's responsibility; this component takes a `graded` flag so when
-// the grade row exists, the page can compose Phase 4's grade summary on
-// top of the existing transcript/playback panels.
+// Three top-of-page states:
+//   - `grade` present → band hero + 4-criterion breakdown + strengths +
+//     improvements (mirrors components/grade-summary.tsx for Writing).
+//   - `grade` null, `gradeError` set → "Grading hit a snag" with a retry
+//     form that re-runs `regradeSpeakingAttempt`.
+//   - both null → transitional "grading is processing" card.
+//
+// Below the grade panel: playback (if R2 download was reachable), the
+// IELTS content the candidate was responding to, and the per-part
+// transcript.
 
 import Link from "next/link";
+import type { SpeakingGrade } from "@elc/ai";
 import {
   renderCueCard,
   type SpeakingContent,
 } from "@/lib/speaking/content";
+import { regradeSpeakingAttempt } from "@/lib/speaking/actions";
+
+type GradeError = "quota" | "grading" | "unknown" | "shape" | null;
 
 type Props = {
+  attemptId: string;
   content: SpeakingContent | null;
   transcripts: { part1: string; part2: string; part3: string };
   audioUrl: string | null;
   durationSec: number | null;
-  graded: boolean;
+  grade: SpeakingGrade | null;
+  gradeError: GradeError;
 };
+
+const CRITERION_LABELS: Record<keyof SpeakingGrade["criteria"], string> = {
+  fluency_coherence: "Fluency & Coherence",
+  lexical_resource: "Lexical Resource",
+  grammatical_range: "Grammatical Range & Accuracy",
+  pronunciation: "Pronunciation",
+};
+
+function bandLabel(n: number): string {
+  return n.toFixed(1);
+}
 
 function formatDuration(sec: number | null): string {
   if (!sec || sec <= 0) return "";
@@ -28,11 +50,13 @@ function formatDuration(sec: number | null): string {
 }
 
 export function SpeakingResult({
+  attemptId,
   content,
   transcripts,
   audioUrl,
   durationSec,
-  graded,
+  grade,
+  gradeError,
 }: Props) {
   return (
     <section className="px-6 py-12 md:py-16">
@@ -42,16 +66,23 @@ export function SpeakingResult({
             Speaking · result
           </p>
           <h1 className="mt-2 font-display italic font-bold text-4xl md:text-5xl text-brand-black leading-tight">
-            {graded ? "Here’s where you landed." : "Recording submitted."}
+            {grade ? "Here’s where you landed." : "Recording submitted."}
           </h1>
-          {!graded ? (
+          {!grade && !gradeError ? (
             <p className="mt-3 font-body text-base text-brand-grey-700 max-w-2xl">
-              Your conversation has been transcribed and saved. AI band
-              scoring for Speaking lands in the next release — your
-              transcript is available below in the meantime.
+              Your conversation has been transcribed and saved. The AI
+              examiner is grading it now — refresh in a moment.
             </p>
           ) : null}
         </header>
+
+        {grade ? (
+          <GradePanel grade={grade} />
+        ) : gradeError ? (
+          <GradeErrorPanel attemptId={attemptId} error={gradeError} />
+        ) : (
+          <PendingPanel />
+        )}
 
         {audioUrl ? (
           <article className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6 space-y-3">
@@ -136,6 +167,153 @@ export function SpeakingResult({
     </section>
   );
 }
+
+// ─── Grade panels ────────────────────────────────────────────────────────
+
+function GradePanel({ grade }: { grade: SpeakingGrade }) {
+  return (
+    <div className="space-y-8">
+      <section className="rounded-lg bg-brand-black text-white p-8 md:p-12 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+        <div>
+          <p className="font-body text-sm uppercase tracking-widest text-brand-grey-200">
+            Speaking
+          </p>
+          <p className="font-heading font-bold text-xl mt-1">Overall band</p>
+        </div>
+        <p className="font-display italic font-bold text-7xl md:text-8xl leading-none text-brand-red tabular-nums">
+          {bandLabel(grade.band_overall)}
+        </p>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="font-heading font-bold text-2xl text-brand-black">
+          Criterion breakdown
+        </h2>
+        <ul className="space-y-3">
+          {(
+            Object.keys(CRITERION_LABELS) as (keyof SpeakingGrade["criteria"])[]
+          ).map((key) => {
+            const row = grade.criteria[key];
+            return (
+              <li
+                key={key}
+                className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-5 flex flex-col md:flex-row md:items-start md:gap-6"
+              >
+                <div className="md:w-56 shrink-0 flex md:flex-col md:items-start justify-between md:justify-start gap-3 md:gap-1 mb-3 md:mb-0">
+                  <p className="font-heading font-bold text-sm text-brand-grey-700">
+                    {CRITERION_LABELS[key]}
+                  </p>
+                  <p className="font-display italic font-bold text-3xl text-brand-black tabular-nums">
+                    {bandLabel(row.band)}
+                  </p>
+                </div>
+                <div className="flex-1 space-y-2">
+                  <p className="font-body text-base text-brand-grey-900 leading-relaxed">
+                    {row.justification}
+                  </p>
+                  <blockquote className="font-body italic text-sm text-brand-grey-700 border-l-4 border-brand-red pl-3">
+                    {row.evidence}
+                  </blockquote>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6">
+          <h3 className="font-heading font-bold text-lg text-brand-black mb-3">
+            Strengths
+          </h3>
+          <ul className="space-y-2 font-body text-base text-brand-grey-900">
+            {grade.strengths.map((s, i) => (
+              <li key={i} className="flex gap-2">
+                <span aria-hidden="true" className="text-brand-red font-bold">
+                  ✓
+                </span>
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6">
+          <h3 className="font-heading font-bold text-lg text-brand-black mb-3">
+            What to work on next
+          </h3>
+          <ul className="space-y-2 font-body text-base text-brand-grey-900">
+            {grade.improvements.map((s, i) => (
+              <li key={i} className="flex gap-2">
+                <span aria-hidden="true" className="text-brand-red font-bold">
+                  →
+                </span>
+                <span>{s}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 font-body text-sm text-brand-grey-500">
+            Suggested drill:{" "}
+            <span className="font-heading font-bold text-brand-grey-900">
+              {grade.next_drill}
+            </span>
+          </p>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function GradeErrorPanel({
+  attemptId,
+  error,
+}: {
+  attemptId: string;
+  error: NonNullable<GradeError>;
+}) {
+  const body =
+    error === "quota"
+      ? "Your daily AI quota has been used up. It resets at midnight UTC. Your recording and transcript are saved — you can try grading it again then."
+      : error === "shape"
+        ? "The AI examiner returned a grade we couldn't read. Try grading again — if it keeps failing, your admin will see it in the logs."
+        : error === "grading"
+          ? "The AI examiner couldn't finish grading this attempt. Your recording and transcript are saved — try again, or let your admin know."
+          : "Something went wrong grading this attempt. Your recording and transcript are saved.";
+  return (
+    <article className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6 space-y-4">
+      <h2 className="font-heading font-bold text-xl text-brand-black">
+        Grading hit a snag
+      </h2>
+      <p className="font-body text-base text-brand-grey-900">{body}</p>
+      {error !== "quota" ? (
+        <form action={regradeSpeakingAttempt}>
+          <input type="hidden" name="attemptId" value={attemptId} />
+          <button
+            type="submit"
+            className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+          >
+            Try grading again
+          </button>
+        </form>
+      ) : null}
+    </article>
+  );
+}
+
+function PendingPanel() {
+  return (
+    <article className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6 space-y-2">
+      <h2 className="font-heading font-bold text-xl text-brand-black">
+        Grading in progress
+      </h2>
+      <p className="font-body text-base text-brand-grey-700">
+        The AI examiner is scoring your conversation. Refresh the page in a
+        moment to see the breakdown.
+      </p>
+    </article>
+  );
+}
+
+// ─── Transcript helpers ──────────────────────────────────────────────────
 
 function TranscriptBlock({
   title,

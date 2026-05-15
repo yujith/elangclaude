@@ -18,14 +18,19 @@
 // returns ok without re-running Whisper.
 
 import { Prisma, withOrg } from "@elc/db";
+import type { OrgContext } from "@elc/db";
 import {
+  GradeShapeError,
   ProviderError,
   QuotaExceededError,
   ai,
   buildExaminerScript,
+  extractAudioFeatures,
   loadExaminerPrompt,
+  speakingGrader,
   splitTranscriptByParts,
   type ExaminerScript,
+  type SpeakingPartKey,
   type TranscriptSegment,
 } from "@elc/ai";
 import {
@@ -398,8 +403,14 @@ export async function finalizeSpeakingAttempt(args: {
   ) {
     return { ok: false, error: "not_found" };
   }
-  if (attempt.status === "Submitted" || attempt.status === "Graded") {
-    // Already finalized — idempotent return so the client's retry is safe.
+  if (attempt.status === "Graded") {
+    // Already graded — idempotent return so the client's retry is safe.
+    return { ok: true };
+  }
+  if (attempt.status === "Submitted") {
+    // Transcripts already persisted on a prior call; only the grade is
+    // still pending. Skip the download/transcribe path and re-try grading.
+    await tryGradeSpeaking(ctx, attempt.id);
     return { ok: true };
   }
   if (attempt.status !== "InProgress") {
@@ -560,7 +571,6 @@ export async function finalizeSpeakingAttempt(args: {
         data: { status: "Submitted", submitted_at: new Date() },
       }),
     ]);
-    return { ok: true };
   } catch (err) {
     console.error("[speaking] finalize transaction failed", {
       attempt_id: attempt.id,
@@ -568,4 +578,205 @@ export async function finalizeSpeakingAttempt(args: {
     });
     return { ok: false, error: "unknown" };
   }
+
+  // Transcripts are saved; the attempt is Submitted. Now run grading.
+  // Failures here do NOT roll back the transcripts — the results page
+  // surfaces a "Try grading again" retry that re-runs this same code
+  // path (idempotent on Submitted entry).
+  await tryGradeSpeaking(ctx, attempt.id);
+  return { ok: true };
+}
+
+// ─── Grading orchestration ───────────────────────────────────────────────
+//
+// Grading is wired as a separate idempotent step that re-runs cleanly on
+// retry. The finalize flow always calls it after the transcripts land; if
+// it fails, the attempt stays in Submitted and `regradeSpeakingAttempt`
+// can retry it from the results page.
+
+type SpeakingGradeOutcome = "ok" | "quota" | "grading" | "unknown";
+
+async function tryGradeSpeaking(
+  ctx: OrgContext,
+  attemptId: string,
+): Promise<SpeakingGradeOutcome> {
+  try {
+    await runSpeakingGrading(ctx, attemptId);
+    return "ok";
+  } catch (err) {
+    if (err instanceof QuotaExceededError) return "quota";
+    if (err instanceof ProviderError || err instanceof GradeShapeError) {
+      console.error("[speaking] grading rejected", { attemptId, err });
+      return "grading";
+    }
+    console.error("[speaking] grading failed (unknown)", { attemptId, err });
+    return "unknown";
+  }
+}
+
+function speakingResultsUrl(
+  attemptId: string,
+  outcome: SpeakingGradeOutcome,
+): string {
+  if (outcome === "ok") return `/results/${attemptId}`;
+  return `/results/${attemptId}?error=${outcome}`;
+}
+
+// Idempotent grading step. Loads the persisted transcripts + recording
+// duration + test content, computes the audio features on the fly, calls
+// the grader, and writes the Grade row in a transaction with the
+// Attempt.status → Graded flip. Returns silently if Grade already exists.
+async function runSpeakingGrading(
+  ctx: OrgContext,
+  attemptId: string,
+): Promise<void> {
+  const db = withOrg(ctx);
+
+  const attempt = await db.attempt.findUnique({
+    where: { id: attemptId },
+    select: {
+      id: true,
+      user_id: true,
+      section: true,
+      status: true,
+      test: { select: { body_json: true, section: true } },
+      recording: { select: { duration_sec: true } },
+      grade: { select: { id: true } },
+      answers: {
+        select: {
+          question_id: true,
+          response: true,
+          question: { select: { type: true } },
+        },
+      },
+    },
+  });
+  if (!attempt || attempt.user_id !== ctx.user_id) {
+    throw new Error("Attempt not found.");
+  }
+  if (attempt.section !== "Speaking" || attempt.test.section !== "Speaking") {
+    throw new Error("Not a Speaking attempt.");
+  }
+  if (attempt.grade) {
+    // Already graded — nothing to do.
+    return;
+  }
+  if (attempt.status !== "Submitted") {
+    throw new Error(`Cannot grade attempt with status ${attempt.status}.`);
+  }
+  if (!attempt.recording) {
+    throw new Error("Cannot grade an attempt without a recording.");
+  }
+
+  const content = parseSpeakingContent(attempt.test.body_json);
+  if (!content) {
+    throw new Error("Test content is malformed.");
+  }
+
+  // Collect per-part transcripts + concatenated segments from the Answer
+  // rows. `Answer.response.segments` was written at transcribe-time, so
+  // we can re-derive audio features without re-running Whisper.
+  const transcripts: Record<SpeakingPartKey, string> = {
+    part1: "",
+    part2: "",
+    part3: "",
+  };
+  const allSegments: TranscriptSegment[] = [];
+  const partsCovered: SpeakingPartKey[] = [];
+  for (const a of attempt.answers) {
+    const text = readAnswerText(a.response);
+    const segments = readAnswerSegments(a.response);
+    let part: SpeakingPartKey | null = null;
+    if (a.question.type === "speaking-part-1") part = "part1";
+    else if (a.question.type === "speaking-part-2-cue") part = "part2";
+    else if (a.question.type === "speaking-part-3") part = "part3";
+    if (part) {
+      transcripts[part] = text;
+      if (text.trim().length > 0) partsCovered.push(part);
+    }
+    allSegments.push(...segments);
+  }
+
+  const features = extractAudioFeatures({
+    segments: allSegments,
+    duration_sec: attempt.recording.duration_sec,
+  });
+
+  const result = await speakingGrader.grade({
+    ctx,
+    transcripts,
+    audioFeatures: features,
+    partsCovered,
+    testContent: {
+      part2_cue_card: content.part2.cue_card_topic,
+      part3_theme: content.part3.theme,
+    },
+  });
+
+  // Persist in a single transaction so we never end up with a Grade row
+  // pointing at an Attempt that's still status=Submitted.
+  await db.$transaction([
+    db.grade.create({
+      data: {
+        org_id: ctx.org_id,
+        attempt_id: attempt.id,
+        band_overall: new Prisma.Decimal(result.grade.band_overall),
+        criteria_scores_json: result.grade as unknown as Prisma.InputJsonValue,
+        feedback_text: null,
+        graded_by: "AI",
+      },
+    }),
+    db.attempt.update({
+      where: { id: attempt.id },
+      data: { status: "Graded" },
+    }),
+  ]);
+}
+
+// ─── regradeSpeakingAttempt ──────────────────────────────────────────────
+//
+// Form action wired to the "Try grading again" button on the results page.
+// Re-runs grading for a Submitted-but-not-Graded attempt and redirects
+// back to the results page with an outcome tag.
+
+export async function regradeSpeakingAttempt(
+  formData: FormData,
+): Promise<void> {
+  const ctx = await requireOrgContext();
+  const attemptId = formData.get("attemptId");
+  if (typeof attemptId !== "string" || attemptId.length === 0) {
+    throw new Error("Missing attemptId.");
+  }
+  const outcome = await tryGradeSpeaking(ctx, attemptId);
+  redirect(speakingResultsUrl(attemptId, outcome));
+}
+
+// ─── Answer-payload helpers ──────────────────────────────────────────────
+
+function readAnswerText(raw: unknown): string {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const obj = raw as { text?: unknown };
+    if (typeof obj.text === "string") return obj.text;
+  }
+  return "";
+}
+
+function readAnswerSegments(raw: unknown): TranscriptSegment[] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  const obj = raw as { segments?: unknown };
+  if (!Array.isArray(obj.segments)) return [];
+  const out: TranscriptSegment[] = [];
+  for (const s of obj.segments) {
+    if (s && typeof s === "object" && !Array.isArray(s)) {
+      const seg = s as { start?: unknown; end?: unknown; text?: unknown };
+      if (
+        typeof seg.start === "number" &&
+        typeof seg.end === "number" &&
+        typeof seg.text === "string"
+      ) {
+        out.push({ start: seg.start, end: seg.end, text: seg.text });
+      }
+    }
+  }
+  return out;
 }

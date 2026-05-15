@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { withOrg } from "@elc/db";
-import { parseReadingGrade, writingGradeSchema } from "@elc/ai";
+import {
+  parseReadingGrade,
+  speakingGradeSchema,
+  writingGradeSchema,
+} from "@elc/ai";
 import { signedDownloadUrl } from "@elc/storage";
 import { requireOrgContext } from "@/lib/auth/context";
 import { isWritingTaskType, taskShortLabel } from "@/lib/writing/task";
@@ -95,13 +99,29 @@ export default async function ResultsPage({
       }
     }
 
+    // Parse the grade if the row exists and the payload is well-formed.
+    // A persisted-but-malformed grade falls back to the retry UI.
+    const speakingGrade = attempt.grade
+      ? speakingGradeSchema.safeParse(attempt.grade.criteria_scores_json)
+      : null;
+
+    const gradeError = pickSpeakingGradeError(
+      speakingGrade && speakingGrade.success
+        ? null
+        : speakingGrade
+          ? "shape"
+          : sp.error,
+    );
+
     return (
       <SpeakingResult
+        attemptId={attempt.id}
         content={content}
         transcripts={transcripts}
         audioUrl={audioUrl}
         durationSec={attempt.recording?.duration_sec ?? null}
-        graded={attempt.status === "Graded"}
+        grade={speakingGrade && speakingGrade.success ? speakingGrade.data : null}
+        gradeError={gradeError}
       />
     );
   }
@@ -321,6 +341,15 @@ function readResponseText(raw: unknown): string {
     if (typeof obj.text === "string") return obj.text;
   }
   return "";
+}
+
+function pickSpeakingGradeError(
+  raw: string | null | undefined,
+): "quota" | "grading" | "unknown" | "shape" | null {
+  if (raw === "quota" || raw === "grading" || raw === "unknown" || raw === "shape") {
+    return raw;
+  }
+  return null;
 }
 
 function readSpeakingTranscripts(
