@@ -64,6 +64,21 @@ const PART2_PREP_SECONDS = 60;
 // anyway. The hand-off itself is normally ~12–15s.
 const PART2_INTRO_SAFETY_MS = 25_000;
 
+// Tuned `server_vad` parameters for the IELTS conversation feel:
+//   - threshold:           a hair above OpenAI's default so background mic
+//                          noise / breaths don't false-trigger a turn end.
+//   - prefix_padding_ms:   include 300 ms before the detected speech start
+//                          so the leading "Um, well…" isn't cut off.
+//   - silence_duration_ms: wait 700 ms of silence before declaring the
+//                          candidate's turn done — gives them a beat to
+//                          finish a thought without the examiner cutting in.
+const VAD_CONFIG = {
+  type: "server_vad" as const,
+  threshold: 0.55,
+  prefix_padding_ms: 300,
+  silence_duration_ms: 700,
+};
+
 const STAGE_LABEL: Record<Stage, string> = {
   idle: "Ready to begin",
   connecting: "Connecting…",
@@ -106,6 +121,9 @@ export function SpeakingPractice({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [prepRemaining, setPrepRemaining] = useState(PART2_PREP_SECONDS);
   const [examinerSpeaking, setExaminerSpeaking] = useState(false);
+  // Live caption — the examiner's current line as Whisper transcribes it.
+  // Updated from `response.audio_transcript.delta` events on the data channel.
+  const [captionText, setCaptionText] = useState("");
 
   const router = useRouter();
 
@@ -297,9 +315,7 @@ export function SpeakingPractice({
           audio: {
             input: {
               turn_detection:
-                cfg.turn_detection === "server_vad"
-                  ? { type: "server_vad" }
-                  : null,
+                cfg.turn_detection === "server_vad" ? VAD_CONFIG : null,
             },
           },
         },
@@ -426,23 +442,50 @@ export function SpeakingPractice({
   }
 
   function onDataChannelMessage(e: MessageEvent<string>) {
-    // Light-weight: just toggle the examiner-speaking indicator. We don't
-    // act on individual events — the IELTS structure is driven by the
-    // runner via session.update. `response.created` and `response.done`
-    // reliably bracket each examiner turn in the GA Realtime event stream,
-    // regardless of the audio chunk event names.
-    let parsed: { type?: string } | null = null;
+    // The IELTS structure is driven by the runner via session.update — the
+    // events we care about here are the ones that update on-screen state:
+    // examiner-speaking indicator, live captions, and the part2_intro →
+    // part2_prep auto-advance.
+    type RealtimeEvent = {
+      type?: string;
+      delta?: unknown;
+      transcript?: unknown;
+    };
+    let parsed: RealtimeEvent;
     try {
-      parsed = JSON.parse(e.data) as { type?: string };
+      parsed = JSON.parse(e.data) as RealtimeEvent;
     } catch {
       return;
     }
     const t = parsed.type;
+
     if (t === "response.created") {
       setExaminerSpeaking(true);
+      setCaptionText("");
     } else if (t === "response.done" || t === "response.cancelled") {
       setExaminerSpeaking(false);
     }
+
+    // Live captions — the GA Realtime API emits audio-transcript deltas
+    // under one of these two event names depending on the model snapshot;
+    // accept both so we don't silently lose captions if the name flips.
+    if (
+      t === "response.audio_transcript.delta" ||
+      t === "response.output_audio_transcript.delta"
+    ) {
+      if (typeof parsed.delta === "string") {
+        const delta = parsed.delta;
+        setCaptionText((prev) => prev + delta);
+      }
+    } else if (
+      t === "response.audio_transcript.done" ||
+      t === "response.output_audio_transcript.done"
+    ) {
+      if (typeof parsed.transcript === "string") {
+        setCaptionText(parsed.transcript);
+      }
+    }
+
     // Auto-advance from the hand-off into the silent prep minute as soon
     // as the examiner finishes their canonical Part 2 intro. response.cancelled
     // never fires here (we don't send response.cancel after entering intro),
@@ -692,6 +735,7 @@ export function SpeakingPractice({
           <Part1View
             content={content}
             examinerSpeaking={examinerSpeaking}
+            caption={captionText}
             onNext={moveToPart2Intro}
             onEnd={endTest}
           />
@@ -699,6 +743,7 @@ export function SpeakingPractice({
           <Part2IntroView
             content={content}
             examinerSpeaking={examinerSpeaking}
+            caption={captionText}
             onEnd={endTest}
           />
         ) : stage === "part2_prep" ? (
@@ -717,6 +762,7 @@ export function SpeakingPractice({
         ) : stage === "part2_followup" ? (
           <Part2FollowupView
             examinerSpeaking={examinerSpeaking}
+            caption={captionText}
             onNext={moveToPart3}
             onEnd={endTest}
           />
@@ -724,6 +770,7 @@ export function SpeakingPractice({
           <Part3View
             content={content}
             examinerSpeaking={examinerSpeaking}
+            caption={captionText}
             onEnd={endTest}
           />
         ) : stage === "uploading" ? (
@@ -850,6 +897,24 @@ function ExaminerIndicator({ speaking }: { speaking: boolean }) {
       <span className="font-body text-sm text-brand-grey-700">
         {speaking ? "Examiner speaking…" : "Your turn — speak naturally."}
       </span>
+    </div>
+  );
+}
+
+// Live caption for the examiner's current turn. Text streams in from
+// `response.audio_transcript.delta` events on the data channel.
+// aria-live="polite" lets screen readers announce updates without
+// interrupting other content.
+function CaptionBar({ text }: { text: string }) {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  return (
+    <div
+      className="rounded-md bg-brand-black/90 text-white px-4 py-3"
+      aria-live="polite"
+      aria-label="Examiner caption"
+    >
+      <p className="font-body text-sm leading-relaxed">{trimmed}</p>
     </div>
   );
 }
@@ -1005,11 +1070,13 @@ function SubmitErrorView({
 function Part1View({
   content,
   examinerSpeaking,
+  caption,
   onNext,
   onEnd,
 }: {
   content: SpeakingContent;
   examinerSpeaking: boolean;
+  caption: string;
   onNext: () => void;
   onEnd: () => void;
 }) {
@@ -1017,6 +1084,7 @@ function Part1View({
     <div className="space-y-6">
       <Panel>
         <ExaminerIndicator speaking={examinerSpeaking} />
+        <CaptionBar text={caption} />
         <p className="font-body text-base text-brand-grey-700">
           The examiner is conducting Part 1 — short questions on familiar
           topics. Just answer naturally. The conversation runs ~4–5 minutes.
@@ -1048,16 +1116,19 @@ function Part1View({
 function Part2IntroView({
   content,
   examinerSpeaking,
+  caption,
   onEnd,
 }: {
   content: SpeakingContent;
   examinerSpeaking: boolean;
+  caption: string;
   onEnd: () => void;
 }) {
   return (
     <div className="space-y-6">
       <Panel>
         <ExaminerIndicator speaking={examinerSpeaking} />
+        <CaptionBar text={caption} />
         <p className="font-body text-base text-brand-grey-700">
           The examiner is handing you the cue card. Your one minute of prep
           will start as soon as they finish reading the instructions.
@@ -1148,10 +1219,12 @@ function Part2LongTurnView({
 
 function Part2FollowupView({
   examinerSpeaking,
+  caption,
   onNext,
   onEnd,
 }: {
   examinerSpeaking: boolean;
+  caption: string;
   onNext: () => void;
   onEnd: () => void;
 }) {
@@ -1159,6 +1232,7 @@ function Part2FollowupView({
     <div className="space-y-6">
       <Panel>
         <ExaminerIndicator speaking={examinerSpeaking} />
+        <CaptionBar text={caption} />
         <p className="font-body text-base text-brand-grey-700">
           The examiner will ask one or two brief follow-up questions about
           what you just said. Answer in a sentence or two each.
@@ -1175,16 +1249,19 @@ function Part2FollowupView({
 function Part3View({
   content,
   examinerSpeaking,
+  caption,
   onEnd,
 }: {
   content: SpeakingContent;
   examinerSpeaking: boolean;
+  caption: string;
   onEnd: () => void;
 }) {
   return (
     <div className="space-y-6">
       <Panel>
         <ExaminerIndicator speaking={examinerSpeaking} />
+        <CaptionBar text={caption} />
         <p className="font-body text-base text-brand-grey-700">
           Part 3 is a discussion. The examiner will ask broader, more abstract
           questions about{" "}

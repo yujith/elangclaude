@@ -143,8 +143,10 @@ export async function createRealtimeSession(
     const session = await ai.realtimeSession({
       ctx,
       instructions: script.part1.instructions,
-      // v1 voice — Phase 5 polish does accent variety.
-      voice: "alloy",
+      // Deterministic voice rotation per attempt — same attempt always
+      // gets the same voice across retries / reconnects, but a learner
+      // doing multiple attempts hears a different examiner each time.
+      voice: voiceForAttempt(attempt.id),
     });
     return {
       ok: true,
@@ -749,6 +751,30 @@ export async function regradeSpeakingAttempt(
   }
   const outcome = await tryGradeSpeaking(ctx, attemptId);
   redirect(speakingResultsUrl(attemptId, outcome));
+}
+
+// ─── Voice rotation (Phase 5) ────────────────────────────────────────────
+//
+// The OpenAI Realtime GA API ships several voices that differ in timbre,
+// age, and perceived accent. We pick one per attempt with a tiny stable
+// hash so the examiner doesn't always sound identical, while a given
+// attempt stays consistent across reconnects.
+
+const REALTIME_VOICES = [
+  "alloy",
+  "ash",
+  "ballad",
+  "coral",
+  "sage",
+  "verse",
+] as const;
+
+function voiceForAttempt(attemptId: string): string {
+  let hash = 0;
+  for (let i = 0; i < attemptId.length; i++) {
+    hash = (hash * 31 + attemptId.charCodeAt(i)) >>> 0;
+  }
+  return REALTIME_VOICES[hash % REALTIME_VOICES.length]!;
 }
 
 // ─── Answer-payload helpers ──────────────────────────────────────────────
