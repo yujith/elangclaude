@@ -21,7 +21,9 @@
       "@elc/db": ["packages/db/src/index.ts"],
       "@elc/db/*": ["packages/db/src/*"],
       "@elc/ai": ["packages/ai/src/index.ts"],
-      "@elc/ai/*": ["packages/ai/src/*"]
+      "@elc/ai/*": ["packages/ai/src/*"],
+      "@elc/storage": ["packages/storage/src/index.ts"],
+      "@elc/storage/*": ["packages/storage/src/*"]
     }
   }
 }

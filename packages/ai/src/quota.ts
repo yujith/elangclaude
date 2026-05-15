@@ -57,9 +57,14 @@ export function todayUtc(): Date {
   );
 }
 
+// `weight` is how many quota units this call costs. It defaults to 1, so every
+// `ai.chat()` callsite is unchanged. A Realtime session passes a larger weight
+// (see REALTIME_SESSION_QUOTA_WEIGHT) because one conversation costs far more
+// than one chat call — ADR 0005 (D3).
 export async function reserveQuota(
   db: QuotaDb,
   ctx: OrgContext,
+  weight = 1,
   now: Date = todayUtc(),
 ): Promise<void> {
   const org = await db.organization.findUniqueOrThrow({
@@ -69,19 +74,19 @@ export async function reserveQuota(
 
   const after = await db.quotaUsage.upsert({
     where: { user_id_date: { user_id: ctx.user_id, date: now } },
-    create: { user_id: ctx.user_id, date: now, ai_calls_count: 1 },
-    update: { ai_calls_count: { increment: 1 } },
+    create: { user_id: ctx.user_id, date: now, ai_calls_count: weight },
+    update: { ai_calls_count: { increment: weight } },
     select: { ai_calls_count: true },
   });
 
   if (after.ai_calls_count > org.quota_daily) {
     await db.quotaUsage.update({
       where: { user_id_date: { user_id: ctx.user_id, date: now } },
-      data: { ai_calls_count: { decrement: 1 } },
+      data: { ai_calls_count: { decrement: weight } },
     });
     throw new QuotaExceededError(
       ctx.user_id,
-      after.ai_calls_count - 1,
+      after.ai_calls_count - weight,
       org.quota_daily,
     );
   }
@@ -90,15 +95,16 @@ export async function reserveQuota(
 export async function refundQuota(
   db: QuotaDb,
   ctx: OrgContext,
+  weight = 1,
   now: Date = todayUtc(),
 ): Promise<void> {
   // Best-effort; if this fails we'd rather not mask the original error.
   try {
     await db.quotaUsage.update({
       where: { user_id_date: { user_id: ctx.user_id, date: now } },
-      data: { ai_calls_count: { decrement: 1 } },
+      data: { ai_calls_count: { decrement: weight } },
     });
   } catch {
-    // Swallow. A leaked reservation costs at most one slot until midnight.
+    // Swallow. A leaked reservation costs at most `weight` slots until midnight.
   }
 }

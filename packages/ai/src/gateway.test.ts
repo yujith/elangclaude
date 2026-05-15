@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@elc/db";
 import { createAI } from "./gateway";
-import { ModelNotAllowedError, QuotaExceededError } from "./errors";
+import { ModelNotAllowedError, ProviderError, QuotaExceededError } from "./errors";
 import type { Provider } from "./adapters/anthropic";
+import type { OpenAIAdapter } from "./adapters/openai";
 import type { QuotaDb } from "./quota";
 
 const CTX: OrgContext = {
@@ -19,6 +20,39 @@ function fakeProvider(text = "OK"): Provider & { calls: number } {
   };
   Object.defineProperty(fn, "calls", { get: () => calls });
   return fn as Provider & { calls: number };
+}
+
+// A working OpenAI adapter with call counters. Failure cases construct an
+// adapter inline rather than parameterising this helper.
+function fakeOpenAI(): OpenAIAdapter & {
+  realtimeCalls: number;
+  transcribeCalls: number;
+} {
+  let realtimeCalls = 0;
+  let transcribeCalls = 0;
+  const adapter: OpenAIAdapter = {
+    mintRealtimeSession: async () => {
+      realtimeCalls++;
+      return {
+        client_secret: "ek_test_secret",
+        expires_at: 1_900_000_000,
+        session_id: "sess_test",
+        model: "gpt-4o-realtime-preview-2024-12-17",
+      };
+    },
+    transcribe: async () => {
+      transcribeCalls++;
+      return { text: "transcribed text" };
+    },
+  };
+  Object.defineProperty(adapter, "realtimeCalls", { get: () => realtimeCalls });
+  Object.defineProperty(adapter, "transcribeCalls", {
+    get: () => transcribeCalls,
+  });
+  return adapter as OpenAIAdapter & {
+    realtimeCalls: number;
+    transcribeCalls: number;
+  };
 }
 
 function fakeDb(opts: {
@@ -44,6 +78,7 @@ describe("gateway: allowlist", () => {
         anthropic: provider,
         openrouter: vi.fn() as unknown as Provider,
       },
+      openai: fakeOpenAI(),
       db: fakeDb({ quotaDaily: 10, countAfterUpsert: 1 }),
     });
     const res = await ai.chat({
@@ -62,6 +97,7 @@ describe("gateway: allowlist", () => {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
       },
+      openai: fakeOpenAI(),
       db: fakeDb({ quotaDaily: 10, countAfterUpsert: 1 }),
     });
     await expect(
@@ -83,6 +119,7 @@ describe("gateway: allowlist", () => {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
       },
+      openai: fakeOpenAI(),
       db: fakeDb({ quotaDaily: 10, countAfterUpsert: 1 }),
     });
     await expect(
@@ -104,6 +141,7 @@ describe("gateway: quota integration", () => {
         anthropic: provider,
         openrouter: vi.fn() as unknown as Provider,
       },
+      openai: fakeOpenAI(),
       // Post-upsert count of 11 with limit 10 → over.
       db: fakeDb({ quotaDaily: 10, countAfterUpsert: 11 }),
     });
@@ -140,6 +178,7 @@ describe("gateway: quota integration", () => {
         },
         openrouter: vi.fn() as unknown as Provider,
       },
+      openai: fakeOpenAI(),
       db,
     });
     await expect(
@@ -150,6 +189,163 @@ describe("gateway: quota integration", () => {
         maxTokens: 100,
       }),
     ).rejects.toThrow("upstream 500");
+    expect(updates).toEqual(["decrement"]);
+  });
+});
+
+describe("gateway: realtimeSession", () => {
+  it("mints an ephemeral token when under quota", async () => {
+    const openai = fakeOpenAI();
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai,
+      db: fakeDb({ quotaDaily: 100, countAfterUpsert: 8 }),
+    });
+    const res = await ai.realtimeSession({
+      ctx: CTX,
+      instructions: "You are an IELTS examiner.",
+    });
+    expect(res.client_secret).toBe("ek_test_secret");
+    expect(res.quota_weight).toBe(8);
+    expect(openai.realtimeCalls).toBe(1);
+  });
+
+  it("does not mint a token when quota is exhausted", async () => {
+    const openai = fakeOpenAI();
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai,
+      // Post-upsert count of 11 with limit 10 → over.
+      db: fakeDb({ quotaDaily: 10, countAfterUpsert: 11 }),
+    });
+    await expect(
+      ai.realtimeSession({ ctx: CTX }),
+    ).rejects.toBeInstanceOf(QuotaExceededError);
+    expect(openai.realtimeCalls).toBe(0);
+  });
+
+  it("refunds the weighted reservation if minting fails", async () => {
+    const updates: Array<"increment" | "decrement"> = [];
+    const db: (ctx: OrgContext) => QuotaDb = () => ({
+      organization: {
+        findUniqueOrThrow: vi.fn(async () => ({ quota_daily: 100 })),
+      },
+      quotaUsage: {
+        upsert: vi.fn(async () => ({ ai_calls_count: 8 })),
+        update: vi.fn(async (args) => {
+          const change = args.data.ai_calls_count;
+          updates.push("decrement" in change ? "decrement" : "increment");
+          return {};
+        }),
+      },
+    });
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai: {
+        mintRealtimeSession: async () => {
+          throw new ProviderError("openai", new Error("realtime 500"));
+        },
+        transcribe: async () => ({ text: "" }),
+      },
+      db,
+    });
+    await expect(ai.realtimeSession({ ctx: CTX })).rejects.toBeInstanceOf(
+      ProviderError,
+    );
+    // The weighted reservation must be undone exactly once.
+    expect(updates).toEqual(["decrement"]);
+  });
+});
+
+describe("gateway: transcribe", () => {
+  it("transcribes audio when under quota", async () => {
+    const openai = fakeOpenAI();
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai,
+      db: fakeDb({ quotaDaily: 10, countAfterUpsert: 1 }),
+    });
+    const res = await ai.transcribe({
+      ctx: CTX,
+      audio: new Uint8Array([1, 2, 3]),
+      filename: "rec.webm",
+      mimeType: "audio/webm",
+    });
+    expect(res.text).toBe("transcribed text");
+    expect(openai.transcribeCalls).toBe(1);
+  });
+
+  it("does not call Whisper when quota is exhausted", async () => {
+    const openai = fakeOpenAI();
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai,
+      db: fakeDb({ quotaDaily: 10, countAfterUpsert: 11 }),
+    });
+    await expect(
+      ai.transcribe({
+        ctx: CTX,
+        audio: new Uint8Array([1, 2, 3]),
+        filename: "rec.webm",
+        mimeType: "audio/webm",
+      }),
+    ).rejects.toBeInstanceOf(QuotaExceededError);
+    expect(openai.transcribeCalls).toBe(0);
+  });
+
+  it("refunds the reservation if Whisper throws", async () => {
+    const updates: Array<"increment" | "decrement"> = [];
+    const db: (ctx: OrgContext) => QuotaDb = () => ({
+      organization: {
+        findUniqueOrThrow: vi.fn(async () => ({ quota_daily: 10 })),
+      },
+      quotaUsage: {
+        upsert: vi.fn(async () => ({ ai_calls_count: 1 })),
+        update: vi.fn(async (args) => {
+          const change = args.data.ai_calls_count;
+          updates.push("decrement" in change ? "decrement" : "increment");
+          return {};
+        }),
+      },
+    });
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai: {
+        mintRealtimeSession: async () => {
+          throw new Error("unused");
+        },
+        transcribe: async () => {
+          throw new ProviderError("openai", new Error("whisper 500"));
+        },
+      },
+      db,
+    });
+    await expect(
+      ai.transcribe({
+        ctx: CTX,
+        audio: new Uint8Array([1, 2, 3]),
+        filename: "rec.webm",
+        mimeType: "audio/webm",
+      }),
+    ).rejects.toBeInstanceOf(ProviderError);
     expect(updates).toEqual(["decrement"]);
   });
 });

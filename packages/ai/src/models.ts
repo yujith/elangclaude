@@ -9,7 +9,9 @@
 // New purposes land here BEFORE any code calls them. Adding a purpose is
 // a deliberate cost decision, not an inline default.
 
-export type Purpose =
+// Chat purposes route through the model REGISTRY below — a purpose → allowed
+// chat-models allowlist. Every `ai.chat()` call carries one of these.
+export type ChatPurpose =
   | "writing-grade"
   | "speaking-grade"
   | "writing-generate"
@@ -17,7 +19,25 @@ export type Purpose =
   | "listening-generate"
   | "speaking-cue-generate";
 
+// Non-chat AI purposes. These do NOT have a chat-model allowlist — they hit
+// fixed OpenAI endpoints (see adapters/openai.ts) — but they still carry a
+// Purpose so the gateway can quota-gate and cost-log them. See ADR 0005 (D1).
+export type RealtimePurpose = "speaking-realtime";
+export type TranscribePurpose = "speaking-transcribe";
+
+export type Purpose = ChatPurpose | RealtimePurpose | TranscribePurpose;
+
 export type ProviderName = "anthropic" | "openrouter";
+
+// A Realtime Speaking session is metered as multiple quota units: a ~12-min
+// conversation costs roughly an order of magnitude more than a single chat
+// call, so counting it as 1 would let the daily quota badly under-price it.
+// This weight is deliberately conservative and NOT measured — it is the
+// placeholder for BRIEF.md open question #1 ("model a 10-minute
+// conversation"). Re-tune against real cost data before Speaking opens past a
+// dev org. See ADR 0005 (D3). Transcription stays at 1.
+export const REALTIME_SESSION_QUOTA_WEIGHT = 8;
+export const TRANSCRIBE_QUOTA_WEIGHT = 1;
 
 export type ModelEntry = {
   id: string;
@@ -58,7 +78,10 @@ const OPENROUTER_NEMOTRON_3_SUPER: ModelEntry = {
   provider: "openrouter",
 };
 
-const REGISTRY: Record<Purpose, { default: ModelEntry; allowed: ModelEntry[] }> = {
+const REGISTRY: Record<
+  ChatPurpose,
+  { default: ModelEntry; allowed: ModelEntry[] }
+> = {
   "writing-grade": {
     default: ANTHROPIC_SONNET,
     allowed: [ANTHROPIC_SONNET],
@@ -93,22 +116,36 @@ const REGISTRY: Record<Purpose, { default: ModelEntry; allowed: ModelEntry[] }> 
     ],
   },
   "listening-generate": { default: ANTHROPIC_SONNET, allowed: [] },
-  "speaking-cue-generate": { default: ANTHROPIC_SONNET, allowed: [] },
+  // Speaking cue/topic generation is bulk, SuperAdmin-moderated,
+  // structured-JSON output — the same profile as reading-generate, so it
+  // gets the same cheap OpenRouter model set. Sonnet is deliberately NOT on
+  // the allowlist: generation does not reason about a rubric. See ADR 0005 (D5).
+  "speaking-cue-generate": {
+    default: OPENROUTER_GEMINI_FLASH,
+    allowed: [
+      OPENROUTER_GEMINI_FLASH,
+      OPENROUTER_LLAMA_3_70B,
+      OPENROUTER_MISTRAL_LARGE,
+    ],
+  },
 };
 
-export function getDefaultModel(purpose: Purpose): ModelEntry {
+export function getDefaultModel(purpose: ChatPurpose): ModelEntry {
   return REGISTRY[purpose].default;
 }
 
-export function isModelAllowed(purpose: Purpose, modelId: string): boolean {
+export function isModelAllowed(purpose: ChatPurpose, modelId: string): boolean {
   return REGISTRY[purpose].allowed.some((m) => m.id === modelId);
 }
 
-export function allowedModelsFor(purpose: Purpose): readonly string[] {
+export function allowedModelsFor(purpose: ChatPurpose): readonly string[] {
   return REGISTRY[purpose].allowed.map((m) => m.id);
 }
 
-export function resolveModel(purpose: Purpose, modelId?: string): ModelEntry {
+export function resolveModel(
+  purpose: ChatPurpose,
+  modelId?: string,
+): ModelEntry {
   if (!modelId) return getDefaultModel(purpose);
   const match = REGISTRY[purpose].allowed.find((m) => m.id === modelId);
   if (!match) {

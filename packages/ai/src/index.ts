@@ -2,10 +2,32 @@
 // `@elc/db/index.ts` — only the symbols routes actually use.
 
 export { ai, createAI } from "./gateway";
-export type { ChatRequest, ChatResponse, GatewayDeps } from "./gateway";
+export type {
+  ChatRequest,
+  ChatResponse,
+  GatewayDeps,
+  RealtimeSessionRequest,
+  RealtimeSessionResponse,
+  TranscribeRequest,
+  TranscribeResponse,
+} from "./gateway";
 
-export type { Purpose, ProviderName } from "./models";
-export { allowedModelsFor, getDefaultModel, isModelAllowed } from "./models";
+export type {
+  ChatPurpose,
+  Purpose,
+  RealtimePurpose,
+  TranscribePurpose,
+  ProviderName,
+} from "./models";
+export {
+  allowedModelsFor,
+  getDefaultModel,
+  isModelAllowed,
+  REALTIME_SESSION_QUOTA_WEIGHT,
+  TRANSCRIBE_QUOTA_WEIGHT,
+} from "./models";
+
+export type { OpenAIAdapter } from "./adapters/openai";
 
 export {
   GradeShapeError,
