@@ -139,6 +139,63 @@ export { bandFromRaw40, bandFromPartial, scaleRawTo40 } from "./reading/band";
 export { persistReadingGrade, ReadingPersistError } from "./reading/persist";
 export type { PersistResult as ReadingPersistResult } from "./reading/persist";
 
+// ─── Listening (deterministic, no AI on submit) ─────────────────────────
+//
+// Phase 1 surface: body_json parser + question-type parsers + the hand-
+// authored fixture. Audio synthesis, runner, and grader land in later
+// phases (see docs/adr/0007-listening-data-shape.md).
+export {
+  findCompletionBlock as findListeningCompletionBlock,
+  parseListeningContent,
+  partForQuestionPosition as partForListeningQuestionPosition,
+} from "./listening/content";
+export type {
+  ListeningAccent,
+  ListeningAudioAsset,
+  ListeningAudioFormat,
+  ListeningCompletionBlock,
+  ListeningCompletionLayout,
+  ListeningCompletionRow,
+  ListeningContent,
+  ListeningPart,
+  ListeningPartContext,
+  ListeningPartNumber,
+  ListeningSegment,
+  ListeningSegmentCell,
+  ListeningSpeaker,
+  ListeningSpeakerRole,
+} from "./listening/content";
+
+export {
+  isListeningQuestionKind,
+  LISTENING_QUESTION_KINDS,
+  parseListeningQuestionPayload,
+  parseListeningResponse,
+} from "./listening/question-types";
+export type {
+  ListeningCompletionBlankPayload,
+  ListeningCompletionBlankResponse,
+  ListeningMcqMultiPayload,
+  ListeningMcqMultiResponse,
+  ListeningMcqOption,
+  ListeningMcqSinglePayload,
+  ListeningMcqSingleResponse,
+  ListeningQuestionKind,
+  ListeningQuestionPayload,
+  ListeningResponse,
+  ListeningSentenceCompletionPayload,
+  ListeningSentenceCompletionResponse,
+  ListeningShortAnswerPayload,
+  ListeningShortAnswerResponse,
+} from "./listening/question-types";
+
+export {
+  sampleListeningContent,
+  sampleListeningQuestions,
+  sampleListeningTest,
+} from "./listening/fixtures";
+export type { ListeningFixtureQuestion } from "./listening/fixtures";
+
 // ─── Reading generation (Phase 5) ───────────────────────────────────────
 export {
   createReadingGenerator,
