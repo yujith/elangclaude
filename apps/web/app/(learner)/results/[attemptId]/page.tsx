@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { withOrg } from "@elc/db";
 import {
+  parseListeningGrade,
   parseReadingGrade,
   speakingGradeSchema,
   writingGradeSchema,
@@ -13,9 +14,11 @@ import { isWritingTaskType, taskShortLabel } from "@/lib/writing/task";
 import { parseVisual } from "@/lib/writing/visual";
 import { parseSpeakingContent } from "@/lib/speaking/content";
 import { regradeAttempt } from "@/lib/attempts/actions";
+import { regradeListeningAttempt } from "@/lib/listening/actions";
 import { regradeReadingAttempt } from "@/lib/reading/actions";
 import { GradeSummary } from "@/components/grade-summary";
 import { TaskVisual } from "@/components/task-visual";
+import { ListeningResult } from "@/components/listening-result";
 import { ReadingResult } from "@/components/reading-result";
 import { SpeakingResult } from "@/components/speaking-result";
 
@@ -148,6 +151,34 @@ export default async function ResultsPage({
         }
         backHref="/practice/reading"
         backLabel="Back to Reading"
+      />
+    );
+  }
+
+  // ─── Listening branch ─────────────────────────────────────────────────
+  if (attempt.section === "Listening") {
+    if (attempt.grade) {
+      const listening = parseListeningGrade(
+        attempt.grade.criteria_scores_json,
+      );
+      if (listening) {
+        return <ListeningResult grade={listening} />;
+      }
+    }
+    return (
+      <FailureCard
+        title="Grading hit a snag."
+        body="We couldn't read the grading payload for this Listening attempt. Try grading it again, or come back to the picker."
+        retry={
+          attempt.grade ? null : (
+            <form action={regradeListeningAttempt}>
+              <input type="hidden" name="attemptId" value={attempt.id} />
+              <RetryButton />
+            </form>
+          )
+        }
+        backHref="/practice/listening"
+        backLabel="Back to Listening"
       />
     );
   }
