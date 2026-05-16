@@ -93,13 +93,45 @@ describe("createListeningGenerator — retry", () => {
 });
 
 describe("createListeningGenerator — validation", () => {
-  it("throws GenerationValidationError when an accepted answer isn't in the transcript", async () => {
+  it("silently drops an ungrounded answer (cleaner) rather than rejecting the whole section", async () => {
     const broken = validatorCleanGeneration();
     const q = broken.questions[1]!;
+    const droppedPosition = q.position;
     if (q.type === "listening-sentence-completion") {
       q.correct_answer.accepted = ["unobtainium"];
     } else {
       throw new Error("expected sentence-completion at index 1 of fixture");
+    }
+    const ai = makeAi([{ text: JSON.stringify(broken) }]);
+    const gen = createListeningGenerator({ ai, loadPrompt: loader });
+    const result = await gen.generate({
+      ctx: CTX,
+      track: "Academic",
+      difficulty: 3,
+    });
+    // The bad question is gone; the rest of the section ships.
+    expect(result.value.questions.length).toBe(broken.questions.length - 1);
+    expect(
+      result.value.questions.some((q) => q.position === droppedPosition),
+    ).toBe(false);
+    expect(result.droppedQuestions).toHaveLength(1);
+    expect(result.droppedQuestions[0]!.reason).toBe(
+      "answer-not-in-transcript",
+    );
+  });
+
+  it("does reject if the cleaner has to drop so many questions that fewer than 10 remain", async () => {
+    const broken = validatorCleanGeneration();
+    // Wipe accepted strings on every completion-style question — cleaner
+    // ends up dropping more than we can spare.
+    for (const q of broken.questions) {
+      if (
+        q.type === "listening-sentence-completion" ||
+        q.type === "listening-short-answer" ||
+        q.type === "listening-completion-blank"
+      ) {
+        q.correct_answer.accepted = ["nonexistent-9999"];
+      }
     }
     const ai = makeAi([{ text: JSON.stringify(broken) }]);
     const gen = createListeningGenerator({ ai, loadPrompt: loader });

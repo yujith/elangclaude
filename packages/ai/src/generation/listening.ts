@@ -29,7 +29,11 @@ import {
   parseGeneratedListening,
   type GeneratedListening,
 } from "./listening-schema";
-import { validateGeneratedListening } from "./listening-validate";
+import {
+  cleanGeneratedListening,
+  validateGeneratedListening,
+  type CleanResult,
+} from "./listening-validate";
 
 // Listening output is significantly bigger than Reading — the script
 // adds 4 parts of transcript prose plus the question array. 12000
@@ -58,6 +62,11 @@ export type GenerateListeningResult = {
   model: string;
   usage: { input_tokens: number; output_tokens: number };
   attempts: number;
+  // Questions the cleaner dropped before validation (typically 0-2 per
+  // generation). Surfaced so the SuperAdmin moderation UI can show
+  // "we kept 17 / 19" and the operator can decide if the trimmed
+  // section is acceptable.
+  droppedQuestions: CleanResult["droppedQuestions"];
 };
 
 type ChatFn = (req: {
@@ -147,9 +156,30 @@ export function createListeningGenerator(deps: ListeningGeneratorDeps) {
         }
       }
 
-      const validation = validateGeneratedListening(parsed.value);
+      // Clean BEFORE validating. The cleaner drops completion-style
+      // questions whose accepted answers don't appear in the transcript
+      // — that's a common 1-2 per ~18 LLM hiccup. Anything the cleaner
+      // removes won't trip the validator's answer.not-in-transcript
+      // check. Real structural issues (positions, speakers, slot
+      // references) still surface.
+      const cleanResult = cleanGeneratedListening(parsed.value);
+
+      const validation = validateGeneratedListening(cleanResult.cleaned);
       if (!validation.ok) {
         throw new GenerationValidationError(validation.issues);
+      }
+
+      // After cleaning we might be below the schema's questions.min(10)
+      // floor. Re-check that explicitly so the operator sees a clear
+      // "too many bad questions, re-roll" signal instead of a silent
+      // half-section ship.
+      if (cleanResult.cleaned.questions.length < 10) {
+        throw new GenerationValidationError([
+          {
+            code: "answer.not-in-transcript",
+            message: `Cleaner dropped ${cleanResult.droppedQuestions.length} questions; only ${cleanResult.cleaned.questions.length} remain (need ≥ 10). Re-roll.`,
+          },
+        ]);
       }
 
       // Cross-check the requested track matches what the model produced.
@@ -157,20 +187,21 @@ export function createListeningGenerator(deps: ListeningGeneratorDeps) {
       // reasoning), but the caller asked for a specific tag and a
       // mismatch suggests the model misread the prompt — a re-roll
       // signal, not a silent rewrite.
-      if (parsed.value.track !== req.track) {
+      if (cleanResult.cleaned.track !== req.track) {
         throw new GenerationValidationError([
           {
             code: "positions.question-not-in-any-part",
-            message: `Model returned track ${parsed.value.track}, caller asked for ${req.track}.`,
+            message: `Model returned track ${cleanResult.cleaned.track}, caller asked for ${req.track}.`,
           },
         ]);
       }
 
       return {
-        value: parsed.value,
+        value: cleanResult.cleaned,
         model: last.model,
         usage: last.usage,
         attempts,
+        droppedQuestions: cleanResult.droppedQuestions,
       };
     },
   };

@@ -23,7 +23,17 @@ import {
 import { requireRole } from "@/lib/auth/context";
 
 export type GenerateListeningOutcome =
-  | { ok: true; testId: string; attempts: number; model: string }
+  | {
+      ok: true;
+      testId: string;
+      attempts: number;
+      model: string;
+      // 0 in the common case; non-zero when the cleaner removed 1-2
+      // ungrounded questions before persistence. Surfaced on the
+      // moderation page so the operator can re-roll if the trimmed
+      // section is too small for their needs.
+      droppedQuestions: number;
+    }
   | {
       ok: false;
       error: "quota" | "schema" | "validation" | "unknown";
@@ -63,11 +73,21 @@ export async function generateListeningTest(input: {
       generatedById: ctx.user_id,
       difficulty: input.difficulty,
     });
+    if (result.droppedQuestions.length > 0) {
+      console.warn("[listening-generate] cleaner dropped questions", {
+        org_id: ctx.org_id,
+        user_id: ctx.user_id,
+        test_id: persisted.testId,
+        dropped: result.droppedQuestions,
+        kept: result.value.questions.length,
+      });
+    }
     return {
       ok: true,
       testId: persisted.testId,
       attempts: result.attempts,
       model: result.model,
+      droppedQuestions: result.droppedQuestions.length,
     };
   } catch (err) {
     const tag = {
@@ -154,5 +174,9 @@ export async function generateListeningTestForm(
     }
     redirect(`${returnTo}?${params.toString()}`);
   }
-  redirect(`${returnTo}?generated=${outcome.testId}`);
+  const params = new URLSearchParams({ generated: outcome.testId });
+  if (outcome.droppedQuestions > 0) {
+    params.set("dropped", String(outcome.droppedQuestions));
+  }
+  redirect(`${returnTo}?${params.toString()}`);
 }

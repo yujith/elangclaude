@@ -250,7 +250,10 @@ export const generatedListeningSchema = z
     parts: z
       .array(partSchema)
       .length(4, "A Listening section must have exactly 4 parts."),
-    questions: z.array(questionSchema).min(12).max(40),
+    // Floor lowered from 12 to 10 to give the post-parse cleaner room
+    // to drop 1-2 ungrounded questions and still land a usable section.
+    // Real IELTS is 40 questions; we already short-ship for cost.
+    questions: z.array(questionSchema).min(10).max(40),
   })
   .strict()
   .refine(

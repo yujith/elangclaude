@@ -337,3 +337,147 @@ export function validateGeneratedListening(
   if (issues.length === 0) return { ok: true };
   return { ok: false, issues };
 }
+
+// ─── Cleaner ────────────────────────────────────────────────────────────
+//
+// LLMs occasionally invent a completion / sentence / short-answer
+// accepted string that doesn't actually appear in their own transcript
+// — usually 1-2 questions out of ~18. Rejecting the whole generation
+// over those is wasteful when the rest is fine. cleanGeneratedListening
+// drops the offending questions and their position references so the
+// remaining content can validate + persist. Callers run it BEFORE
+// validateGeneratedListening; anything the cleaner can drop becomes a
+// no-op in the validator afterwards.
+//
+// What gets dropped:
+//   - listening-sentence-completion / listening-short-answer where
+//     none of the accepted strings are in the part transcript.
+//   - listening-completion-blank where either the block/slot doesn't
+//     resolve OR none of the accepted strings are in the transcript.
+//
+// MCQ kinds (single + multi) are never dropped — they have no
+// grounding signal here (see ADR note in checkAnswerGrounding).
+
+export type CleanResult = {
+  cleaned: GeneratedListening;
+  droppedQuestions: {
+    position: number;
+    type: string;
+    reason:
+      | "answer-not-in-transcript"
+      | "completion-blank-block-not-found"
+      | "completion-blank-slot-not-found";
+  }[];
+};
+
+export function cleanGeneratedListening(
+  value: GeneratedListening,
+): CleanResult {
+  // Pre-compute haystacks + the block index so we don't recompute per
+  // question.
+  const haystacks = value.parts.map(partHaystack);
+  const blockIndex = new Map<
+    string,
+    { partIndex: number; slotIds: Set<string> }
+  >();
+  for (let pi = 0; pi < value.parts.length; pi += 1) {
+    const part = value.parts[pi]!;
+    if (!part.completion_blocks) continue;
+    for (const block of part.completion_blocks) {
+      const slotIds = new Set<string>();
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          for (const seg of cell) {
+            if (seg.kind === "blank") slotIds.add(seg.slot_id);
+          }
+        }
+      }
+      blockIndex.set(block.id, { partIndex: pi, slotIds });
+    }
+  }
+
+  const dropped: CleanResult["droppedQuestions"] = [];
+  const droppedPositions = new Set<number>();
+
+  const keptQuestions = value.questions.filter((q) => {
+    if (q.type === "listening-mcq-single" || q.type === "listening-mcq-multi") {
+      return true;
+    }
+    const { partIndex } = findQuestionPart(value.parts, q.position);
+    if (partIndex === -1) return true; // structural issue — let validator surface it
+    const haystack = haystacks[partIndex]!;
+
+    if (q.type === "listening-completion-blank") {
+      const ref = blockIndex.get(q.correct_answer.block_id);
+      if (!ref) {
+        dropped.push({
+          position: q.position,
+          type: q.type,
+          reason: "completion-blank-block-not-found",
+        });
+        droppedPositions.add(q.position);
+        return false;
+      }
+      if (!ref.slotIds.has(q.correct_answer.slot_id)) {
+        dropped.push({
+          position: q.position,
+          type: q.type,
+          reason: "completion-blank-slot-not-found",
+        });
+        droppedPositions.add(q.position);
+        return false;
+      }
+    }
+
+    // Common grounding check for completion / sentence / short-answer.
+    const accepted =
+      q.type === "listening-sentence-completion" ||
+      q.type === "listening-short-answer" ||
+      q.type === "listening-completion-blank"
+        ? q.correct_answer.accepted
+        : null;
+    if (!accepted) return true;
+
+    const anyFound = accepted.some((a) => inHaystack(haystack, a));
+    if (!anyFound) {
+      dropped.push({
+        position: q.position,
+        type: q.type,
+        reason: "answer-not-in-transcript",
+      });
+      droppedPositions.add(q.position);
+      return false;
+    }
+    return true;
+  });
+
+  if (droppedPositions.size === 0) {
+    return { cleaned: value, droppedQuestions: [] };
+  }
+
+  // Build cleaned parts with the dropped positions removed from each
+  // part's question_positions array. We also strip them from any
+  // questions-preview segments that referenced them.
+  const cleanedParts = value.parts.map((part) => {
+    const filteredPositions = part.question_positions.filter(
+      (p) => !droppedPositions.has(p),
+    );
+    const cleanedTranscript = part.transcript.map((seg) => {
+      if (seg.kind !== "questions-preview") return seg;
+      const filtered = seg.question_positions.filter(
+        (p) => !droppedPositions.has(p),
+      );
+      return { ...seg, question_positions: filtered };
+    });
+    return {
+      ...part,
+      question_positions: filteredPositions,
+      transcript: cleanedTranscript,
+    };
+  });
+
+  return {
+    cleaned: { ...value, parts: cleanedParts, questions: keptQuestions },
+    droppedQuestions: dropped,
+  };
+}

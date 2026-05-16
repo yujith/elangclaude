@@ -19,6 +19,7 @@ type SearchParams = {
   generate_error?: string;
   validation_issues?: string;
   synth_error?: string;
+  dropped?: string;
 };
 
 const PAGE_SIZE = 25;
@@ -89,6 +90,15 @@ export default async function ListeningModerationPage({
           <Banner tone="success">
             Generated test <code>{sp.generated}</code> — review it below
             before approving.
+            {sp.dropped && Number.parseInt(sp.dropped, 10) > 0 ? (
+              <>
+                {" "}
+                The validator dropped <strong>{sp.dropped}</strong>{" "}
+                question{sp.dropped === "1" ? "" : "s"} whose accepted
+                answers couldn&apos;t be located in the transcript — the
+                remaining set is below.
+              </>
+            ) : null}
           </Banner>
         ) : null}
         {sp.generate_error ? (

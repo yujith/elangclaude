@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { GeneratedListening } from "./listening-schema";
-import { validateGeneratedListening } from "./listening-validate";
+import {
+  cleanGeneratedListening,
+  validateGeneratedListening,
+} from "./listening-validate";
 import { validatorCleanGeneration as validatorFixture } from "./listening-test-fixtures";
 
 describe("validateGeneratedListening — happy path", () => {
@@ -175,5 +178,91 @@ describe("validateGeneratedListening — answer grounding", () => {
     }
     const r = validateGeneratedListening(v);
     expect(r.ok).toBe(true);
+  });
+});
+
+describe("cleanGeneratedListening", () => {
+  it("is a no-op when every question is grounded", () => {
+    const v = validatorFixture();
+    const r = cleanGeneratedListening(v);
+    expect(r.droppedQuestions).toEqual([]);
+    expect(r.cleaned.questions.length).toBe(v.questions.length);
+  });
+
+  it("drops a sentence-completion whose accepted answer isn't in the transcript", () => {
+    const v = validatorFixture();
+    const q = v.questions[1]!;
+    if (q.type === "listening-sentence-completion") {
+      q.correct_answer.accepted = ["nonexistent-token-9999"];
+    } else {
+      throw new Error("expected sentence-completion at index 1");
+    }
+    const r = cleanGeneratedListening(v);
+    expect(r.droppedQuestions).toHaveLength(1);
+    expect(r.droppedQuestions[0]!.reason).toBe("answer-not-in-transcript");
+    expect(r.cleaned.questions.length).toBe(v.questions.length - 1);
+  });
+
+  it("also strips the dropped position from the parent part's question_positions", () => {
+    const v = validatorFixture();
+    const q = v.questions[2]!;
+    const droppedPosition = q.position;
+    if (q.type === "listening-short-answer") {
+      q.correct_answer.accepted = ["nonexistent-9999"];
+    } else {
+      throw new Error("expected short-answer at index 2");
+    }
+    const r = cleanGeneratedListening(v);
+    for (const part of r.cleaned.parts) {
+      expect(part.question_positions).not.toContain(droppedPosition);
+    }
+  });
+
+  it("drops a completion-blank with an unknown block_id and notes the reason", () => {
+    const v = validatorFixture();
+    const q = v.questions[0]!;
+    if (q.type === "listening-completion-blank") {
+      q.correct_answer.block_id = "nonexistent-block";
+    } else {
+      throw new Error("expected completion-blank at index 0");
+    }
+    const r = cleanGeneratedListening(v);
+    expect(r.droppedQuestions).toHaveLength(1);
+    expect(r.droppedQuestions[0]!.reason).toBe(
+      "completion-blank-block-not-found",
+    );
+  });
+
+  it("never drops MCQ questions even with weirdly-worded options", () => {
+    const v = validatorFixture();
+    const q = v.questions[3]!;
+    if (q.type === "listening-mcq-single") {
+      q.correct_answer.options = [
+        { id: "A", text: "fictitious" },
+        { id: "B", text: "fantasia" },
+      ];
+      q.correct_answer.correct = "A";
+    }
+    const r = cleanGeneratedListening(v);
+    expect(r.droppedQuestions).toEqual([]);
+  });
+
+  it("strips dropped positions from questions-preview segments too", () => {
+    const v = validatorFixture();
+    const q = v.questions[1]!;
+    const droppedPosition = q.position;
+    if (q.type === "listening-sentence-completion") {
+      q.correct_answer.accepted = ["nonexistent-9999"];
+    } else {
+      throw new Error("expected sentence-completion at index 1");
+    }
+    const r = cleanGeneratedListening(v);
+    for (const part of r.cleaned.parts) {
+      for (const seg of part.transcript) {
+        if (seg.kind === "questions-preview") {
+          expect(seg.question_positions).not.toContain(droppedPosition);
+        }
+      }
+    }
   });
 });
