@@ -566,6 +566,11 @@ function PartPanel({
         </article>
       ) : (
         <StrictAudioPanel
+          // Per-part key — without this React reuses the same instance
+          // across part transitions and the previous part's playState
+          // ("finished") leaks into the new part, blocking auto-start
+          // and showing the wrong "audio already played" message.
+          key={`part-${part.part}`}
           attemptId={attemptId}
           part={part}
           alreadyPlayed={alreadyPlayed}
