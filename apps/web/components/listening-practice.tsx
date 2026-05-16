@@ -592,49 +592,80 @@ function StrictAudioPanel({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Index of playable segments only (speech + narration with audio_clip).
-  // reading-pause / questions-preview slots are handled as setTimeout gaps.
+  // Playlist: every speech / narration segment, in order. A speech /
+  // narration segment with no audio_sha256 becomes a `missing-audio`
+  // item that auto-advances after 1 s with a visible "no audio for this
+  // segment" indicator — silent-dropping these used to look like the
+  // player had stalled, when really the synth step had just failed
+  // partially. reading-pause + questions-preview render as visible
+  // countdown pauses.
   type PlaylistItem =
     | { type: "audio"; sha256: string }
-    | { type: "pause"; seconds: number };
+    | { type: "missing-audio" }
+    | { type: "pause"; seconds: number; label: "reading" | "preview" };
   const playlist = useMemo(() => {
     const out: PlaylistItem[] = [];
     for (const seg of part.transcript) {
       if (seg.kind === "speech" || seg.kind === "narration") {
-        if (seg.audio_sha256)
+        if (seg.audio_sha256) {
           out.push({ type: "audio", sha256: seg.audio_sha256 });
+        } else {
+          out.push({ type: "missing-audio" });
+        }
       } else if (seg.kind === "reading-pause") {
-        out.push({ type: "pause", seconds: seg.seconds });
+        out.push({ type: "pause", seconds: seg.seconds, label: "reading" });
       } else if (seg.kind === "questions-preview") {
-        out.push({ type: "pause", seconds: seg.seconds });
+        out.push({ type: "pause", seconds: seg.seconds, label: "preview" });
       }
     }
     return out;
   }, [part]);
 
-  // State-machine advance: when the current item is a pause, schedule a
-  // timer that bumps segmentIndex when it expires. When it's audio, we
-  // wait for the <audio> element's onEnded to call advance(). Using an
-  // effect (rather than a recursive callback) avoids the
-  // use-before-define lint trip from a setTimeout closure self-referencing
-  // its callback.
-  const advance = useCallback(() => {
-    setSegmentIndex((i) => {
-      if (i + 1 >= playlist.length) {
-        setPlayState("finished");
-        return i;
+  // Quick header diagnostic so the operator sees "5 of 12 speech
+  // segments missing audio" at a glance — that's a SuperAdmin re-synth
+  // signal, not a player bug.
+  const audioStatus = useMemo(() => {
+    let speech = 0;
+    let withAudio = 0;
+    for (const seg of part.transcript) {
+      if (seg.kind === "speech" || seg.kind === "narration") {
+        speech += 1;
+        if (seg.audio_sha256) withAudio += 1;
       }
-      return i + 1;
-    });
-  }, [playlist.length]);
+    }
+    return { total: speech, withAudio, missing: speech - withAudio };
+  }, [part]);
+
+  // State-machine advance: bumps segmentIndex, or flips to 'finished' if
+  // we're past the last item. setState updaters MUST be pure — no nested
+  // setState calls — so we compute the next-index decision outside the
+  // updater. (React strict mode runs updaters twice to detect side
+  // effects, which previously caused the parent setPlayedParts to fire
+  // during a child render.)
+  const advance = useCallback(() => {
+    const next = segmentIndex + 1;
+    if (next >= playlist.length) {
+      setPlayState("finished");
+    } else {
+      setSegmentIndex(next);
+    }
+  }, [playlist.length, segmentIndex]);
 
   useEffect(() => {
     if (playState !== "playing") return;
     const item = playlist[segmentIndex];
-    if (!item || item.type !== "pause") return;
+    if (!item) return;
+    // Pause segments wait for their declared seconds. Missing-audio
+    // placeholders auto-advance after 1 s with a visible note so the
+    // learner isn't staring at a frozen player. Real audio items are
+    // driven by the <audio onEnded> callback elsewhere.
+    let delayMs: number | null = null;
+    if (item.type === "pause") delayMs = item.seconds * 1000;
+    else if (item.type === "missing-audio") delayMs = 1000;
+    if (delayMs === null) return;
     const handle = setTimeout(() => {
       advance();
-    }, item.seconds * 1000);
+    }, delayMs);
     pauseTimerRef.current = handle;
     return () => {
       clearTimeout(handle);
@@ -649,17 +680,18 @@ function StrictAudioPanel({
   }, []);
 
   const start = useCallback(() => {
-    setPlayState((prev) => {
-      if (prev !== "idle") return prev;
-      // Notify the parent so a tab-switch + return doesn't reset our
-      // "played" status — the per-tab unmount/remount lifecycle would
-      // otherwise wipe it.
-      onPlayStarted(part.part);
-      return "playing";
-    });
+    // Read current playState via closure (callback id changes with state)
+    // so the updater stays pure and we keep the parent-notification side
+    // effect outside the updater.
+    if (playState !== "idle") return;
+    setPlayState("playing");
     setError(null);
     setSegmentIndex(0);
-  }, [onPlayStarted, part.part]);
+    // Notify the parent AFTER scheduling our own state changes. The
+    // parent's setPlayedParts is then a normal event-triggered update,
+    // not a render-time side effect.
+    onPlayStarted(part.part);
+  }, [onPlayStarted, part.part, playState]);
 
   const currentItem = playState === "playing" ? playlist[segmentIndex] : null;
 
@@ -676,6 +708,12 @@ function StrictAudioPanel({
           Speakers:{" "}
           {part.speakers.map((s) => `${s.name} (${s.accent})`).join(", ")}
         </p>
+        {audioStatus.missing > 0 ? (
+          <p className="mt-2 font-body text-xs text-brand-red">
+            ⚠ {audioStatus.missing} of {audioStatus.total} speech segments
+            have no audio. Ask SuperAdmin to re-synth this section.
+          </p>
+        ) : null}
       </header>
 
       {playState === "idle" ? (
@@ -702,8 +740,14 @@ function StrictAudioPanel({
               onError={() => setError("Audio failed to load.")}
             />
           ) : currentItem && currentItem.type === "pause" ? (
-            <p className="font-body text-xs italic text-white/60">
-              [silent pause — {currentItem.seconds}s]
+            <PauseCountdown
+              key={segmentIndex}
+              seconds={currentItem.seconds}
+              label={currentItem.label}
+            />
+          ) : currentItem && currentItem.type === "missing-audio" ? (
+            <p className="font-body text-xs italic text-brand-red">
+              [no audio for this segment — re-synth from moderation page]
             </p>
           ) : null}
         </div>
@@ -725,6 +769,37 @@ function StrictAudioPanel({
         Exam mode: audio plays once. No pause, no rewind.
       </p>
     </article>
+  );
+}
+
+function PauseCountdown({
+  seconds,
+  label,
+}: {
+  seconds: number;
+  label: "reading" | "preview";
+}) {
+  // Visible per-second countdown so the learner sees "this is a real
+  // 30-second exam silence" and not "the player froze." Re-mounts via
+  // the parent's `key` whenever a new pause segment starts, so the
+  // countdown always begins at the right number.
+  const [remaining, setRemaining] = useState(seconds);
+  useEffect(() => {
+    if (remaining <= 0) return;
+    const id = setTimeout(() => setRemaining((r) => Math.max(0, r - 1)), 1000);
+    return () => clearTimeout(id);
+  }, [remaining]);
+  const headline =
+    label === "preview"
+      ? "Reading time — look ahead at the questions"
+      : "Silent pause — check your answers";
+  return (
+    <div className="space-y-1">
+      <p className="font-heading font-bold text-sm text-white">{headline}</p>
+      <p className="font-body text-xs italic text-white/70">
+        {remaining}s remaining…
+      </p>
+    </div>
   );
 }
 
