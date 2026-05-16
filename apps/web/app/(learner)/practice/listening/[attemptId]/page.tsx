@@ -37,6 +37,7 @@ export default async function ListeningPracticeAttemptPage({
       user_id: true,
       status: true,
       started_at: true,
+      mock_session_id: true,
       test: {
         select: {
           id: true,
@@ -213,6 +214,10 @@ export default async function ListeningPracticeAttemptPage({
   const initial: Record<string, unknown> = {};
   for (const a of attempt.answers) initial[a.question_id] = a.response;
 
+  // If this attempt belongs to a Full Mock session, force strict-mode
+  // playback per ADR 0008. Standalone practice stays in practice mode.
+  const mode = attempt.mock_session_id ? "strict" : "practice";
+
   return (
     <ListeningPractice
       attemptId={attempt.id}
@@ -220,6 +225,7 @@ export default async function ListeningPracticeAttemptPage({
       parts={runnerParts}
       questions={runnerQuestions}
       initialResponses={initial}
+      mode={mode}
     />
   );
 }

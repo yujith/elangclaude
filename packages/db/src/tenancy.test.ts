@@ -238,6 +238,59 @@ describe("withSuperAdminContext()", () => {
   });
 });
 
+describe("MockSession — isolation", () => {
+  // MockSession joined the tenant-scoped set in ADR 0008. The drift
+  // guard catches accidental removal from the set, but doesn't exercise
+  // the proxy against it. This block covers the proxy: read isolation,
+  // create org_id clamping, and the Attempt.mock_session_id FK staying
+  // sane across orgs.
+  it("findMany returns only the caller's mock sessions", async () => {
+    const orgA = await createTestOrg("A");
+    const orgB = await createTestOrg("B");
+    await prisma.mockSession.create({
+      data: { org_id: orgA.id, user_id: orgA.learnerIds[0]!, track: "Academic" },
+    });
+    await prisma.mockSession.create({
+      data: { org_id: orgB.id, user_id: orgB.learnerIds[0]!, track: "Academic" },
+    });
+
+    const dbA = withOrg(ctxFor(orgA));
+    const sessions = await dbA.mockSession.findMany();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]!.org_id).toBe(orgA.id);
+  });
+
+  it("findUnique by an orgB MockSession id returns null from orgA", async () => {
+    const orgA = await createTestOrg("A");
+    const orgB = await createTestOrg("B");
+    const bSession = await prisma.mockSession.create({
+      data: { org_id: orgB.id, user_id: orgB.learnerIds[0]!, track: "Academic" },
+    });
+
+    const dbA = withOrg(ctxFor(orgA));
+    const leak = await dbA.mockSession.findUnique({
+      where: { id: bSession.id },
+    });
+    expect(leak).toBeNull();
+  });
+
+  it("create clamps a smuggled org_id on MockSession to ctx.org_id", async () => {
+    const orgA = await createTestOrg("A");
+    const orgB = await createTestOrg("B");
+
+    const dbA = withOrg(ctxFor(orgA));
+    const created = await dbA.mockSession.create({
+      data: {
+        // Smuggle attempt — proxy must clamp to orgA.
+        org_id: orgB.id,
+        user_id: orgA.learnerIds[0]!,
+        track: "Academic",
+      },
+    });
+    expect(created.org_id).toBe(orgA.id);
+  });
+});
+
 describe("schema/runtime drift guard", () => {
   it("TENANT_SCOPED_MODELS matches the live Prisma datamodel", () => {
     const drift = findTenantSetDrift();

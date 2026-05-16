@@ -69,6 +69,12 @@ enum OrgStatus {
   Archived
 }
 
+enum MockStatus {
+  InProgress
+  Submitted
+  Abandoned
+}
+
 // ─── Models — global (NOT tenant-scoped) ──────────────────────────────────
 
 model Organization {
@@ -88,6 +94,7 @@ model Organization {
   recordings    Recording[]
   quotaUsages   QuotaUsage[]
   activityLogs  ActivityLog[]
+  mockSessions  MockSession[]
 }
 
 model Test {
@@ -150,6 +157,7 @@ model User {
   quotaUsages    QuotaUsage[]
   activityLogs   ActivityLog[]
   approved_tests Test[]    @relation("TestApprover")
+  mockSessions   MockSession[]
 
   @@index([org_id])
   @@index([org_id, createdAt])
@@ -157,28 +165,33 @@ model User {
 }
 
 model Attempt {
-  id           String        @id @default(cuid())
-  org_id       String
-  org          Organization  @relation(fields: [org_id], references: [id], onDelete: Cascade)
-  user_id      String
-  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  test_id      String
-  test         Test          @relation(fields: [test_id], references: [id], onDelete: Cascade)
-  section      Section
-  status       AttemptStatus @default(InProgress)
-  started_at   DateTime      @default(now())
-  submitted_at DateTime?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  org_id          String
+  org             Organization  @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  user_id         String
+  user            User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  test_id         String
+  test            Test          @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  section         Section
+  status          AttemptStatus @default(InProgress)
+  started_at      DateTime      @default(now())
+  submitted_at    DateTime?
+  // Optional parent mock session. Standalone practice attempts leave
+  // this null; only the mock orchestrator sets it. See ADR 0008 D2.
+  mock_session_id String?
+  mock_session    MockSession?  @relation(fields: [mock_session_id], references: [id], onDelete: SetNull)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  answers      Answer[]
-  grade        Grade?
-  recording    Recording?
+  answers         Answer[]
+  grade           Grade?
+  recording       Recording?
 
   @@index([org_id])
   @@index([org_id, user_id])
   @@index([org_id, createdAt])
   @@index([org_id, submitted_at])
+  @@index([mock_session_id])
 }
 
 model Answer {
@@ -262,4 +275,29 @@ model ActivityLog {
   @@index([org_id])
   @@index([org_id, timestamp])
   @@index([org_id, user_id])
+}
+
+// Parent row for a Full Mock Test sitting — see ADR 0008. Standalone
+// practice does not create a MockSession; the mock orchestrator is the
+// only writer. Section progression / current-section status is derived
+// from the joined Attempt rows; this row holds only the lifecycle
+// metadata (timing, status, track).
+model MockSession {
+  id           String      @id @default(cuid())
+  org_id       String
+  org          Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  user_id      String
+  user         User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  track        Track
+  status       MockStatus  @default(InProgress)
+  started_at   DateTime    @default(now())
+  submitted_at DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  attempts     Attempt[]
+
+  @@index([org_id])
+  @@index([org_id, user_id])
+  @@index([org_id, status])
 }

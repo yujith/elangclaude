@@ -137,7 +137,18 @@ export async function submitListeningAttempt(formData: FormData): Promise<void> 
   if (typeof attemptId !== "string" || attemptId.length === 0) {
     throw new Error("Missing attemptId.");
   }
+  // Check whether this attempt belongs to a mock BEFORE grading — the
+  // redirect target differs (mock orchestrator vs per-section results
+  // page). Grading itself is the same either way.
+  const db = withOrg(ctx);
+  const meta = await db.attempt.findUnique({
+    where: { id: attemptId },
+    select: { mock_session_id: true, user_id: true },
+  });
   await runListeningSubmit(ctx, attemptId);
+  if (meta && meta.user_id === ctx.user_id && meta.mock_session_id) {
+    redirect(`/mock/${meta.mock_session_id}`);
+  }
   redirect(`/results/${attemptId}`);
 }
 
