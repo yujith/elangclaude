@@ -156,7 +156,12 @@ describe("validateGeneratedListening — answer grounding", () => {
     }
   });
 
-  it("rejects an MCQ whose correct option shares no tokens with the part transcript", () => {
+  it("does NOT reject an MCQ even when the correct option shares no tokens with the transcript (interpretive paraphrase OK)", () => {
+    // Listening MCQ options summarise / paraphrase what speakers said —
+    // not literal substrings. The grounding heuristic was carried over
+    // from Reading and produced false positives almost every run on
+    // Listening output. Hallucination protection is moderation, not a
+    // string-match check.
     const v = validatorFixture() as GeneratedListening;
     const q = v.questions[3]!;
     if (q.type === "listening-mcq-single") {
@@ -169,11 +174,6 @@ describe("validateGeneratedListening — answer grounding", () => {
       throw new Error("expected mcq-single at index 3");
     }
     const r = validateGeneratedListening(v);
-    expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(
-        r.issues.some((i) => i.code === "mcq.correct-not-grounded"),
-      ).toBe(true);
-    }
+    expect(r.ok).toBe(true);
   });
 });

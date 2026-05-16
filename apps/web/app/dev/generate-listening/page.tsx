@@ -61,8 +61,6 @@ const ISSUE_COPY: Record<string, string> = {
     "A completion-blank question references a slot_id that doesn't exist in the named block.",
   "answer.not-in-transcript":
     "An accepted answer string for a completion / sentence / short-answer question wasn't found in its part's transcript.",
-  "mcq.correct-not-grounded":
-    "The MCQ correct option shares no substantive tokens with the part transcript. The model hallucinated.",
 };
 
 export default async function DevGenerateListeningPage({

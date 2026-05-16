@@ -42,8 +42,7 @@ export type ListeningValidationIssue = {
     | "slots.duplicate-id"
     | "completion-blank.block-not-found"
     | "completion-blank.slot-not-found"
-    | "answer.not-in-transcript"
-    | "mcq.correct-not-grounded";
+    | "answer.not-in-transcript";
   message: string;
   // Indices into the input shape, when applicable. Surfaced so the
   // moderation UI can highlight the offending row.
@@ -311,40 +310,17 @@ function checkAnswerGrounding(
           partIndex,
         });
       }
-    } else if (q.type === "listening-mcq-single") {
-      checkMcqGrounding(q, qi, haystack, issues);
     }
-    // listening-mcq-multi: we don't ground individual options, only check
-    // distractor presence above the schema level. Real-world Listening
-    // multi-MCQs use distractors not in the recording, so per-option
-    // haystack matching would produce false rejections.
+    // listening-mcq-single / -mcq-multi: we do NOT enforce token-overlap
+    // grounding here. Listening MCQ options are interpretive paraphrases
+    // ("What concerns the tutor?" → "Methodology" — the speaker said
+    // "the methodology is quite specialised," but the option summarises
+    // it as one word). The token-overlap heuristic was carried over from
+    // Reading where short dense passages make it reliable; on Listening
+    // transcripts it produced false positives almost every run.
+    // Hallucination protection is the SuperAdmin moderation queue, not
+    // a string-match heuristic.
   }
-}
-
-function checkMcqGrounding(
-  q: Extract<GeneratedListeningQuestion, { type: "listening-mcq-single" }>,
-  qi: number,
-  haystack: string,
-  issues: ListeningValidationIssue[],
-): void {
-  // Same weak signal as reading-mcq: the correct option must share at
-  // least one substantive token with the part transcript. Catches
-  // hallucinated options that the model invented out of thin air.
-  const correct = q.correct_answer.options.find(
-    (o) => o.id === q.correct_answer.correct,
-  );
-  if (!correct) return;
-  const tokens = softNormalize(correct.text)
-    .split(" ")
-    .filter((t) => t.length >= 4);
-  const numbers = correct.text.match(/\d+/g) ?? [];
-  for (const n of numbers) if (haystack.includes(n)) return;
-  for (const t of tokens) if (haystack.includes(t)) return;
-  issues.push({
-    code: "mcq.correct-not-grounded",
-    message: `MCQ at position ${q.position}: correct option "${correct.text}" shares no substantive tokens with the part transcript.`,
-    questionIndex: qi,
-  });
 }
 
 // ─── Entry point ────────────────────────────────────────────────────────
