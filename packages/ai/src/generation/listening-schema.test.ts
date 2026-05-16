@@ -401,10 +401,32 @@ describe("parseGeneratedListening — string parser", () => {
     expect(out.ok).toBe(true);
   });
 
+  it("extracts JSON wrapped in a markdown code fence", () => {
+    const json = JSON.stringify(validGeneration());
+    const fenced = "```json\n" + json + "\n```";
+    const out = parseGeneratedListening(fenced);
+    expect(out.ok).toBe(true);
+  });
+
   it("returns ok=false with issues when JSON is malformed", () => {
     const out = parseGeneratedListening("not a json");
     expect(out.ok).toBe(false);
     if (!out.ok) expect(out.issues.length).toBeGreaterThan(0);
+  });
+
+  it("returns a TRUNCATION-flavoured issue when the JSON object is unclosed", () => {
+    // Simulates the model hitting its output-token cap mid-response: an
+    // opening `{` arrives but the matching `}` never does. Operators see
+    // a distinct error pointing at the model's output cap rather than a
+    // misleading "no JSON object found".
+    const truncated =
+      "```json\n" +
+      JSON.stringify(validGeneration()).slice(0, 200);
+    const out = parseGeneratedListening(truncated);
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.issues[0]!.message).toMatch(/never closed|truncat/i);
+    }
   });
 
   it("returns ok=false with the issues from the schema when JSON parses but is wrong shape", () => {

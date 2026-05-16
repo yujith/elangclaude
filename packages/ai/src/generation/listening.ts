@@ -32,10 +32,11 @@ import {
 import { validateGeneratedListening } from "./listening-validate";
 
 // Listening output is significantly bigger than Reading — the script
-// adds 4 parts of transcript prose plus the question array. 8000 tokens
-// gives the model headroom; the cost-per-Test ceiling stays acceptable
-// because the model is OpenRouter cheap-tier.
-const MAX_OUTPUT_TOKENS = 8000;
+// adds 4 parts of transcript prose plus the question array. 12000
+// tokens gives the default model (Mistral Large 2411, ~16k cap) the
+// room a chunked 4-part section actually needs. Real generations
+// observed at ~7500–9500 output tokens; 12k is a safety margin.
+const MAX_OUTPUT_TOKENS = 12000;
 
 const STRICTER_RETRY_NUDGE =
   "Your previous response was not valid JSON or did not match the required schema. " +

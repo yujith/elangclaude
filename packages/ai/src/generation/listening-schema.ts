@@ -272,8 +272,8 @@ export type ParseResult =
   | { ok: false; issues: z.ZodIssue[]; raw: string };
 
 export function parseGeneratedListening(raw: string): ParseResult {
-  const json = extractFirstJsonObject(raw);
-  if (json === null) {
+  const extraction = extractFirstJsonObject(raw);
+  if (extraction.kind === "no-object") {
     return {
       ok: false,
       issues: [
@@ -286,9 +286,27 @@ export function parseGeneratedListening(raw: string): ParseResult {
       raw,
     };
   }
+  if (extraction.kind === "truncated") {
+    // Most common failure when a model hits its output-token cap mid-
+    // response. The opening `{` arrives but the matching `}` never does.
+    // Distinguishing this from "no JSON at all" tells the operator to
+    // raise MAX_OUTPUT_TOKENS or switch to a model with a bigger output
+    // ceiling, not to fiddle with the prompt.
+    return {
+      ok: false,
+      issues: [
+        {
+          code: "custom",
+          path: [],
+          message: `JSON object started at offset ${extraction.start} but was never closed (response truncated at ${raw.length} chars / depth ${extraction.depthAtEnd}). Likely the model hit its output-token cap mid-response.`,
+        },
+      ],
+      raw,
+    };
+  }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(json);
+    parsed = JSON.parse(extraction.json);
   } catch {
     return {
       ok: false,
@@ -305,9 +323,14 @@ export function parseGeneratedListening(raw: string): ParseResult {
   return { ok: true, value: result.data };
 }
 
-function extractFirstJsonObject(s: string): string | null {
+type ExtractionResult =
+  | { kind: "no-object" }
+  | { kind: "truncated"; start: number; depthAtEnd: number }
+  | { kind: "ok"; json: string };
+
+function extractFirstJsonObject(s: string): ExtractionResult {
   const start = s.indexOf("{");
-  if (start === -1) return null;
+  if (start === -1) return { kind: "no-object" };
   let depth = 0;
   let inString = false;
   let escape = false;
@@ -329,8 +352,9 @@ function extractFirstJsonObject(s: string): string | null {
     if (ch === "{") depth++;
     else if (ch === "}") {
       depth--;
-      if (depth === 0) return s.slice(start, i + 1);
+      if (depth === 0) return { kind: "ok", json: s.slice(start, i + 1) };
     }
   }
-  return null;
+  // Found an opening brace but never closed the outermost object.
+  return { kind: "truncated", start, depthAtEnd: depth };
 }
