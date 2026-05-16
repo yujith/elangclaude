@@ -206,6 +206,34 @@ export {
 } from "./listening/fixtures";
 export type { ListeningFixtureQuestion } from "./listening/fixtures";
 
+// ─── Listening grading (Phase 4 — deterministic) ────────────────────────
+export {
+  gradeListeningAttempt,
+  parseListeningGrade,
+} from "./listening/grade";
+export type {
+  ListeningGrade,
+  ListeningGradeAnswer,
+  ListeningGradeInput,
+  ListeningGradeQuestion,
+  ListeningBreakdownItem,
+} from "./listening/grade";
+
+export {
+  listeningBandFromPartial,
+  listeningBandFromRaw40,
+  scaleListeningRawTo40,
+} from "./listening/band";
+
+export {
+  ListeningPersistError,
+  persistListeningGrade,
+} from "./listening/persist";
+export type {
+  ListeningPersistDb,
+  PersistListeningGradeResult,
+} from "./listening/persist";
+
 // ─── Listening TTS (Phase 2) ────────────────────────────────────────────
 export {
   DEFAULT_VOICE_CATALOGUE,
