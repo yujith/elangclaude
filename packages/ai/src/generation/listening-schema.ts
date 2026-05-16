@@ -163,7 +163,7 @@ const mcqMultiAnswerSchema = z
 const sentenceCompletionAnswerSchema = z
   .object({
     stem: z.string().min(3).max(400),
-    word_limit: z.number().int().min(1).max(8),
+    word_limit: z.number().int().min(1).max(10),
     accepted: z.array(z.string().min(1).max(80)).min(1).max(6),
   })
   .refine(
@@ -172,14 +172,14 @@ const sentenceCompletionAnswerSchema = z
   );
 
 const shortAnswerAnswerSchema = z.object({
-  word_limit: z.number().int().min(1).max(8),
+  word_limit: z.number().int().min(1).max(10),
   accepted: z.array(z.string().min(1).max(80)).min(1).max(6),
 });
 
 const completionBlankAnswerSchema = z.object({
   block_id: z.string().min(1).max(40),
   slot_id: z.string().min(1).max(40),
-  word_limit: z.number().int().min(1).max(8),
+  word_limit: z.number().int().min(1).max(10),
   accepted: z.array(z.string().min(1).max(80)).min(1).max(6),
 });
 
