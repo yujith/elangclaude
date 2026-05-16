@@ -20,12 +20,18 @@ export type ChatPurpose =
   | "speaking-cue-generate";
 
 // Non-chat AI purposes. These do NOT have a chat-model allowlist — they hit
-// fixed OpenAI endpoints (see adapters/openai.ts) — but they still carry a
-// Purpose so the gateway can quota-gate and cost-log them. See ADR 0005 (D1).
+// fixed provider endpoints (see adapters/openai.ts and adapters/elevenlabs.ts)
+// — but they still carry a Purpose so the gateway can quota-gate and cost-
+// log them. See ADR 0005 (D1).
 export type RealtimePurpose = "speaking-realtime";
 export type TranscribePurpose = "speaking-transcribe";
+export type TtsPurpose = "listening-tts";
 
-export type Purpose = ChatPurpose | RealtimePurpose | TranscribePurpose;
+export type Purpose =
+  | ChatPurpose
+  | RealtimePurpose
+  | TranscribePurpose
+  | TtsPurpose;
 
 export type ProviderName = "anthropic" | "openrouter";
 
@@ -38,6 +44,15 @@ export type ProviderName = "anthropic" | "openrouter";
 // dev org. See ADR 0005 (D3). Transcription stays at 1.
 export const REALTIME_SESSION_QUOTA_WEIGHT = 8;
 export const TRANSCRIBE_QUOTA_WEIGHT = 1;
+
+// One ListeningPart synthesises into several mp3 clips (one per speech /
+// narration segment) — call it ~10 clips per part, ~40 clips per Test.
+// Synth happens at SuperAdmin-approval time, not on the learner hot path,
+// so this weight is about cost visibility on the cost dashboard rather
+// than throttling. Per-call weight stays at 1; the cache layer accumulates
+// the count via repeated reserve calls. Revisit if SuperAdmin orgs need a
+// distinct quota bucket (planned Phase 2 follow-up).
+export const LISTENING_TTS_QUOTA_WEIGHT = 1;
 
 export type ModelEntry = {
   id: string;

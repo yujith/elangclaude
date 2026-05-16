@@ -4,6 +4,7 @@ import { createAI } from "./gateway";
 import { ModelNotAllowedError, ProviderError, QuotaExceededError } from "./errors";
 import type { Provider } from "./adapters/anthropic";
 import type { OpenAIAdapter } from "./adapters/openai";
+import type { ElevenLabsAdapter } from "./adapters/elevenlabs";
 import type { QuotaDb } from "./quota";
 
 const CTX: OrgContext = {
@@ -55,6 +56,24 @@ function fakeOpenAI(): OpenAIAdapter & {
   };
 }
 
+// A working ElevenLabs adapter with a call counter. Tests that need to
+// exercise failure construct the adapter inline.
+function fakeElevenLabs(): ElevenLabsAdapter & { synthCalls: number } {
+  let synthCalls = 0;
+  const adapter: ElevenLabsAdapter = {
+    synth: async () => {
+      synthCalls++;
+      return {
+        audio: new Uint8Array([0x49, 0x44, 0x33]), // "ID3" — mp3 marker
+        mimeType: "audio/mpeg",
+        model: "eleven_multilingual_v2",
+      };
+    },
+  };
+  Object.defineProperty(adapter, "synthCalls", { get: () => synthCalls });
+  return adapter as ElevenLabsAdapter & { synthCalls: number };
+}
+
 function fakeDb(opts: {
   quotaDaily: number;
   countAfterUpsert: number;
@@ -79,6 +98,7 @@ describe("gateway: allowlist", () => {
         openrouter: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
+      elevenlabs: fakeElevenLabs(),
       db: fakeDb({ quotaDaily: 10, countAfterUpsert: 1 }),
     });
     const res = await ai.chat({
@@ -98,6 +118,7 @@ describe("gateway: allowlist", () => {
         openrouter: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
+      elevenlabs: fakeElevenLabs(),
       db: fakeDb({ quotaDaily: 10, countAfterUpsert: 1 }),
     });
     await expect(
@@ -120,6 +141,7 @@ describe("gateway: allowlist", () => {
         openrouter: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
+      elevenlabs: fakeElevenLabs(),
       db: fakeDb({ quotaDaily: 10, countAfterUpsert: 1 }),
     });
     await expect(
@@ -142,6 +164,7 @@ describe("gateway: quota integration", () => {
         openrouter: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
+      elevenlabs: fakeElevenLabs(),
       // Post-upsert count of 11 with limit 10 → over.
       db: fakeDb({ quotaDaily: 10, countAfterUpsert: 11 }),
     });
@@ -179,6 +202,7 @@ describe("gateway: quota integration", () => {
         openrouter: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
+      elevenlabs: fakeElevenLabs(),
       db,
     });
     await expect(
@@ -202,6 +226,7 @@ describe("gateway: realtimeSession", () => {
         openrouter: vi.fn() as unknown as Provider,
       },
       openai,
+      elevenlabs: fakeElevenLabs(),
       db: fakeDb({ quotaDaily: 100, countAfterUpsert: 8 }),
     });
     const res = await ai.realtimeSession({
@@ -221,6 +246,7 @@ describe("gateway: realtimeSession", () => {
         openrouter: vi.fn() as unknown as Provider,
       },
       openai,
+      elevenlabs: fakeElevenLabs(),
       // Post-upsert count of 11 with limit 10 → over.
       db: fakeDb({ quotaDaily: 10, countAfterUpsert: 11 }),
     });
@@ -256,6 +282,7 @@ describe("gateway: realtimeSession", () => {
         },
         transcribe: async () => ({ text: "", segments: [], duration_sec: 0 }),
       },
+      elevenlabs: fakeElevenLabs(),
       db,
     });
     await expect(ai.realtimeSession({ ctx: CTX })).rejects.toBeInstanceOf(
@@ -275,6 +302,7 @@ describe("gateway: transcribe", () => {
         openrouter: vi.fn() as unknown as Provider,
       },
       openai,
+      elevenlabs: fakeElevenLabs(),
       db: fakeDb({ quotaDaily: 10, countAfterUpsert: 1 }),
     });
     const res = await ai.transcribe({
@@ -295,6 +323,7 @@ describe("gateway: transcribe", () => {
         openrouter: vi.fn() as unknown as Provider,
       },
       openai,
+      elevenlabs: fakeElevenLabs(),
       db: fakeDb({ quotaDaily: 10, countAfterUpsert: 11 }),
     });
     await expect(
@@ -336,6 +365,7 @@ describe("gateway: transcribe", () => {
           throw new ProviderError("openai", new Error("whisper 500"));
         },
       },
+      elevenlabs: fakeElevenLabs(),
       db,
     });
     await expect(
@@ -345,6 +375,81 @@ describe("gateway: transcribe", () => {
         filename: "rec.webm",
         mimeType: "audio/webm",
       }),
+    ).rejects.toBeInstanceOf(ProviderError);
+    expect(updates).toEqual(["decrement"]);
+  });
+});
+
+describe("gateway: tts (Listening)", () => {
+  it("synthesises audio when under quota", async () => {
+    const elevenlabs = fakeElevenLabs();
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai: fakeOpenAI(),
+      elevenlabs,
+      db: fakeDb({ quotaDaily: 10, countAfterUpsert: 1 }),
+    });
+    const res = await ai.tts({
+      ctx: CTX,
+      text: "Welcome to Riverside Library.",
+      voice_id: "voice_test_1",
+    });
+    expect(res.audio.byteLength).toBeGreaterThan(0);
+    expect(res.mimeType).toBe("audio/mpeg");
+    expect(res.quota_weight).toBe(1);
+    expect(elevenlabs.synthCalls).toBe(1);
+  });
+
+  it("does not call ElevenLabs when quota is exhausted", async () => {
+    const elevenlabs = fakeElevenLabs();
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai: fakeOpenAI(),
+      elevenlabs,
+      db: fakeDb({ quotaDaily: 10, countAfterUpsert: 11 }),
+    });
+    await expect(
+      ai.tts({ ctx: CTX, text: "hello", voice_id: "voice_test_1" }),
+    ).rejects.toBeInstanceOf(QuotaExceededError);
+    expect(elevenlabs.synthCalls).toBe(0);
+  });
+
+  it("refunds the reservation if synth throws", async () => {
+    const updates: Array<"increment" | "decrement"> = [];
+    const db: (ctx: OrgContext) => QuotaDb = () => ({
+      organization: {
+        findUniqueOrThrow: vi.fn(async () => ({ quota_daily: 10 })),
+      },
+      quotaUsage: {
+        upsert: vi.fn(async () => ({ ai_calls_count: 1 })),
+        update: vi.fn(async (args) => {
+          const change = args.data.ai_calls_count;
+          updates.push("decrement" in change ? "decrement" : "increment");
+          return {};
+        }),
+      },
+    });
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai: fakeOpenAI(),
+      elevenlabs: {
+        synth: async () => {
+          throw new ProviderError("elevenlabs", new Error("tts 500"));
+        },
+      },
+      db,
+    });
+    await expect(
+      ai.tts({ ctx: CTX, text: "hello", voice_id: "voice_test_1" }),
     ).rejects.toBeInstanceOf(ProviderError);
     expect(updates).toEqual(["decrement"]);
   });

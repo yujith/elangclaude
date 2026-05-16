@@ -36,10 +36,35 @@ export type ListeningSpeaker = {
 };
 
 export type ListeningSegment =
-  | { kind: "narration"; text: string }
-  | { kind: "speech"; speaker_id: string; text: string }
-  | { kind: "reading-pause"; seconds: number; instruction?: string }
-  | { kind: "questions-preview"; seconds: number; question_positions: number[] };
+  | {
+      kind: "narration";
+      text: string;
+      // Optional cached TTS clip for this segment. Phase 2 populates this
+      // at SuperAdmin-approval time; Phase 1 and freshly-generated
+      // content leave it undefined. The player chains clips in
+      // transcript order.
+      audio_clip?: ListeningAudioAsset;
+    }
+  | {
+      kind: "speech";
+      speaker_id: string;
+      text: string;
+      audio_clip?: ListeningAudioAsset;
+    }
+  | {
+      kind: "reading-pause";
+      seconds: number;
+      // UI-only instruction line ("You now have 30 seconds to check your
+      // answers."). NOT spoken — if the script wants a spoken instruction,
+      // it lives as a preceding `narration` segment and this segment is
+      // just the silence.
+      instruction?: string;
+    }
+  | {
+      kind: "questions-preview";
+      seconds: number;
+      question_positions: number[];
+    };
 
 // ─── Audio asset ────────────────────────────────────────────────────────
 //
@@ -209,6 +234,14 @@ function parseNumberArray(raw: unknown): number[] | null {
   return out;
 }
 
+function parseOptionalAudioClip(raw: unknown): ListeningAudioAsset | null {
+  // Distinguish "absent" (return undefined-equivalent via the caller) from
+  // "present but malformed" (return a sentinel so the caller can null the
+  // whole segment). We rely on the caller checking `raw === undefined` —
+  // if it's anything else, we delegate to parseAudioAsset for validation.
+  return parseAudioAsset(raw);
+}
+
 function parseSegment(
   raw: unknown,
   speakerIds: ReadonlySet<string>,
@@ -217,7 +250,13 @@ function parseSegment(
   if (!isObject(raw)) return null;
   if (raw.kind === "narration") {
     if (typeof raw.text !== "string" || raw.text.length === 0) return null;
-    return { kind: "narration", text: raw.text };
+    let clip: ListeningAudioAsset | undefined;
+    if (raw.audio_clip !== undefined && raw.audio_clip !== null) {
+      const parsed = parseOptionalAudioClip(raw.audio_clip);
+      if (!parsed) return null;
+      clip = parsed;
+    }
+    return { kind: "narration", text: raw.text, audio_clip: clip };
   }
   if (raw.kind === "speech") {
     if (typeof raw.speaker_id !== "string" || raw.speaker_id.length === 0) {
@@ -225,7 +264,18 @@ function parseSegment(
     }
     if (!speakerIds.has(raw.speaker_id)) return null;
     if (typeof raw.text !== "string" || raw.text.length === 0) return null;
-    return { kind: "speech", speaker_id: raw.speaker_id, text: raw.text };
+    let clip: ListeningAudioAsset | undefined;
+    if (raw.audio_clip !== undefined && raw.audio_clip !== null) {
+      const parsed = parseOptionalAudioClip(raw.audio_clip);
+      if (!parsed) return null;
+      clip = parsed;
+    }
+    return {
+      kind: "speech",
+      speaker_id: raw.speaker_id,
+      text: raw.text,
+      audio_clip: clip,
+    };
   }
   if (raw.kind === "reading-pause") {
     if (!isPositiveInt(raw.seconds)) return null;

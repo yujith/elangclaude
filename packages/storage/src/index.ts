@@ -12,6 +12,13 @@ export {
 export type { RecordingKeyParts, RecordingExtension } from "./keys";
 
 export {
+  audioKey,
+  assertAudioKey,
+  audioExtensionForMimeType,
+} from "./keys";
+export type { AudioKeyParts, AudioExtension } from "./keys";
+
+export {
   signedUploadUrl,
   signedDownloadUrl,
   downloadObject,
@@ -20,4 +27,15 @@ export type {
   SignedUploadArgs,
   SignedDownloadArgs,
   DownloadObjectArgs,
+} from "./r2";
+
+export {
+  audioObjectExists,
+  putAudioObject,
+  signedAudioDownloadUrl,
+} from "./r2";
+export type {
+  AudioObjectExistsArgs,
+  PutAudioObjectArgs,
+  SignedAudioDownloadArgs,
 } from "./r2";

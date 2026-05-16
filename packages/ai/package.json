@@ -19,6 +19,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@elc/db": "workspace:*",
+    "@elc/storage": "workspace:*",
     "dotenv": "^16.4.5",
     "zod": "^3.23.8"
   },

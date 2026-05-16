@@ -10,6 +10,8 @@ export type {
   RealtimeSessionResponse,
   TranscribeRequest,
   TranscribeResponse,
+  TtsRequest,
+  TtsResponse,
 } from "./gateway";
 
 export type {
@@ -17,17 +19,25 @@ export type {
   Purpose,
   RealtimePurpose,
   TranscribePurpose,
+  TtsPurpose,
   ProviderName,
 } from "./models";
 export {
   allowedModelsFor,
   getDefaultModel,
   isModelAllowed,
+  LISTENING_TTS_QUOTA_WEIGHT,
   REALTIME_SESSION_QUOTA_WEIGHT,
   TRANSCRIBE_QUOTA_WEIGHT,
 } from "./models";
 
 export type { OpenAIAdapter } from "./adapters/openai";
+export type {
+  ElevenLabsAdapter,
+  ElevenLabsSynthRequest,
+  ElevenLabsSynthResult,
+} from "./adapters/elevenlabs";
+export { ELEVENLABS_DEFAULT_MODEL } from "./adapters/elevenlabs";
 
 export {
   GradeShapeError,
@@ -195,6 +205,38 @@ export {
   sampleListeningTest,
 } from "./listening/fixtures";
 export type { ListeningFixtureQuestion } from "./listening/fixtures";
+
+// ─── Listening TTS (Phase 2) ────────────────────────────────────────────
+export {
+  DEFAULT_VOICE_CATALOGUE,
+  listAccents,
+  pickVoiceForSpeaker,
+  roleBucket,
+} from "./listening/voices";
+export type {
+  PickedVoice,
+  VoiceCatalogue,
+  VoicePickerOptions,
+  VoiceRole,
+} from "./listening/voices";
+
+export {
+  attachSynthesizedClips,
+  computeAudioClipKey,
+  createTtsCache,
+  planSynthesisJobs,
+  ttsCache,
+} from "./listening/tts-cache";
+export type {
+  AudioClipKey,
+  AudioClipKeyInput,
+  PlanSynthesisJobsOptions,
+  SynthJob,
+  SynthesizeAndCacheRequest,
+  SynthesizeAndCacheResult,
+  SynthesizedClip,
+  TtsCacheDeps,
+} from "./listening/tts-cache";
 
 // ─── Reading generation (Phase 5) ───────────────────────────────────────
 export {

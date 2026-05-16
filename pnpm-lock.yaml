@@ -68,6 +68,9 @@ importers:
       '@elc/db':
         specifier: workspace:*
         version: link:../db
+      '@elc/storage':
+        specifier: workspace:*
+        version: link:../storage
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1

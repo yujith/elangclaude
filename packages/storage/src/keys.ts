@@ -79,3 +79,91 @@ export function assertKeyBelongsToOrg(key: string, org_id: string): void {
     );
   }
 }
+
+// ─── Global audio keys (Listening TTS cache) ────────────────────────────
+//
+// Listening audio is shared content, not tenancy data — see ADR 0007 D5.
+// One TTS synth per (text, voice_id, model_id) tuple; the resulting bytes
+// live under `audio/{sha256}.{ext}` and every learner across every org plays
+// the same object. There is NO org_id in the prefix — that is deliberate.
+//
+// The tenancy guarantee for audio is enforced one layer up: the signed-URL
+// minter checks that the requesting ctx owns an Attempt against the parent
+// Test before issuing a URL. The object itself is global.
+//
+// `assertAudioKey` is the structural guard — it prevents a recording key
+// (which IS org-scoped) from accidentally being passed into an audio-only
+// code path, and vice versa.
+
+export type AudioExtension = "mp3" | "wav" | "ogg";
+
+const ALLOWED_AUDIO_EXTENSIONS: ReadonlySet<AudioExtension> = new Set([
+  "mp3",
+  "wav",
+  "ogg",
+]);
+
+// sha256 lowercase hex (64 chars). The hash carries content identity, so we
+// reject anything that doesn't look like a hash to avoid bogus, collision-
+// prone keys ending up in the bucket.
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
+export type AudioKeyParts = {
+  sha256: string;
+  extension: AudioExtension;
+};
+
+// audio/{sha256}.{ext}
+export function audioKey(parts: AudioKeyParts): string {
+  if (!SHA256_HEX.test(parts.sha256)) {
+    throw new Error(
+      `Unsafe sha256 for audio key: ${JSON.stringify(parts.sha256)}`,
+    );
+  }
+  if (!ALLOWED_AUDIO_EXTENSIONS.has(parts.extension)) {
+    throw new Error(`Unsupported audio extension: ${parts.extension}`);
+  }
+  return `audio/${parts.sha256}.${parts.extension}`;
+}
+
+// Structural guard for audio-only code paths. A recording key (which is
+// `recordings/{org_id}/...`) MUST NOT be passed where an audio key is
+// expected, and vice versa — different lifecycles, different ACL stories.
+export function assertAudioKey(key: string): void {
+  if (!key.startsWith("audio/")) {
+    throw new Error(
+      `Storage key ${JSON.stringify(key)} is not an audio cache key.`,
+    );
+  }
+  // Validate the rest of the shape to keep callers from constructing
+  // their own ad-hoc paths under `audio/`. `audio/{sha256}.{ext}` only.
+  const tail = key.slice("audio/".length);
+  const dot = tail.lastIndexOf(".");
+  if (dot < 0) {
+    throw new Error(`Audio key ${JSON.stringify(key)} has no extension.`);
+  }
+  const sha = tail.slice(0, dot);
+  const ext = tail.slice(dot + 1);
+  if (!SHA256_HEX.test(sha)) {
+    throw new Error(
+      `Audio key ${JSON.stringify(key)} does not embed a sha256 hash.`,
+    );
+  }
+  if (!ALLOWED_AUDIO_EXTENSIONS.has(ext as AudioExtension)) {
+    throw new Error(
+      `Audio key ${JSON.stringify(key)} has an unsupported extension.`,
+    );
+  }
+}
+
+// Maps a TTS provider's response MIME type to the file extension we store
+// under. Returns null when the MIME isn't one of the supported audio
+// formats — the caller surfaces a friendly error rather than smuggling a
+// bad key in.
+export function audioExtensionForMimeType(mime: string): AudioExtension | null {
+  const base = mime.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (base === "audio/mpeg" || base === "audio/mp3") return "mp3";
+  if (base === "audio/wav" || base === "audio/x-wav") return "wav";
+  if (base === "audio/ogg" || base === "application/ogg") return "ogg";
+  return null;
+}

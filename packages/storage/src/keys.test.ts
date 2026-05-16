@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertAudioKey,
   assertKeyBelongsToOrg,
+  audioExtensionForMimeType,
+  audioKey,
   extensionForMimeType,
   recordingKey,
 } from "./keys";
+
+const SHA = "a".repeat(64);
+const OTHER_SHA = "b".repeat(64);
 
 describe("recordingKey", () => {
   it("prefixes org → user → attempt and ends in .webm", () => {
@@ -123,5 +129,93 @@ describe("assertKeyBelongsToOrg", () => {
     expect(() =>
       assertKeyBelongsToOrg("recordings/x/u/a.webm", "../x"),
     ).toThrow(/Unsafe org_id/);
+  });
+
+  it("throws when handed an audio cache key", () => {
+    // An audio key has no org_id in the prefix at all — flagging it as
+    // "not scoped to org X" stops a caller from accidentally treating
+    // a global object as if it were tenant-owned.
+    expect(() =>
+      assertKeyBelongsToOrg(`audio/${SHA}.mp3`, "org_1"),
+    ).toThrow(/not scoped to org/);
+  });
+});
+
+describe("audioKey", () => {
+  it("builds an audio/{sha256}.{ext} path", () => {
+    expect(audioKey({ sha256: SHA, extension: "mp3" })).toBe(
+      `audio/${SHA}.mp3`,
+    );
+    expect(audioKey({ sha256: OTHER_SHA, extension: "wav" })).toBe(
+      `audio/${OTHER_SHA}.wav`,
+    );
+  });
+
+  it("rejects a non-hex / wrong-length sha256", () => {
+    expect(() => audioKey({ sha256: "deadbeef", extension: "mp3" })).toThrow(
+      /Unsafe sha256/,
+    );
+    expect(() =>
+      audioKey({ sha256: "Z".repeat(64), extension: "mp3" }),
+    ).toThrow(/Unsafe sha256/);
+  });
+
+  it("rejects an unsupported extension", () => {
+    expect(() =>
+      // @ts-expect-error — exercising the runtime guard.
+      audioKey({ sha256: SHA, extension: "flac" }),
+    ).toThrow(/Unsupported audio extension/);
+  });
+});
+
+describe("assertAudioKey", () => {
+  it("passes for a well-formed audio key", () => {
+    expect(() => assertAudioKey(`audio/${SHA}.mp3`)).not.toThrow();
+    expect(() => assertAudioKey(`audio/${SHA}.ogg`)).not.toThrow();
+  });
+
+  it("rejects a key under the recordings/ prefix", () => {
+    expect(() => assertAudioKey("recordings/org_1/u/a.webm")).toThrow(
+      /not an audio cache key/,
+    );
+  });
+
+  it("rejects a key missing the sha256 segment", () => {
+    expect(() => assertAudioKey("audio/not-a-hash.mp3")).toThrow(
+      /does not embed a sha256/,
+    );
+  });
+
+  it("rejects a key with no extension", () => {
+    expect(() => assertAudioKey(`audio/${SHA}`)).toThrow(/no extension/);
+  });
+
+  it("rejects an unsupported extension", () => {
+    expect(() => assertAudioKey(`audio/${SHA}.flac`)).toThrow(
+      /unsupported extension/,
+    );
+  });
+});
+
+describe("audioExtensionForMimeType", () => {
+  it("maps mpeg/mp3 to mp3", () => {
+    expect(audioExtensionForMimeType("audio/mpeg")).toBe("mp3");
+    expect(audioExtensionForMimeType("audio/mp3")).toBe("mp3");
+  });
+
+  it("maps wav family to wav", () => {
+    expect(audioExtensionForMimeType("audio/wav")).toBe("wav");
+    expect(audioExtensionForMimeType("audio/x-wav")).toBe("wav");
+  });
+
+  it("maps ogg to ogg", () => {
+    expect(audioExtensionForMimeType("audio/ogg")).toBe("ogg");
+    expect(audioExtensionForMimeType("application/ogg")).toBe("ogg");
+  });
+
+  it("returns null for unsupported types", () => {
+    expect(audioExtensionForMimeType("audio/flac")).toBeNull();
+    expect(audioExtensionForMimeType("text/plain")).toBeNull();
+    expect(audioExtensionForMimeType("")).toBeNull();
   });
 });

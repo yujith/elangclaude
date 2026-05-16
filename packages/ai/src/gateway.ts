@@ -19,12 +19,17 @@ import { withOrg, type OrgContext } from "@elc/db";
 import { anthropicProvider, type Provider, type ProviderMessage } from "./adapters/anthropic";
 import { openrouterProvider } from "./adapters/openrouter";
 import { openaiAdapter, type OpenAIAdapter } from "./adapters/openai";
+import {
+  elevenLabsAdapter,
+  type ElevenLabsAdapter,
+} from "./adapters/elevenlabs";
 import type { TranscriptSegment } from "./audio/features";
 import { ModelNotAllowedError } from "./errors";
 import {
   allowedModelsFor,
   isModelAllowed,
   resolveModel,
+  LISTENING_TTS_QUOTA_WEIGHT,
   REALTIME_SESSION_QUOTA_WEIGHT,
   TRANSCRIBE_QUOTA_WEIGHT,
   type ChatPurpose,
@@ -87,10 +92,37 @@ export type TranscribeResponse = {
   duration_sec: number;
 };
 
+// ── TTS request/response shapes (Listening, Phase 2) ──────────────────────
+
+export type TtsRequest = {
+  ctx: OrgContext;
+  text: string;
+  voice_id: string;
+  // Optional ElevenLabs model override. Defaults to the adapter's pinned
+  // ELEVENLABS_DEFAULT_MODEL. If you pass a non-default the TTS cache key
+  // changes — every cached clip re-synthesises once.
+  model_id?: string;
+  // Optional ISO-639-1 language code; the adapter passes it through to
+  // ElevenLabs as the model's language hint.
+  language_code?: string;
+};
+
+export type TtsResponse = {
+  audio: Uint8Array;
+  mimeType: string;
+  model: string;
+  // How many quota units this call reserved — surfaced so callers can log
+  // it. Constant in v1 (one unit per synth) but kept on the response so
+  // future per-call weighting is non-breaking.
+  quota_weight: number;
+};
+
 export type GatewayDeps = {
   providers: Record<"anthropic" | "openrouter", Provider>;
   // OpenAI adapter for the non-chat calls (realtime token mint, Whisper).
   openai: OpenAIAdapter;
+  // ElevenLabs adapter for Listening TTS synth.
+  elevenlabs: ElevenLabsAdapter;
   // Returns a Prisma-shaped client scoped to ctx (typically `withOrg(ctx)`).
   // Injected so tests can pass a mock that doesn't talk to a real DB.
   db: (ctx: OrgContext) => QuotaDb;
@@ -195,6 +227,36 @@ export function createAI(deps: GatewayDeps) {
         throw err;
       }
     },
+
+    // ElevenLabs TTS synth for one Listening transcript segment. The call
+    // and the cost are the same span (provider returns bytes synchronously),
+    // so reserve-then-refund matches the transcribe pattern.
+    //
+    // Callers are typically the TTS cache layer in
+    // `packages/ai/src/listening/tts-cache.ts` — direct route handlers
+    // should NOT call `ai.tts()` and bypass the cache.
+    async tts(req: TtsRequest): Promise<TtsResponse> {
+      const db = deps.db(req.ctx);
+      await reserveQuota(db, req.ctx, LISTENING_TTS_QUOTA_WEIGHT);
+
+      try {
+        const res = await deps.elevenlabs.synth({
+          text: req.text,
+          voice_id: req.voice_id,
+          model_id: req.model_id,
+          language_code: req.language_code,
+        });
+        return {
+          audio: res.audio,
+          mimeType: res.mimeType,
+          model: res.model,
+          quota_weight: LISTENING_TTS_QUOTA_WEIGHT,
+        };
+      } catch (err) {
+        await refundQuota(db, req.ctx, LISTENING_TTS_QUOTA_WEIGHT);
+        throw err;
+      }
+    },
   };
 }
 
@@ -207,5 +269,6 @@ export const ai = createAI({
     openrouter: openrouterProvider,
   },
   openai: openaiAdapter,
+  elevenlabs: elevenLabsAdapter,
   db: (ctx) => withOrg(ctx) as unknown as QuotaDb,
 });
