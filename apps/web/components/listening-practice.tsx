@@ -154,20 +154,13 @@ export function ListeningPractice({
     Record<string, ClientListeningResponse>
   >(() => seedResponses(questions, initialResponses));
   const [status, setStatus] = useState<Status>({ kind: "idle" });
-  // Tracks which part numbers have started playing in this session, so
-  // the Begin button disables after first use even when the learner
-  // navigates away and back (real IELTS audio plays exactly once).
-  const [playedParts, setPlayedParts] = useState<Set<number>>(
-    () => new Set(),
-  );
-  // When a part finishes, we set the NEXT part number here. The next
-  // part's panel observes this on mount and auto-starts so a learner
-  // experiences the 4-part section as one continuous play — same as
-  // real IELTS. Cleared after consumption so manual tab navigation
-  // doesn't auto-start anything.
-  const [pendingAutoStart, setPendingAutoStart] = useState<number | null>(
-    null,
-  );
+  // Which part the GLOBAL audio panel is currently playing through.
+  // null when the section is idle or finished. The visible tab
+  // auto-tracks this (overridable by clicking tabs to view questions
+  // for another part).
+  const [currentlyPlayingPart, setCurrentlyPlayingPart] = useState<
+    number | null
+  >(null);
   const startedAt = useMemo(() => new Date(startedAtIso), [startedAtIso]);
   // NOTE: we deliberately do NOT call useElapsedSeconds here — the
   // per-second tick used to re-render the entire ListeningPractice
@@ -176,35 +169,21 @@ export function ListeningPractice({
   // (reloading the <audio src> in a tight loop). The elapsed timer
   // now lives inside ElapsedTimer, scoped to the header.
 
-  const markPartPlayed = useCallback((part: number) => {
-    setPlayedParts((prev) => {
-      if (prev.has(part)) return prev;
-      const next = new Set(prev);
-      next.add(part);
-      return next;
-    });
-  }, []);
-
-  // Called by a part's StrictAudioPanel when its audio reaches the end.
-  // We switch the visible tab to the next part AND queue an auto-start
-  // so the section flows continuously. If we're already on the last
-  // part, just stay put.
-  const advanceToNextPart = useCallback(
-    (finishedPart: number) => {
-      const finishedIndex = parts.findIndex((p) => p.part === finishedPart);
-      if (finishedIndex < 0 || finishedIndex >= parts.length - 1) return;
-      const nextIndex = finishedIndex + 1;
-      const nextPartNumber = parts[nextIndex]!.part;
-      setPartIndex(nextIndex);
-      setPendingAutoStart(nextPartNumber);
+  // Auto-follow the audio. When the global audio enters a new part,
+  // we move the visible tab to match — the learner doesn't have to
+  // chase the audio with the tabs. They can still override by
+  // clicking a different tab to read ahead.
+  const handlePartChange = useCallback(
+    (partNumber: number) => {
+      setCurrentlyPlayingPart(partNumber);
+      const idx = parts.findIndex((p) => p.part === partNumber);
+      if (idx >= 0) setPartIndex(idx);
     },
     [parts],
   );
 
-  // Called by a part's panel once it consumes the auto-start signal so
-  // we don't re-trigger on a later manual navigation back to it.
-  const clearAutoStart = useCallback(() => {
-    setPendingAutoStart(null);
+  const handleFinished = useCallback(() => {
+    setCurrentlyPlayingPart(null);
   }, []);
 
   // Group questions by part position membership for fast lookup.
@@ -295,26 +274,25 @@ export function ListeningPractice({
           mode={mode}
         />
 
+        <GlobalAudioPanel
+          attemptId={attemptId}
+          parts={parts}
+          onPartChange={handlePartChange}
+          onFinished={handleFinished}
+        />
+
         <PartTabs
           parts={parts}
           current={partIndex}
           onChange={setPartIndex}
-          playedParts={playedParts}
+          currentlyPlayingPart={currentlyPlayingPart}
         />
 
-        <PartPanel
-          attemptId={attemptId}
+        <QuestionsList
           part={currentPart}
           questions={currentQuestions}
           responses={responses}
           onChange={onChange}
-          mode={mode}
-          alreadyPlayed={playedParts.has(currentPart.part)}
-          onPlayStarted={markPartPlayed}
-          autoStart={pendingAutoStart === currentPart.part}
-          onAutoStartConsumed={clearAutoStart}
-          onPartFinished={advanceToNextPart}
-          isLastPart={partIndex === parts.length - 1}
         />
 
         <PartNavigation
@@ -407,18 +385,18 @@ function PartTabs({
   parts,
   current,
   onChange,
-  playedParts,
+  currentlyPlayingPart,
 }: {
   parts: ListeningRunnerPart[];
   current: number;
   onChange: (i: number) => void;
-  playedParts: Set<number>;
+  currentlyPlayingPart: number | null;
 }) {
   return (
     <nav aria-label="Listening part" className="mb-6 flex flex-wrap gap-2">
       {parts.map((p, i) => {
         const active = i === current;
-        const played = playedParts.has(p.part);
+        const playing = currentlyPlayingPart === p.part;
         return (
           <button
             key={p.part}
@@ -431,18 +409,18 @@ function PartTabs({
                 ? "bg-brand-red text-white ring-brand-red"
                 : "bg-brand-white text-brand-grey-700 ring-brand-grey-200 hover:text-brand-black")
             }
-            title={played ? "Audio already played for this part." : undefined}
+            title={playing ? "Audio is currently playing this part." : undefined}
           >
             <span>Part {p.part}</span>
             <span className="font-body font-normal text-xs opacity-80">
               {p.title}
             </span>
-            {played ? (
+            {playing ? (
               <span
-                aria-label="played"
-                className="font-body font-normal text-xs opacity-70"
+                aria-label="now playing"
+                className="font-heading font-bold text-xs"
               >
-                ✓
+                ●▶
               </span>
             ) : null}
           </button>
@@ -485,149 +463,73 @@ function PartNavigation({
   );
 }
 
-// ─── Per-part panel ─────────────────────────────────────────────────────
+// ─── Questions list (per-active-part) ───────────────────────────────────
+//
+// The questions side of the page. Audio is owned globally by
+// GlobalAudioPanel above; this component is presentational over the
+// learner's responses for the part they are CURRENTLY VIEWING.
 
-function PartPanel({
-  attemptId,
+function QuestionsList({
   part,
   questions,
   responses,
   onChange,
-  mode,
-  alreadyPlayed,
-  onPlayStarted,
-  autoStart,
-  onAutoStartConsumed,
-  onPartFinished,
-  isLastPart,
 }: {
-  attemptId: string;
   part: ListeningRunnerPart;
   questions: ListeningRunnerQuestion[];
   responses: Record<string, ClientListeningResponse>;
   onChange: (questionId: string, next: ClientListeningResponse) => void;
-  mode: ListeningPlayerMode;
-  alreadyPlayed: boolean;
-  onPlayStarted: (part: number) => void;
-  autoStart: boolean;
-  onAutoStartConsumed: () => void;
-  onPartFinished: (part: number) => void;
-  isLastPart: boolean;
 }) {
-  const speakerLabelById = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of part.speakers) m.set(s.id, s.name);
-    return m;
-  }, [part]);
-
   const blockById = useMemo(() => {
     const m = new Map<string, ListeningRunnerBlock>();
     for (const b of part.completion_blocks) m.set(b.id, b);
     return m;
   }, [part]);
 
-  const strict = mode === "strict";
-  // In strict mode the questions panel goes full-width — transcript is
-  // hidden because the audio plays once and that's the whole point.
-  const containerClass = strict
-    ? "space-y-5"
-    : "grid grid-cols-1 lg:grid-cols-2 gap-8";
-
   return (
-    <div className={containerClass}>
-      {!strict ? (
-        <article
-          aria-label={`Part ${part.part} transcript`}
-          className="space-y-4"
-        >
-          <header>
-            <p className="font-body text-xs uppercase tracking-widest text-brand-grey-500">
-              Part {part.part} · {part.context}
-            </p>
-            <h2 className="mt-1 font-heading font-bold text-xl text-brand-black">
-              {part.title}
-            </h2>
-            <p className="mt-1 font-body text-xs text-brand-grey-500">
-              Speakers:{" "}
-              {part.speakers.map((s) => `${s.name} (${s.accent})`).join(", ")}
-            </p>
-          </header>
+    <article aria-label={`Part ${part.part} questions`} className="space-y-5">
+      <header>
+        <p className="font-body text-xs uppercase tracking-widest text-brand-grey-500">
+          Part {part.part} · {part.context}
+        </p>
+        <h2 className="mt-1 font-heading font-bold text-xl text-brand-black">
+          {part.title}{" "}
+          <span className="font-body font-normal text-sm text-brand-grey-600">
+            · answer {questions.length} as the recording plays
+          </span>
+        </h2>
+      </header>
 
-          <div className="space-y-3">
-            {part.transcript.map((seg, i) => (
-              <TranscriptSegment
-                key={i}
-                attemptId={attemptId}
-                segment={seg}
-                speakerLabelById={speakerLabelById}
-              />
-            ))}
-          </div>
-        </article>
-      ) : (
-        <StrictAudioPanel
-          // Per-part key — without this React reuses the same instance
-          // across part transitions and the previous part's playState
-          // ("finished") leaks into the new part, blocking auto-start
-          // and showing the wrong "audio already played" message.
-          key={`part-${part.part}`}
-          attemptId={attemptId}
-          part={part}
-          alreadyPlayed={alreadyPlayed}
-          onPlayStarted={onPlayStarted}
-          autoStart={autoStart}
-          onAutoStartConsumed={onAutoStartConsumed}
-          onPartFinished={onPartFinished}
-          isLastPart={isLastPart}
-        />
-      )}
+      <ol className="space-y-5">
+        {questions.map((q) => (
+          <li
+            key={q.id}
+            className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-5 space-y-3"
+          >
+            <header className="flex items-start gap-3">
+              <span className="inline-flex items-center justify-center min-w-[2.25rem] h-9 rounded-pill bg-brand-black font-heading font-bold text-sm text-white px-2">
+                {q.position + 1}
+              </span>
+              <div>
+                <p className="font-body text-sm font-bold text-brand-black leading-snug">
+                  {q.prompt}
+                </p>
+                <p className="font-body text-xs text-brand-grey-500">
+                  {q.payload.kind.replace("listening-", "")} · {q.points} pt
+                </p>
+              </div>
+            </header>
 
-      <article aria-label={`Part ${part.part} questions`} className="space-y-5">
-        <header>
-          <p className="font-body text-xs uppercase tracking-widest text-brand-grey-500">
-            {strict ? "Answer as you listen" : "Questions"}
-          </p>
-          <h2 className="mt-1 font-heading font-bold text-xl text-brand-black">
-            Answer {questions.length}.{" "}
-            <span className="font-body font-normal text-brand-grey-700">
-              {strict
-                ? "The recording will play once."
-                : "Each saves as you type."}
-            </span>
-          </h2>
-        </header>
-
-        <ol className="space-y-5">
-          {questions.map((q) => (
-            <li
-              key={q.id}
-              className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-5 space-y-3"
-            >
-              <header className="flex items-start gap-3">
-                <span className="inline-flex items-center justify-center min-w-[2.25rem] h-9 rounded-pill bg-brand-black font-heading font-bold text-sm text-white px-2">
-                  {q.position + 1}
-                </span>
-                <div>
-                  <p className="font-body text-sm font-bold text-brand-black leading-snug">
-                    {q.prompt}
-                  </p>
-                  <p className="font-body text-xs text-brand-grey-500">
-                    {q.payload.kind.replace("listening-", "")} · {q.points} pt
-                  </p>
-                </div>
-              </header>
-
-              <QuestionInput
-                question={q}
-                value={responses[q.id]}
-                onChange={onChange}
-                blockById={blockById}
-              />
-            </li>
-          ))}
-        </ol>
-      </article>
-    </div>
+            <QuestionInput
+              question={q}
+              value={responses[q.id]}
+              onChange={onChange}
+              blockById={blockById}
+            />
+          </li>
+        ))}
+      </ol>
+    </article>
   );
 }
 
@@ -636,110 +538,143 @@ function PartPanel({
 // pause silences, plays once, and cannot be paused / scrubbed / restarted.
 // Reading-ahead and post-part check pauses come through as honest silent
 // gaps so the timing matches the real exam.
-function StrictAudioPanel({
+// ─── Global audio panel (one playback chain across all 4 parts) ─────────
+//
+// Real IELTS Listening is ONE continuous 30-minute recording. The
+// learner clicks Begin once and the whole section plays through:
+// narrator's intros, the four parts' transcripts, the silent reading
+// pauses, all in order. This component owns that single playback chain.
+//
+// Per-part tabs above the questions panel are purely a viewing nav —
+// they don't gate audio. When the playback crosses a part boundary
+// we call onPartChange so the parent can auto-follow with the visible
+// tab.
+
+type GlobalPlaylistItem =
+  | { type: "audio"; sha256: string; partNumber: number }
+  | { type: "missing-audio"; partNumber: number }
+  | {
+      type: "pause";
+      seconds: number;
+      label: "reading" | "preview";
+      partNumber: number;
+    };
+
+function buildGlobalPlaylist(
+  parts: ListeningRunnerPart[],
+): GlobalPlaylistItem[] {
+  const out: GlobalPlaylistItem[] = [];
+  for (const part of parts) {
+    for (const seg of part.transcript) {
+      if (seg.kind === "speech" || seg.kind === "narration") {
+        if (seg.audio_sha256) {
+          out.push({
+            type: "audio",
+            sha256: seg.audio_sha256,
+            partNumber: part.part,
+          });
+        } else {
+          out.push({ type: "missing-audio", partNumber: part.part });
+        }
+      } else if (seg.kind === "reading-pause") {
+        out.push({
+          type: "pause",
+          seconds: seg.seconds,
+          label: "reading",
+          partNumber: part.part,
+        });
+      } else if (seg.kind === "questions-preview") {
+        out.push({
+          type: "pause",
+          seconds: seg.seconds,
+          label: "preview",
+          partNumber: part.part,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+function GlobalAudioPanel({
   attemptId,
-  part,
-  alreadyPlayed,
-  onPlayStarted,
-  autoStart,
-  onAutoStartConsumed,
-  onPartFinished,
-  isLastPart,
+  parts,
+  onPartChange,
+  onFinished,
 }: {
   attemptId: string;
-  part: ListeningRunnerPart;
-  alreadyPlayed: boolean;
-  onPlayStarted: (part: number) => void;
-  autoStart: boolean;
-  onAutoStartConsumed: () => void;
-  onPartFinished: (part: number) => void;
-  isLastPart: boolean;
+  parts: ListeningRunnerPart[];
+  onPartChange: (partNumber: number) => void;
+  onFinished: () => void;
 }) {
-  // If the parent says this part already played (because the learner
-  // started it on a previous tab visit), start in "finished" so the UI
-  // never offers a replay. Audio plays at most once per session.
   const [playState, setPlayState] = useState<
-    "idle" | "loading" | "playing" | "finished" | "error"
-  >(alreadyPlayed ? "finished" : "idle");
+    "idle" | "playing" | "finished" | "error"
+  >("idle");
   const [segmentIndex, setSegmentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Playlist: every speech / narration segment, in order. A speech /
-  // narration segment with no audio_sha256 becomes a `missing-audio`
-  // item that auto-advances after 1 s with a visible "no audio for this
-  // segment" indicator — silent-dropping these used to look like the
-  // player had stalled, when really the synth step had just failed
-  // partially. reading-pause + questions-preview render as visible
-  // countdown pauses.
-  type PlaylistItem =
-    | { type: "audio"; sha256: string }
-    | { type: "missing-audio" }
-    | { type: "pause"; seconds: number; label: "reading" | "preview" };
-  const playlist = useMemo(() => {
-    const out: PlaylistItem[] = [];
-    for (const seg of part.transcript) {
-      if (seg.kind === "speech" || seg.kind === "narration") {
-        if (seg.audio_sha256) {
-          out.push({ type: "audio", sha256: seg.audio_sha256 });
-        } else {
-          out.push({ type: "missing-audio" });
-        }
-      } else if (seg.kind === "reading-pause") {
-        out.push({ type: "pause", seconds: seg.seconds, label: "reading" });
-      } else if (seg.kind === "questions-preview") {
-        out.push({ type: "pause", seconds: seg.seconds, label: "preview" });
-      }
-    }
-    return out;
-  }, [part]);
+  const playlist = useMemo(() => buildGlobalPlaylist(parts), [parts]);
 
-  // Quick header diagnostic so the operator sees "5 of 12 speech
-  // segments missing audio" at a glance — that's a SuperAdmin re-synth
-  // signal, not a player bug.
+  // Total speech + per-part-with-audio counts so we can show "1 of 4
+  // parts has no audio at all" loudly in the panel.
   const audioStatus = useMemo(() => {
-    let speech = 0;
-    let withAudio = 0;
-    for (const seg of part.transcript) {
-      if (seg.kind === "speech" || seg.kind === "narration") {
-        speech += 1;
-        if (seg.audio_sha256) withAudio += 1;
+    const perPart = new Map<
+      number,
+      { speech: number; withAudio: number }
+    >();
+    for (const part of parts) {
+      let speech = 0;
+      let withAudio = 0;
+      for (const seg of part.transcript) {
+        if (seg.kind === "speech" || seg.kind === "narration") {
+          speech += 1;
+          if (seg.audio_sha256) withAudio += 1;
+        }
       }
+      perPart.set(part.part, { speech, withAudio });
     }
-    return { total: speech, withAudio, missing: speech - withAudio };
-  }, [part]);
+    let totalSpeech = 0;
+    let totalWithAudio = 0;
+    const fullySilentParts: number[] = [];
+    for (const [partNumber, stats] of perPart) {
+      totalSpeech += stats.speech;
+      totalWithAudio += stats.withAudio;
+      if (stats.speech > 0 && stats.withAudio === 0)
+        fullySilentParts.push(partNumber);
+    }
+    return {
+      totalSpeech,
+      totalWithAudio,
+      missing: totalSpeech - totalWithAudio,
+      fullySilentParts,
+    };
+  }, [parts]);
 
-  // State-machine advance: bumps segmentIndex, or flips to 'finished' if
-  // we're past the last item. setState updaters MUST be pure — no nested
-  // setState calls — so we compute the next-index decision outside the
-  // updater. (React strict mode runs updaters twice to detect side
-  // effects, which previously caused the parent setPlayedParts to fire
-  // during a child render.)
+  // Drive a pure-by-construction advance: compute next state outside
+  // the setSegmentIndex updater so React strict-mode's double-invoke
+  // can't trigger side effects.
   const advance = useCallback(() => {
     const next = segmentIndex + 1;
     if (next >= playlist.length) {
       setPlayState("finished");
+      onFinished();
     } else {
       setSegmentIndex(next);
     }
-  }, [playlist.length, segmentIndex]);
+  }, [playlist.length, segmentIndex, onFinished]);
 
+  // Pause / missing-audio timer effect — same shape as before.
   useEffect(() => {
     if (playState !== "playing") return;
     const item = playlist[segmentIndex];
     if (!item) return;
-    // Pause segments wait for their declared seconds. Missing-audio
-    // placeholders auto-advance after 1 s with a visible note so the
-    // learner isn't staring at a frozen player. Real audio items are
-    // driven by the <audio onEnded> callback elsewhere.
     let delayMs: number | null = null;
     if (item.type === "pause") delayMs = item.seconds * 1000;
     else if (item.type === "missing-audio") delayMs = 1000;
     if (delayMs === null) return;
-    const handle = setTimeout(() => {
-      advance();
-    }, delayMs);
+    const handle = setTimeout(() => advance(), delayMs);
     pauseTimerRef.current = handle;
     return () => {
       clearTimeout(handle);
@@ -753,86 +688,61 @@ function StrictAudioPanel({
     };
   }, []);
 
+  // Notify parent when the current playlist item enters a new part, so
+  // the visible tab auto-follows the audio.
+  const currentItem = playState === "playing" ? playlist[segmentIndex] : null;
+  const currentPartNumber = currentItem ? currentItem.partNumber : null;
+  useEffect(() => {
+    if (currentPartNumber !== null) onPartChange(currentPartNumber);
+  }, [currentPartNumber, onPartChange]);
+
   const start = useCallback(() => {
-    // Read current playState via closure (callback id changes with state)
-    // so the updater stays pure and we keep the parent-notification side
-    // effect outside the updater.
     if (playState !== "idle") return;
     setPlayState("playing");
     setError(null);
     setSegmentIndex(0);
-    // Notify the parent AFTER scheduling our own state changes. The
-    // parent's setPlayedParts is then a normal event-triggered update,
-    // not a render-time side effect.
-    onPlayStarted(part.part);
-  }, [onPlayStarted, part.part, playState]);
+  }, [playState]);
 
-  // Auto-start when the parent signals this part is the next in line
-  // (e.g., the learner clicked Continue at the end of the previous
-  // part, or the previous part's audio finished and auto-advanced).
-  // Consumed once so manual tab navigation back to this part doesn't
-  // re-trigger. Deferred via queueMicrotask so the setState cascade
-  // fires after the current effect commits (React strict-mode rule).
-  useEffect(() => {
-    if (!autoStart) return;
-    if (playState !== "idle") {
-      onAutoStartConsumed();
-      return;
-    }
-    queueMicrotask(() => {
-      start();
-      onAutoStartConsumed();
-    });
-  }, [autoStart, playState, start, onAutoStartConsumed]);
-
-  // Notify the parent the moment this part transitions to "finished"
-  // so it can flip the visible tab + queue auto-start for the next
-  // part. Only fires for FRESH completions (not panels that started
-  // life as alreadyPlayed=true, which would re-trigger every remount).
-  const finishedNotifiedRef = useRef(false);
-  useEffect(() => {
-    if (playState !== "finished") return;
-    if (alreadyPlayed) return;
-    if (finishedNotifiedRef.current) return;
-    finishedNotifiedRef.current = true;
-    onPartFinished(part.part);
-  }, [playState, alreadyPlayed, onPartFinished, part.part]);
-
-  const currentItem = playState === "playing" ? playlist[segmentIndex] : null;
+  const totalParts = parts.length;
+  const playingPartIndex = currentPartNumber
+    ? parts.findIndex((p) => p.part === currentPartNumber)
+    : -1;
 
   return (
-    <article className="rounded-lg bg-brand-black text-white p-6 space-y-4">
-      <header>
-        <p className="font-body text-xs uppercase tracking-widest text-brand-red">
-          Part {part.part} · {part.context}
-        </p>
-        <h2 className="mt-1 font-heading font-bold text-xl text-white">
-          {part.title}
-        </h2>
-        <p className="mt-1 font-body text-xs text-white/70">
-          Speakers:{" "}
-          {part.speakers.map((s) => `${s.name} (${s.accent})`).join(", ")}
-        </p>
-        {audioStatus.missing > 0 && audioStatus.withAudio > 0 ? (
-          <p className="mt-2 font-body text-xs text-brand-red">
-            ⚠ {audioStatus.missing} of {audioStatus.total} speech segments
-            have no audio. Ask SuperAdmin to re-synth this section.
+    <article className="rounded-lg bg-brand-black text-white p-6 space-y-4 mb-6">
+      <header className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <p className="font-body text-xs uppercase tracking-widest text-brand-red">
+            Listening section · single continuous playback
+          </p>
+          <h2 className="mt-1 font-heading font-bold text-xl text-white">
+            {playState === "idle"
+              ? "All four parts will play once, end to end."
+              : playState === "playing"
+                ? `Playing Part ${currentPartNumber ?? "?"} (segment ${segmentIndex + 1} of ${playlist.length})`
+                : "Listening section finished."}
+          </h2>
+        </div>
+        {audioStatus.missing > 0 && audioStatus.totalWithAudio > 0 ? (
+          <p className="font-body text-xs text-brand-red max-w-xs text-right">
+            ⚠ {audioStatus.missing} of {audioStatus.totalSpeech} speech
+            segments have no audio.
           </p>
         ) : null}
       </header>
 
-      {audioStatus.withAudio === 0 && audioStatus.total > 0 ? (
-        // Hard "this part has no audio at all" state — make it loud so
-        // the learner doesn't sit waiting for sound that's never coming.
+      {audioStatus.fullySilentParts.length > 0 ? (
         <div className="rounded-md bg-brand-red/20 ring-1 ring-brand-red/60 p-4">
           <p className="font-heading font-bold text-sm text-white">
-            No audio synthesised for Part {part.part}.
+            No audio for Part
+            {audioStatus.fullySilentParts.length === 1 ? "" : "s"}{" "}
+            {audioStatus.fullySilentParts.join(", ")}.
           </p>
           <p className="mt-1 font-body text-sm text-white/80">
-            Every speech segment in this part is missing its TTS clip.
-            Ask a SuperAdmin to open the moderation page for this section
-            and click <em>Re-synthesise missing clips</em>. You can still
-            navigate to other parts and answer the questions you can hear.
+            TTS synth failed for {audioStatus.fullySilentParts.length === 1 ? "this part" : "these parts"}.
+            Ask a SuperAdmin to open the moderation page and click{" "}
+            <em>Re-synthesise missing clips</em>. Playback will skip the
+            silent segments and continue.
           </p>
         </div>
       ) : null}
@@ -841,18 +751,15 @@ function StrictAudioPanel({
         <button
           type="button"
           onClick={start}
-          className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black"
+          className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black"
         >
-          ▶ Begin Part {part.part} audio
+          ▶ Begin Listening section
         </button>
       ) : null}
 
-      {playState === "playing" ? (
+      {playState === "playing" && currentItem ? (
         <div className="space-y-2">
-          <p className="font-body text-sm text-white/80">
-            Playing segment {segmentIndex + 1} of {playlist.length}…
-          </p>
-          {currentItem && currentItem.type === "audio" ? (
+          {currentItem.type === "audio" ? (
             <StrictAudioSegment
               attemptId={attemptId}
               sha256={currentItem.sha256}
@@ -860,39 +767,30 @@ function StrictAudioPanel({
               onEnded={() => advance()}
               onError={() => setError("Audio failed to load.")}
             />
-          ) : currentItem && currentItem.type === "pause" ? (
+          ) : currentItem.type === "pause" ? (
             <PauseCountdown
               key={segmentIndex}
               seconds={currentItem.seconds}
               label={currentItem.label}
             />
-          ) : currentItem && currentItem.type === "missing-audio" ? (
+          ) : currentItem.type === "missing-audio" ? (
             <p className="font-body text-xs italic text-brand-red">
-              [no audio for this segment — re-synth from moderation page]
+              [no audio for this segment — skipping]
+            </p>
+          ) : null}
+          {playingPartIndex >= 0 ? (
+            <p className="font-body text-xs text-white/60">
+              Part {currentPartNumber} of {totalParts} in progress.
             </p>
           ) : null}
         </div>
       ) : null}
 
       {playState === "finished" ? (
-        <div className="space-y-3">
-          <p className="font-body text-sm text-white/80">
-            {alreadyPlayed
-              ? `Part ${part.part} audio has already played. It cannot be replayed — the exam plays each part once.`
-              : isLastPart
-                ? `Part ${part.part} audio finished. That's the whole section — scroll down to submit your answers.`
-                : `Part ${part.part} audio finished. Part ${part.part + 1} will begin shortly.`}
-          </p>
-          {!alreadyPlayed && !isLastPart ? (
-            <button
-              type="button"
-              onClick={() => onPartFinished(part.part)}
-              className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black"
-            >
-              Continue to Part {part.part + 1} →
-            </button>
-          ) : null}
-        </div>
+        <p className="font-body text-sm text-white/80">
+          That&apos;s the whole Listening section. Scroll down to review
+          your answers and submit.
+        </p>
       ) : null}
 
       {error ? (
@@ -900,7 +798,9 @@ function StrictAudioPanel({
       ) : null}
 
       <p className="font-body text-xs text-white/60">
-        Exam mode: audio plays once. No pause, no rewind.
+        Exam mode: audio plays once. No pause, no rewind. Flip between
+        part tabs below to view any part&apos;s questions while the
+        recording plays.
       </p>
     </article>
   );
@@ -1001,110 +901,6 @@ function StrictAudioSegment({
       // affordance; the audio element still exists in the DOM and
       // determined users will find ways around it.
     />
-  );
-}
-
-// ─── Transcript segment ─────────────────────────────────────────────────
-
-function TranscriptSegment({
-  attemptId,
-  segment,
-  speakerLabelById,
-}: {
-  attemptId: string;
-  segment: ListeningRunnerSegment;
-  speakerLabelById: Map<string, string>;
-}) {
-  if (segment.kind === "reading-pause") {
-    return (
-      <p className="font-body text-xs italic text-brand-grey-500 border-l-2 border-brand-grey-300 pl-3">
-        [pause {segment.seconds}s
-        {segment.instruction ? ` — ${segment.instruction}` : ""}]
-      </p>
-    );
-  }
-  if (segment.kind === "questions-preview") {
-    return (
-      <p className="font-body text-xs italic text-brand-grey-500 border-l-2 border-brand-grey-300 pl-3">
-        [look at questions {segment.question_positions.map((p) => p + 1).join(", ")} — {segment.seconds}s]
-      </p>
-    );
-  }
-  const speakerLabel =
-    segment.kind === "speech"
-      ? (speakerLabelById.get(segment.speaker_id) ?? segment.speaker_id)
-      : "Narrator";
-  return (
-    <div className="space-y-1">
-      <p className="font-body text-sm text-brand-grey-900 leading-relaxed">
-        <span className="font-heading font-bold text-brand-red mr-2">
-          {speakerLabel}:
-        </span>
-        {segment.text}
-      </p>
-      {segment.audio_sha256 ? (
-        <LazyAudioPlayer
-          attemptId={attemptId}
-          sha256={segment.audio_sha256}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function LazyAudioPlayer({
-  attemptId,
-  sha256,
-}: {
-  attemptId: string;
-  sha256: string;
-}) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async () => {
-    if (url || loading) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await issueSignedAudioUrl(attemptId, sha256);
-      if (res.ok) {
-        setUrl(res.url);
-      } else {
-        setError(
-          res.error === "unknown_clip"
-            ? "Audio for this segment isn't available."
-            : "Couldn't load audio.",
-        );
-      }
-    } catch {
-      setError("Couldn't load audio.");
-    } finally {
-      setLoading(false);
-    }
-  }, [attemptId, sha256, url, loading]);
-
-  if (error) {
-    return <p className="font-body text-xs text-brand-grey-500">{error}</p>;
-  }
-  if (!url) {
-    return (
-      <button
-        type="button"
-        onClick={load}
-        disabled={loading}
-        className="inline-flex items-center gap-2 rounded-pill bg-brand-grey-100 px-3 py-1 font-heading font-bold text-xs text-brand-grey-900 hover:bg-brand-grey-200 disabled:opacity-50"
-      >
-        {loading ? "Loading…" : "▶ Play audio"}
-      </button>
-    );
-  }
-  return (
-    // Default <audio controls> is fine for practice mode — pause + seek
-    // allowed. Phase 5 strict mode will swap this for a locked-down
-    // custom player.
-    <audio controls preload="none" src={url} className="w-full" />
   );
 }
 
