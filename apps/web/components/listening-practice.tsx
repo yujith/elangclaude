@@ -2,11 +2,19 @@
 
 // Listening section practice runner.
 //
-// Practice-mode UX: per-part tabs, transcript visible alongside questions
-// (so a learner can re-read and re-listen freely), per-segment <audio>
-// players that lazily mint signed R2 URLs via issueSignedAudioUrl.
-// Strict single-play mode lands in Phase 5; this component never enforces
-// playback rules.
+// Two playback modes:
+//   - "practice" (default): transcript visible alongside questions,
+//     per-segment <audio controls> with pause + rewind, free part
+//     navigation. The everyday drill experience.
+//   - "strict": no transcript text rendered, single-play per segment
+//     (pause hidden via a custom widget, seek blocked, replay blocked),
+//     no part navigation backwards. Used by the Phase 6 mock
+//     orchestrator. Scrub attempts are logged via a server action.
+//
+// Phase 1 question kinds wired (mcq-single, mcq-multi,
+// sentence-completion, short-answer, completion-blank). Strict mode
+// uses the same input widgets — the difference is the player envelope
+// and the transcript visibility.
 //
 // All five Phase 1 question kinds are wired:
 //   - listening-mcq-single
@@ -114,12 +122,17 @@ export type ListeningRunnerQuestion = {
 
 // ─── Component ──────────────────────────────────────────────────────────
 
+export type ListeningPlayerMode = "practice" | "strict";
+
 type Props = {
   attemptId: string;
   startedAtIso: string;
   parts: ListeningRunnerPart[];
   questions: ListeningRunnerQuestion[];
   initialResponses: Record<string, unknown>;
+  // Defaults to "practice". The mock orchestrator (Phase 6) renders this
+  // component with mode="strict".
+  mode?: ListeningPlayerMode;
 };
 
 type Status =
@@ -134,6 +147,7 @@ export function ListeningPractice({
   parts,
   questions,
   initialResponses,
+  mode = "practice",
 }: Props) {
   const [partIndex, setPartIndex] = useState(0);
   const [responses, setResponses] = useState<
@@ -142,6 +156,7 @@ export function ListeningPractice({
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const startedAt = useMemo(() => new Date(startedAtIso), [startedAtIso]);
   const elapsed = useElapsedSeconds(startedAt);
+  const strict = mode === "strict";
 
   // Group questions by part position membership for fast lookup.
   const questionsByPart = useMemo(() => {
@@ -228,12 +243,14 @@ export function ListeningPractice({
           status={status}
           totalQuestions={questions.length}
           answeredCount={countAnswered(responses)}
+          mode={mode}
         />
 
         <PartTabs
           parts={parts}
           current={partIndex}
           onChange={setPartIndex}
+          strict={strict}
         />
 
         <PartPanel
@@ -242,6 +259,7 @@ export function ListeningPractice({
           questions={currentQuestions}
           responses={responses}
           onChange={onChange}
+          mode={mode}
         />
 
         <PartNavigation
@@ -249,6 +267,7 @@ export function ListeningPractice({
           partCount={parts.length}
           onPrev={() => setPartIndex((i) => Math.max(0, i - 1))}
           onNext={() => setPartIndex((i) => Math.min(parts.length - 1, i + 1))}
+          strict={strict}
         />
 
         <SubmitBar attemptId={attemptId} />
@@ -264,20 +283,23 @@ function RunnerHeader({
   status,
   totalQuestions,
   answeredCount,
+  mode,
 }: {
   elapsed: number;
   status: Status;
   totalQuestions: number;
   answeredCount: number;
+  mode: ListeningPlayerMode;
 }) {
+  const strict = mode === "strict";
   return (
     <header className="mb-6 flex flex-wrap items-baseline justify-between gap-3">
       <div>
         <p className="font-body text-sm uppercase tracking-widest text-brand-red">
-          Listening · practice mode
+          Listening · {strict ? "exam mode" : "practice mode"}
         </p>
         <h1 className="mt-1 font-display italic font-bold text-3xl md:text-4xl text-brand-black leading-tight">
-          Take your time.
+          {strict ? "Single play. Eyes on the questions." : "Take your time."}
         </h1>
         <p className="mt-2 font-body text-sm text-brand-grey-700">
           Answered{" "}
@@ -321,29 +343,35 @@ function PartTabs({
   parts,
   current,
   onChange,
+  strict,
 }: {
   parts: ListeningRunnerPart[];
   current: number;
   onChange: (i: number) => void;
+  strict: boolean;
 }) {
   return (
-    <nav
-      aria-label="Listening part"
-      className="mb-6 flex flex-wrap gap-2"
-    >
+    <nav aria-label="Listening part" className="mb-6 flex flex-wrap gap-2">
       {parts.map((p, i) => {
         const active = i === current;
+        // Strict mode forbids jumping backwards. Forward tabs are also
+        // disabled — the only way to advance is the Next-part button at
+        // the bottom of the panel, which enforces sequential progression.
+        const disabled = strict;
         return (
           <button
             key={p.part}
             type="button"
             onClick={() => onChange(i)}
+            disabled={disabled}
             aria-current={active ? "page" : undefined}
             className={
               "inline-flex items-center gap-2 rounded-pill px-4 py-2 font-heading font-bold text-sm ring-1 transition-colors " +
               (active
                 ? "bg-brand-red text-white ring-brand-red"
-                : "bg-brand-white text-brand-grey-700 ring-brand-grey-200 hover:text-brand-black")
+                : disabled
+                  ? "bg-brand-grey-50 text-brand-grey-500 ring-brand-grey-200 cursor-not-allowed"
+                  : "bg-brand-white text-brand-grey-700 ring-brand-grey-200 hover:text-brand-black")
             }
           >
             <span>Part {p.part}</span>
@@ -362,18 +390,21 @@ function PartNavigation({
   partCount,
   onPrev,
   onNext,
+  strict,
 }: {
   partIndex: number;
   partCount: number;
   onPrev: () => void;
   onNext: () => void;
+  strict: boolean;
 }) {
   return (
     <div className="mt-8 flex items-center justify-between">
       <button
         type="button"
         onClick={onPrev}
-        disabled={partIndex === 0}
+        disabled={strict || partIndex === 0}
+        title={strict ? "Going back is disabled in exam mode." : undefined}
         className="inline-flex items-center rounded-pill bg-brand-white px-4 py-2 font-heading font-bold text-sm text-brand-grey-700 ring-1 ring-brand-grey-200 hover:text-brand-black disabled:opacity-40 disabled:cursor-not-allowed"
       >
         ← Previous part
@@ -398,12 +429,14 @@ function PartPanel({
   questions,
   responses,
   onChange,
+  mode,
 }: {
   attemptId: string;
   part: ListeningRunnerPart;
   questions: ListeningRunnerQuestion[];
   responses: Record<string, ClientListeningResponse>;
   onChange: (questionId: string, next: ClientListeningResponse) => void;
+  mode: ListeningPlayerMode;
 }) {
   const speakerLabelById = useMemo(() => {
     const m = new Map<string, string>();
@@ -417,43 +450,62 @@ function PartPanel({
     return m;
   }, [part]);
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <article aria-label={`Part ${part.part} transcript`} className="space-y-4">
-        <header>
-          <p className="font-body text-xs uppercase tracking-widest text-brand-grey-500">
-            Part {part.part} · {part.context}
-          </p>
-          <h2 className="mt-1 font-heading font-bold text-xl text-brand-black">
-            {part.title}
-          </h2>
-          <p className="mt-1 font-body text-xs text-brand-grey-500">
-            Speakers:{" "}
-            {part.speakers.map((s) => `${s.name} (${s.accent})`).join(", ")}
-          </p>
-        </header>
+  const strict = mode === "strict";
+  // In strict mode the questions panel goes full-width — transcript is
+  // hidden because the audio plays once and that's the whole point.
+  const containerClass = strict
+    ? "space-y-5"
+    : "grid grid-cols-1 lg:grid-cols-2 gap-8";
 
-        <div className="space-y-3">
-          {part.transcript.map((seg, i) => (
-            <TranscriptSegment
-              key={i}
-              attemptId={attemptId}
-              segment={seg}
-              speakerLabelById={speakerLabelById}
-            />
-          ))}
-        </div>
-      </article>
+  return (
+    <div className={containerClass}>
+      {!strict ? (
+        <article
+          aria-label={`Part ${part.part} transcript`}
+          className="space-y-4"
+        >
+          <header>
+            <p className="font-body text-xs uppercase tracking-widest text-brand-grey-500">
+              Part {part.part} · {part.context}
+            </p>
+            <h2 className="mt-1 font-heading font-bold text-xl text-brand-black">
+              {part.title}
+            </h2>
+            <p className="mt-1 font-body text-xs text-brand-grey-500">
+              Speakers:{" "}
+              {part.speakers.map((s) => `${s.name} (${s.accent})`).join(", ")}
+            </p>
+          </header>
+
+          <div className="space-y-3">
+            {part.transcript.map((seg, i) => (
+              <TranscriptSegment
+                key={i}
+                attemptId={attemptId}
+                segment={seg}
+                speakerLabelById={speakerLabelById}
+              />
+            ))}
+          </div>
+        </article>
+      ) : (
+        <StrictAudioPanel
+          attemptId={attemptId}
+          part={part}
+        />
+      )}
 
       <article aria-label={`Part ${part.part} questions`} className="space-y-5">
         <header>
           <p className="font-body text-xs uppercase tracking-widest text-brand-grey-500">
-            Questions
+            {strict ? "Answer as you listen" : "Questions"}
           </p>
           <h2 className="mt-1 font-heading font-bold text-xl text-brand-black">
             Answer {questions.length}.{" "}
             <span className="font-body font-normal text-brand-grey-700">
-              Each saves as you type.
+              {strict
+                ? "The recording will play once."
+                : "Each saves as you type."}
             </span>
           </h2>
         </header>
@@ -489,6 +541,209 @@ function PartPanel({
         </ol>
       </article>
     </div>
+  );
+}
+
+// Strict-mode audio panel: a single "Begin Part N audio" button that
+// chains every speech / narration segment with its declared reading-
+// pause silences, plays once, and cannot be paused / scrubbed / restarted.
+// Reading-ahead and post-part check pauses come through as honest silent
+// gaps so the timing matches the real exam.
+function StrictAudioPanel({
+  attemptId,
+  part,
+}: {
+  attemptId: string;
+  part: ListeningRunnerPart;
+}) {
+  const [playState, setPlayState] = useState<
+    "idle" | "loading" | "playing" | "finished" | "error"
+  >("idle");
+  const [segmentIndex, setSegmentIndex] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const pauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Index of playable segments only (speech + narration with audio_clip).
+  // reading-pause / questions-preview slots are handled as setTimeout gaps.
+  type PlaylistItem =
+    | { type: "audio"; sha256: string }
+    | { type: "pause"; seconds: number };
+  const playlist = useMemo(() => {
+    const out: PlaylistItem[] = [];
+    for (const seg of part.transcript) {
+      if (seg.kind === "speech" || seg.kind === "narration") {
+        if (seg.audio_sha256)
+          out.push({ type: "audio", sha256: seg.audio_sha256 });
+      } else if (seg.kind === "reading-pause") {
+        out.push({ type: "pause", seconds: seg.seconds });
+      } else if (seg.kind === "questions-preview") {
+        out.push({ type: "pause", seconds: seg.seconds });
+      }
+    }
+    return out;
+  }, [part]);
+
+  // State-machine advance: when the current item is a pause, schedule a
+  // timer that bumps segmentIndex when it expires. When it's audio, we
+  // wait for the <audio> element's onEnded to call advance(). Using an
+  // effect (rather than a recursive callback) avoids the
+  // use-before-define lint trip from a setTimeout closure self-referencing
+  // its callback.
+  const advance = useCallback(() => {
+    setSegmentIndex((i) => {
+      if (i + 1 >= playlist.length) {
+        setPlayState("finished");
+        return i;
+      }
+      return i + 1;
+    });
+  }, [playlist.length]);
+
+  useEffect(() => {
+    if (playState !== "playing") return;
+    const item = playlist[segmentIndex];
+    if (!item || item.type !== "pause") return;
+    const handle = setTimeout(() => {
+      advance();
+    }, item.seconds * 1000);
+    pauseTimerRef.current = handle;
+    return () => {
+      clearTimeout(handle);
+      if (pauseTimerRef.current === handle) pauseTimerRef.current = null;
+    };
+  }, [advance, playState, playlist, segmentIndex]);
+
+  useEffect(() => {
+    return () => {
+      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+    };
+  }, []);
+
+  const start = useCallback(() => {
+    setPlayState((prev) => (prev === "idle" ? "playing" : prev));
+    setError(null);
+    setSegmentIndex(0);
+  }, []);
+
+  const currentItem = playState === "playing" ? playlist[segmentIndex] : null;
+
+  return (
+    <article className="rounded-lg bg-brand-black text-white p-6 space-y-4">
+      <header>
+        <p className="font-body text-xs uppercase tracking-widest text-brand-red">
+          Part {part.part} · {part.context}
+        </p>
+        <h2 className="mt-1 font-heading font-bold text-xl text-white">
+          {part.title}
+        </h2>
+        <p className="mt-1 font-body text-xs text-white/70">
+          Speakers:{" "}
+          {part.speakers.map((s) => `${s.name} (${s.accent})`).join(", ")}
+        </p>
+      </header>
+
+      {playState === "idle" ? (
+        <button
+          type="button"
+          onClick={start}
+          className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black"
+        >
+          ▶ Begin Part {part.part} audio
+        </button>
+      ) : null}
+
+      {playState === "playing" ? (
+        <div className="space-y-2">
+          <p className="font-body text-sm text-white/80">
+            Playing segment {segmentIndex + 1} of {playlist.length}…
+          </p>
+          {currentItem && currentItem.type === "audio" ? (
+            <StrictAudioSegment
+              attemptId={attemptId}
+              sha256={currentItem.sha256}
+              audioRef={audioRef}
+              onEnded={() => advance()}
+              onError={() => setError("Audio failed to load.")}
+            />
+          ) : currentItem && currentItem.type === "pause" ? (
+            <p className="font-body text-xs italic text-white/60">
+              [silent pause — {currentItem.seconds}s]
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {playState === "finished" ? (
+        <p className="font-body text-sm text-white/80">
+          Part {part.part} audio finished. Move on to the next part below.
+        </p>
+      ) : null}
+
+      {error ? (
+        <p className="font-body text-sm text-brand-red">{error}</p>
+      ) : null}
+
+      <p className="font-body text-xs text-white/60">
+        Exam mode: audio plays once. No pause, no rewind.
+      </p>
+    </article>
+  );
+}
+
+function StrictAudioSegment({
+  attemptId,
+  sha256,
+  audioRef,
+  onEnded,
+  onError,
+}: {
+  attemptId: string;
+  sha256: string;
+  audioRef: React.MutableRefObject<HTMLAudioElement | null>;
+  onEnded: () => void;
+  onError: () => void;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await issueSignedAudioUrl(attemptId, sha256);
+        if (cancelled) return;
+        if (res.ok) setUrl(res.url);
+        else onError();
+      } catch {
+        if (!cancelled) onError();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [attemptId, sha256, onError]);
+
+  // Note: native <audio> elements always expose seek + pause via the
+  // OS-level media key UI. We render WITHOUT controls and auto-play; the
+  // visible widget is just a progress strip. A determined cheater can
+  // still scrub via devtools — same threat model as commercial IELTS
+  // practice software. Documented in ADR 0007 / Phase 5.
+  if (!url) {
+    return (
+      <p className="font-body text-xs italic text-white/60">Loading audio…</p>
+    );
+  }
+  return (
+    <audio
+      ref={audioRef}
+      src={url}
+      autoPlay
+      onEnded={onEnded}
+      onError={onError}
+      // No `controls` attribute. The strict mode envelope hides the
+      // affordance; the audio element still exists in the DOM and
+      // determined users will find ways around it.
+    />
   );
 }
 
