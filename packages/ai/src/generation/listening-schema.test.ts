@@ -318,6 +318,42 @@ describe("generatedListeningSchema — structural rejections", () => {
   });
 });
 
+describe("generatedListeningSchema — cell coercion", () => {
+  it("coerces a bare-string cell entry into the canonical {kind:text} object", () => {
+    const v = validGeneration() as {
+      parts: {
+        completion_blocks?: {
+          rows: { cells: unknown[][] }[];
+        }[];
+      }[];
+    };
+    // Replace the canonical {kind:text} cell with a bare string —
+    // a common LLM JSON-generation shortcut.
+    v.parts[0]!.completion_blocks![0]!.rows[0]!.cells = [["Surname"]];
+    const parsed = generatedListeningSchema.safeParse(v);
+    if (!parsed.success) {
+      throw new Error(
+        `expected coercion to succeed, got: ${JSON.stringify(parsed.error.issues)}`,
+      );
+    }
+    expect(parsed.data.parts[0]!.completion_blocks![0]!.rows[0]!.cells[0]).toEqual([
+      { kind: "text", text: "Surname" },
+    ]);
+  });
+
+  it("still rejects an object cell missing a discriminator", () => {
+    const v = validGeneration() as {
+      parts: {
+        completion_blocks?: {
+          rows: { cells: unknown[][] }[];
+        }[];
+      }[];
+    };
+    v.parts[0]!.completion_blocks![0]!.rows[0]!.cells = [[{ text: "no-kind" }]];
+    expect(generatedListeningSchema.safeParse(v).success).toBe(false);
+  });
+});
+
 describe("parseGeneratedListening — string parser", () => {
   it("extracts the first JSON object from a noisy response", () => {
     const json = JSON.stringify(validGeneration());

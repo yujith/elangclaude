@@ -79,9 +79,30 @@ export async function generateListeningTest(input: {
     };
     if (err instanceof QuotaExceededError) return { ok: false, error: "quota" };
     if (err instanceof GenerationShapeError) {
+      // Log the issue paths + a truncated snapshot of the raw response so
+      // the SuperAdmin can see WHERE the model deviated, not just the
+      // generic shape error. Truncate aggressively — a full 8000-token
+      // response would drown the console.
+      const issues = Array.isArray(err.issues)
+        ? (err.issues as { path?: unknown[]; message?: string; code?: string }[]).map(
+            (i) => ({
+              code: i.code,
+              path: i.path,
+              message: i.message,
+            }),
+          )
+        : err.issues;
       console.error(
         "[listening-generate] schema rejection — model output did not parse",
-        { ...tag, issues: err.issues },
+        {
+          ...tag,
+          issues,
+          raw_preview:
+            typeof err.raw === "string"
+              ? err.raw.slice(0, 800) +
+                (err.raw.length > 800 ? `\n…[truncated ${err.raw.length - 800} chars]` : "")
+              : null,
+        },
       );
       return { ok: false, error: "schema" };
     }

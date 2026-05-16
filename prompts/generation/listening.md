@@ -49,19 +49,25 @@ the `track` tag is required on the output for catalog consistency.
    for this prompt.
 5. **Slot ids must be globally unique** across every completion block in
    every part. A duplicate slot id makes the section unrenderable.
-6. **Question positions are globally unique integers from 0 upwards.**
+6. **Every cell entry inside `cells` is an OBJECT, not a bare string.**
+   Use `{ "kind": "text", "text": "Saturdays at " }` for plain prose
+   inside a row, and `{ "kind": "blank", "slot_id": "p1-surname" }` for
+   the answer slot. A row can mix text + blank cells (see the example
+   schema below). DO NOT write `"cells": [["Surname"]]` — write
+   `"cells": [[ { "kind": "text", "text": "Surname" } ]]`.
+7. **Question positions are globally unique integers from 0 upwards.**
    Contiguous numbering is preferred (0, 1, 2, …) but not required.
-7. **An `mcq-multi` question counts as ONE Question row, with `pick_count`
+8. **An `mcq-multi` question counts as ONE Question row, with `pick_count`
    set to the number of correct answers** (always equal to
    `correct.length`). The renderer will display it as "Choose TWO answers"
    etc.; do NOT split it into separate rows.
-8. **Speaker ids referenced from `speech` segments must be defined in the
+9. **Speaker ids referenced from `speech` segments must be defined in the
    same part's `speakers` array.** A typo here makes the script
    un-synthesisable.
-9. **Every `questions-preview` segment must point only at question
-   positions that belong to the SAME part it appears in.** Looking ahead
-   across part boundaries is not how real IELTS works.
-10. **Exactly 4 parts**, in `part` order 1, 2, 3, 4. No more, no fewer.
+10. **Every `questions-preview` segment must point only at question
+    positions that belong to the SAME part it appears in.** Looking ahead
+    across part boundaries is not how real IELTS works.
+11. **Exactly 4 parts**, in `part` order 1, 2, 3, 4. No more, no fewer.
 
 ## Part structure (mirror real IELTS)
 
@@ -173,6 +179,15 @@ allowed. Comments are not allowed.
               "label": "Surname",
               "cells": [
                 [ { "kind": "blank", "slot_id": "p1-surname" } ]
+              ]
+            },
+            {
+              "label": "Saturday arrival",
+              "cells": [
+                [
+                  { "kind": "text", "text": "Saturdays at " },
+                  { "kind": "blank", "slot_id": "p2-arrival-time" }
+                ]
               ]
             }
           ]

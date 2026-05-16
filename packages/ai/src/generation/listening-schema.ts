@@ -71,16 +71,28 @@ const segmentSchema = z.discriminatedUnion("kind", [
 
 const completionLayoutSchema = z.enum(["form", "notes", "table"]);
 
-const segmentCellSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("text"),
-    text: z.string().min(1).max(400),
-  }),
-  z.object({
-    kind: z.literal("blank"),
-    slot_id: z.string().min(1).max(40),
-  }),
-]);
+// LLMs frequently shorten "text" cells into bare strings ("Surname:")
+// instead of the canonical {kind:"text", text:"Surname:"} object. Coerce
+// here so a perfectly fine generation isn't thrown away over JSON shape
+// quirks. The transform persists the object form, so downstream
+// consumers (the runtime parser, the player, the grader) always see
+// the canonical shape.
+const segmentCellSchema = z.preprocess(
+  (v) =>
+    typeof v === "string"
+      ? { kind: "text", text: v }
+      : v,
+  z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("text"),
+      text: z.string().min(1).max(400),
+    }),
+    z.object({
+      kind: z.literal("blank"),
+      slot_id: z.string().min(1).max(40),
+    }),
+  ]),
+);
 
 const completionRowSchema = z.object({
   label: z.string().min(1).max(120).optional(),
