@@ -115,6 +115,12 @@ the most speakers). Each `speaker` entry MUST carry an `accent` field.
 
 ## Transcript style
 
+- **Chunk long monologues into multiple speech / narration segments at
+  natural paragraph breaks.** A Part 4 lecture should be 5–15 separate
+  `speech` segments of 60–200 words each, NOT a single 800-word block.
+  Smaller chunks synthesise faster, cache better, and let the player
+  show progress segment-by-segment. The same applies to long
+  receptionist explanations in Part 1.
 - Use natural fillers ("um", "well", "right", "OK") sparingly — once or
   twice per part. Real IELTS scripts have them; pure scripted prose
   sounds wrong.

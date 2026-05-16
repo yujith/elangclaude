@@ -36,15 +36,21 @@ const speakerSchema = z.object({
   accent: accentSchema,
 });
 
+// Per-segment text cap. Sized to accommodate a full Part 4 lecture
+// (~750-1000 words ≈ 4500-5500 chars) even when the model writes it as
+// a single un-chunked monologue. The prompt encourages chunking — this
+// is the safety net for when it doesn't.
+const SEGMENT_TEXT_MAX = 6000;
+
 const narrationSegmentSchema = z.object({
   kind: z.literal("narration"),
-  text: z.string().min(1).max(2000),
+  text: z.string().min(1).max(SEGMENT_TEXT_MAX),
 });
 
 const speechSegmentSchema = z.object({
   kind: z.literal("speech"),
   speaker_id: z.string().min(1).max(40),
-  text: z.string().min(1).max(2000),
+  text: z.string().min(1).max(SEGMENT_TEXT_MAX),
 });
 
 const readingPauseSegmentSchema = z.object({
@@ -123,7 +129,9 @@ const partSchema = z.object({
   context: partContextSchema,
   title: z.string().min(2).max(160),
   speakers: z.array(speakerSchema).min(1).max(6),
-  transcript: z.array(segmentSchema).min(2).max(80),
+  // 120 cap accommodates a chunky Part 4 lecture broken into ~30
+  // narration segments + intros + reading-pause / preview segments.
+  transcript: z.array(segmentSchema).min(2).max(120),
   question_positions: z.array(z.number().int().min(0).max(60)).min(1).max(20),
   completion_blocks: z.array(completionBlockSchema).max(4).optional(),
 });

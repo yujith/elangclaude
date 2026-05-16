@@ -354,6 +354,45 @@ describe("generatedListeningSchema — cell coercion", () => {
   });
 });
 
+describe("generatedListeningSchema — segment length caps", () => {
+  it("accepts a 5000-character speech segment (full Part 4 lecture as one chunk)", () => {
+    const v = validGeneration() as {
+      parts: {
+        transcript: { kind?: string; text?: string; speaker_id?: string }[];
+      }[];
+    };
+    // Replace a speech segment in Part 4 with a very long monologue —
+    // the unchunked worst case the schema must still accept.
+    const long = "Today's lecture covers mechanical clockmaking. ".repeat(110); // ~5060 chars
+    v.parts[3]!.transcript.push({
+      kind: "speech",
+      speaker_id: "l",
+      text: long,
+    });
+    const parsed = generatedListeningSchema.safeParse(v);
+    if (!parsed.success) {
+      throw new Error(
+        `expected long segment to pass, got: ${JSON.stringify(parsed.error.issues)}`,
+      );
+    }
+  });
+
+  it("still rejects a segment longer than the 6000-char cap", () => {
+    const v = validGeneration() as {
+      parts: {
+        transcript: { kind?: string; text?: string; speaker_id?: string }[];
+      }[];
+    };
+    const tooLong = "x".repeat(6500);
+    v.parts[3]!.transcript.push({
+      kind: "speech",
+      speaker_id: "l",
+      text: tooLong,
+    });
+    expect(generatedListeningSchema.safeParse(v).success).toBe(false);
+  });
+});
+
 describe("parseGeneratedListening — string parser", () => {
   it("extracts the first JSON object from a noisy response", () => {
     const json = JSON.stringify(validGeneration());
