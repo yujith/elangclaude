@@ -214,10 +214,11 @@ export default async function ListeningPracticeAttemptPage({
   const initial: Record<string, unknown> = {};
   for (const a of attempt.answers) initial[a.question_id] = a.response;
 
-  // If this attempt belongs to a Full Mock session, force strict-mode
-  // playback per ADR 0008. Standalone practice stays in practice mode.
-  const mode = attempt.mock_session_id ? "strict" : "practice";
-
+  // Listening ALWAYS renders in strict mode — no transcript, chained
+  // audio per part, single play. We are testing the learner's listening
+  // skill; a visible transcript or per-segment replay would invalidate
+  // the result. The `mode` prop is still here for parity with the mock
+  // orchestrator, but standalone and mock attempts both opt in.
   return (
     <ListeningPractice
       attemptId={attempt.id}
@@ -225,7 +226,7 @@ export default async function ListeningPracticeAttemptPage({
       parts={runnerParts}
       questions={runnerQuestions}
       initialResponses={initial}
-      mode={mode}
+      mode="strict"
     />
   );
 }

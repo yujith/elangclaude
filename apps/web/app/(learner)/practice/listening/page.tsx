@@ -86,8 +86,9 @@ export default async function ListeningPickerPage({
           </h1>
           <p className="mt-4 font-body text-base text-brand-grey-700 max-w-2xl">
             One full IELTS Listening section: four parts, ~30 minutes of audio,
-            mixed question types. Practice mode lets you pause and rewind; the
-            timed exam-day mode lands in a later release.
+            mixed question types. Real-exam playback rules — audio plays once
+            per part, no transcript, no replay. We&apos;re testing your
+            listening skill, not your reading speed.
           </p>
         </header>
 
@@ -115,7 +116,7 @@ function ModeTabs({ current }: { current: Mode }) {
       key: "section",
       label: "Section practice",
       href: "/practice/listening?mode=section",
-      hint: "Full Listening section, pause + rewind allowed.",
+      hint: "Full Listening section, real-exam single-play rules.",
     },
     {
       key: "mock",

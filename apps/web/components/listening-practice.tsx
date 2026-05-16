@@ -154,9 +154,23 @@ export function ListeningPractice({
     Record<string, ClientListeningResponse>
   >(() => seedResponses(questions, initialResponses));
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  // Tracks which part numbers have started playing in this session, so
+  // the Begin button disables after first use even when the learner
+  // navigates away and back (real IELTS audio plays exactly once).
+  const [playedParts, setPlayedParts] = useState<Set<number>>(
+    () => new Set(),
+  );
   const startedAt = useMemo(() => new Date(startedAtIso), [startedAtIso]);
   const elapsed = useElapsedSeconds(startedAt);
-  const strict = mode === "strict";
+
+  const markPartPlayed = useCallback((part: number) => {
+    setPlayedParts((prev) => {
+      if (prev.has(part)) return prev;
+      const next = new Set(prev);
+      next.add(part);
+      return next;
+    });
+  }, []);
 
   // Group questions by part position membership for fast lookup.
   const questionsByPart = useMemo(() => {
@@ -250,7 +264,7 @@ export function ListeningPractice({
           parts={parts}
           current={partIndex}
           onChange={setPartIndex}
-          strict={strict}
+          playedParts={playedParts}
         />
 
         <PartPanel
@@ -260,6 +274,8 @@ export function ListeningPractice({
           responses={responses}
           onChange={onChange}
           mode={mode}
+          alreadyPlayed={playedParts.has(currentPart.part)}
+          onPlayStarted={markPartPlayed}
         />
 
         <PartNavigation
@@ -267,7 +283,6 @@ export function ListeningPractice({
           partCount={parts.length}
           onPrev={() => setPartIndex((i) => Math.max(0, i - 1))}
           onNext={() => setPartIndex((i) => Math.min(parts.length - 1, i + 1))}
-          strict={strict}
         />
 
         <SubmitBar attemptId={attemptId} />
@@ -343,41 +358,44 @@ function PartTabs({
   parts,
   current,
   onChange,
-  strict,
+  playedParts,
 }: {
   parts: ListeningRunnerPart[];
   current: number;
   onChange: (i: number) => void;
-  strict: boolean;
+  playedParts: Set<number>;
 }) {
   return (
     <nav aria-label="Listening part" className="mb-6 flex flex-wrap gap-2">
       {parts.map((p, i) => {
         const active = i === current;
-        // Strict mode forbids jumping backwards. Forward tabs are also
-        // disabled — the only way to advance is the Next-part button at
-        // the bottom of the panel, which enforces sequential progression.
-        const disabled = strict;
+        const played = playedParts.has(p.part);
         return (
           <button
             key={p.part}
             type="button"
             onClick={() => onChange(i)}
-            disabled={disabled}
             aria-current={active ? "page" : undefined}
             className={
               "inline-flex items-center gap-2 rounded-pill px-4 py-2 font-heading font-bold text-sm ring-1 transition-colors " +
               (active
                 ? "bg-brand-red text-white ring-brand-red"
-                : disabled
-                  ? "bg-brand-grey-50 text-brand-grey-500 ring-brand-grey-200 cursor-not-allowed"
-                  : "bg-brand-white text-brand-grey-700 ring-brand-grey-200 hover:text-brand-black")
+                : "bg-brand-white text-brand-grey-700 ring-brand-grey-200 hover:text-brand-black")
             }
+            title={played ? "Audio already played for this part." : undefined}
           >
             <span>Part {p.part}</span>
             <span className="font-body font-normal text-xs opacity-80">
               {p.title}
             </span>
+            {played ? (
+              <span
+                aria-label="played"
+                className="font-body font-normal text-xs opacity-70"
+              >
+                ✓
+              </span>
+            ) : null}
           </button>
         );
       })}
@@ -390,21 +408,18 @@ function PartNavigation({
   partCount,
   onPrev,
   onNext,
-  strict,
 }: {
   partIndex: number;
   partCount: number;
   onPrev: () => void;
   onNext: () => void;
-  strict: boolean;
 }) {
   return (
     <div className="mt-8 flex items-center justify-between">
       <button
         type="button"
         onClick={onPrev}
-        disabled={strict || partIndex === 0}
-        title={strict ? "Going back is disabled in exam mode." : undefined}
+        disabled={partIndex === 0}
         className="inline-flex items-center rounded-pill bg-brand-white px-4 py-2 font-heading font-bold text-sm text-brand-grey-700 ring-1 ring-brand-grey-200 hover:text-brand-black disabled:opacity-40 disabled:cursor-not-allowed"
       >
         ← Previous part
@@ -430,6 +445,8 @@ function PartPanel({
   responses,
   onChange,
   mode,
+  alreadyPlayed,
+  onPlayStarted,
 }: {
   attemptId: string;
   part: ListeningRunnerPart;
@@ -437,6 +454,8 @@ function PartPanel({
   responses: Record<string, ClientListeningResponse>;
   onChange: (questionId: string, next: ClientListeningResponse) => void;
   mode: ListeningPlayerMode;
+  alreadyPlayed: boolean;
+  onPlayStarted: (part: number) => void;
 }) {
   const speakerLabelById = useMemo(() => {
     const m = new Map<string, string>();
@@ -492,6 +511,8 @@ function PartPanel({
         <StrictAudioPanel
           attemptId={attemptId}
           part={part}
+          alreadyPlayed={alreadyPlayed}
+          onPlayStarted={onPlayStarted}
         />
       )}
 
@@ -552,13 +573,20 @@ function PartPanel({
 function StrictAudioPanel({
   attemptId,
   part,
+  alreadyPlayed,
+  onPlayStarted,
 }: {
   attemptId: string;
   part: ListeningRunnerPart;
+  alreadyPlayed: boolean;
+  onPlayStarted: (part: number) => void;
 }) {
+  // If the parent says this part already played (because the learner
+  // started it on a previous tab visit), start in "finished" so the UI
+  // never offers a replay. Audio plays at most once per session.
   const [playState, setPlayState] = useState<
     "idle" | "loading" | "playing" | "finished" | "error"
-  >("idle");
+  >(alreadyPlayed ? "finished" : "idle");
   const [segmentIndex, setSegmentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -621,10 +649,17 @@ function StrictAudioPanel({
   }, []);
 
   const start = useCallback(() => {
-    setPlayState((prev) => (prev === "idle" ? "playing" : prev));
+    setPlayState((prev) => {
+      if (prev !== "idle") return prev;
+      // Notify the parent so a tab-switch + return doesn't reset our
+      // "played" status — the per-tab unmount/remount lifecycle would
+      // otherwise wipe it.
+      onPlayStarted(part.part);
+      return "playing";
+    });
     setError(null);
     setSegmentIndex(0);
-  }, []);
+  }, [onPlayStarted, part.part]);
 
   const currentItem = playState === "playing" ? playlist[segmentIndex] : null;
 
@@ -676,7 +711,9 @@ function StrictAudioPanel({
 
       {playState === "finished" ? (
         <p className="font-body text-sm text-white/80">
-          Part {part.part} audio finished. Move on to the next part below.
+          {alreadyPlayed
+            ? `Part ${part.part} audio has already played. It cannot be replayed — the exam plays each part once.`
+            : `Part ${part.part} audio finished. Move on to the next part below.`}
         </p>
       ) : null}
 
