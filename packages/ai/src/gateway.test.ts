@@ -132,9 +132,9 @@ describe("gateway: allowlist", () => {
     ).rejects.toBeInstanceOf(ModelNotAllowedError);
   });
 
-  it("rejects any model on a purpose with no allowed models", async () => {
-    // listening-generate still has an empty allowlist — it wakes up when
-    // the Listening section lands.
+  it("rejects a non-allowlisted model on the listening-generate purpose", async () => {
+    // listening-generate is on the cheap OpenRouter set (Phase 3) — passing
+    // a Sonnet override is a programming error and must throw.
     const ai = createAI({
       providers: {
         anthropic: fakeProvider(),
@@ -148,6 +148,7 @@ describe("gateway: allowlist", () => {
       ai.chat({
         ctx: CTX,
         purpose: "listening-generate",
+        model: "claude-sonnet-4-5-20250929",
         messages: [{ role: "user", content: "hi" }],
         maxTokens: 100,
       }),

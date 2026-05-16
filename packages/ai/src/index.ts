@@ -306,6 +306,42 @@ export type {
   PersistWritingResult as GeneratedWritingPersistResult,
 } from "./generation/writing-persist";
 
+// ─── Listening generation (Phase 3) ─────────────────────────────────────
+export {
+  createListeningGenerator,
+  listeningGenerator,
+} from "./generation/listening";
+export type {
+  GenerateListeningRequest,
+  GenerateListeningResult,
+  ListeningGeneratorDeps,
+} from "./generation/listening";
+
+export {
+  generatedListeningSchema,
+  parseGeneratedListening,
+} from "./generation/listening-schema";
+export type {
+  GeneratedListening,
+  GeneratedListeningCompletionBlock,
+  GeneratedListeningPart,
+  GeneratedListeningQuestion,
+  GeneratedListeningSegment,
+  GeneratedListeningSpeaker,
+} from "./generation/listening-schema";
+
+export { validateGeneratedListening } from "./generation/listening-validate";
+export type {
+  ListeningValidationIssue,
+  ListeningValidationResult,
+} from "./generation/listening-validate";
+
+export { persistGeneratedListening } from "./generation/listening-persist";
+export type {
+  PersistGeneratedListeningDb,
+  PersistListeningResult,
+} from "./generation/listening-persist";
+
 // ─── Speaking generation ────────────────────────────────────────────────
 export {
   createSpeakingGenerator,

@@ -130,7 +130,18 @@ const REGISTRY: Record<
       OPENROUTER_MISTRAL_LARGE,
     ],
   },
-  "listening-generate": { default: ANTHROPIC_SONNET, allowed: [] },
+  // Listening generation is structurally identical to Reading generation:
+  // bulk, SuperAdmin-moderated, JSON-output. Same cheap OpenRouter set
+  // applies. Sonnet is deliberately NOT on this allowlist — generation
+  // doesn't reason about a rubric, and the cost gap is large.
+  "listening-generate": {
+    default: OPENROUTER_GEMINI_FLASH,
+    allowed: [
+      OPENROUTER_GEMINI_FLASH,
+      OPENROUTER_LLAMA_3_70B,
+      OPENROUTER_MISTRAL_LARGE,
+    ],
+  },
   // Speaking cue/topic generation is bulk, SuperAdmin-moderated,
   // structured-JSON output — the same profile as reading-generate, so it
   // gets the same cheap OpenRouter model set. Sonnet is deliberately NOT on
