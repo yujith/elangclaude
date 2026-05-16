@@ -161,7 +161,12 @@ export function ListeningPractice({
     () => new Set(),
   );
   const startedAt = useMemo(() => new Date(startedAtIso), [startedAtIso]);
-  const elapsed = useElapsedSeconds(startedAt);
+  // NOTE: we deliberately do NOT call useElapsedSeconds here — the
+  // per-second tick used to re-render the entire ListeningPractice
+  // tree, which churned every callback prop passed to children and
+  // caused the audio's URL-fetch effect to refire every second
+  // (reloading the <audio src> in a tight loop). The elapsed timer
+  // now lives inside ElapsedTimer, scoped to the header.
 
   const markPartPlayed = useCallback((part: number) => {
     setPlayedParts((prev) => {
@@ -253,7 +258,7 @@ export function ListeningPractice({
     <section className="px-4 md:px-6 py-8 md:py-12">
       <div className="mx-auto max-w-5xl">
         <RunnerHeader
-          elapsed={elapsed}
+          startedAt={startedAt}
           status={status}
           totalQuestions={questions.length}
           answeredCount={countAnswered(responses)}
@@ -294,13 +299,13 @@ export function ListeningPractice({
 // ─── Header / status ────────────────────────────────────────────────────
 
 function RunnerHeader({
-  elapsed,
+  startedAt,
   status,
   totalQuestions,
   answeredCount,
   mode,
 }: {
-  elapsed: number;
+  startedAt: Date;
   status: Status;
   totalQuestions: number;
   answeredCount: number;
@@ -321,12 +326,22 @@ function RunnerHeader({
           <span className="font-heading font-bold text-brand-black">
             {answeredCount}
           </span>{" "}
-          / {totalQuestions} · time elapsed {formatElapsed(elapsed)}
+          / {totalQuestions} · time elapsed <ElapsedTimer startedAt={startedAt} />
         </p>
       </div>
       <StatusPill status={status} />
     </header>
   );
+}
+
+// Per-second ticker kept in its own component so the timer's re-render
+// does not bubble up to ListeningPractice. Previously the timer caused
+// a full-tree re-render every second, which created new inline
+// callback identities on the audio panel — those re-fired the
+// URL-fetch effect, reloading <audio src> and looping the audio.
+function ElapsedTimer({ startedAt }: { startedAt: Date }) {
+  const elapsed = useElapsedSeconds(startedAt);
+  return <>{formatElapsed(elapsed)}</>;
 }
 
 function StatusPill({ status }: { status: Status }) {
@@ -817,6 +832,17 @@ function StrictAudioSegment({
   onError: () => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
+  // Callback refs so the URL-fetch effect's dependency list stays
+  // stable across parent re-renders. Previously `onError` lived in the
+  // effect's deps and changed identity on every parent re-render,
+  // causing the signed URL to be re-fetched and the <audio src> to
+  // reload — which restarted playback in a tight loop.
+  const onErrorRef = useRef(onError);
+  const onEndedRef = useRef(onEnded);
+  useEffect(() => {
+    onErrorRef.current = onError;
+    onEndedRef.current = onEnded;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -825,15 +851,15 @@ function StrictAudioSegment({
         const res = await issueSignedAudioUrl(attemptId, sha256);
         if (cancelled) return;
         if (res.ok) setUrl(res.url);
-        else onError();
+        else onErrorRef.current();
       } catch {
-        if (!cancelled) onError();
+        if (!cancelled) onErrorRef.current();
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [attemptId, sha256, onError]);
+  }, [attemptId, sha256]);
 
   // Note: native <audio> elements always expose seek + pause via the
   // OS-level media key UI. We render WITHOUT controls and auto-play; the
@@ -850,8 +876,8 @@ function StrictAudioSegment({
       ref={audioRef}
       src={url}
       autoPlay
-      onEnded={onEnded}
-      onError={onError}
+      onEnded={() => onEndedRef.current()}
+      onError={() => onErrorRef.current()}
       // No `controls` attribute. The strict mode envelope hides the
       // affordance; the audio element still exists in the DOM and
       // determined users will find ways around it.
