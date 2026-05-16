@@ -160,6 +160,14 @@ export function ListeningPractice({
   const [playedParts, setPlayedParts] = useState<Set<number>>(
     () => new Set(),
   );
+  // When a part finishes, we set the NEXT part number here. The next
+  // part's panel observes this on mount and auto-starts so a learner
+  // experiences the 4-part section as one continuous play — same as
+  // real IELTS. Cleared after consumption so manual tab navigation
+  // doesn't auto-start anything.
+  const [pendingAutoStart, setPendingAutoStart] = useState<number | null>(
+    null,
+  );
   const startedAt = useMemo(() => new Date(startedAtIso), [startedAtIso]);
   // NOTE: we deliberately do NOT call useElapsedSeconds here — the
   // per-second tick used to re-render the entire ListeningPractice
@@ -175,6 +183,28 @@ export function ListeningPractice({
       next.add(part);
       return next;
     });
+  }, []);
+
+  // Called by a part's StrictAudioPanel when its audio reaches the end.
+  // We switch the visible tab to the next part AND queue an auto-start
+  // so the section flows continuously. If we're already on the last
+  // part, just stay put.
+  const advanceToNextPart = useCallback(
+    (finishedPart: number) => {
+      const finishedIndex = parts.findIndex((p) => p.part === finishedPart);
+      if (finishedIndex < 0 || finishedIndex >= parts.length - 1) return;
+      const nextIndex = finishedIndex + 1;
+      const nextPartNumber = parts[nextIndex]!.part;
+      setPartIndex(nextIndex);
+      setPendingAutoStart(nextPartNumber);
+    },
+    [parts],
+  );
+
+  // Called by a part's panel once it consumes the auto-start signal so
+  // we don't re-trigger on a later manual navigation back to it.
+  const clearAutoStart = useCallback(() => {
+    setPendingAutoStart(null);
   }, []);
 
   // Group questions by part position membership for fast lookup.
@@ -281,6 +311,10 @@ export function ListeningPractice({
           mode={mode}
           alreadyPlayed={playedParts.has(currentPart.part)}
           onPlayStarted={markPartPlayed}
+          autoStart={pendingAutoStart === currentPart.part}
+          onAutoStartConsumed={clearAutoStart}
+          onPartFinished={advanceToNextPart}
+          isLastPart={partIndex === parts.length - 1}
         />
 
         <PartNavigation
@@ -462,6 +496,10 @@ function PartPanel({
   mode,
   alreadyPlayed,
   onPlayStarted,
+  autoStart,
+  onAutoStartConsumed,
+  onPartFinished,
+  isLastPart,
 }: {
   attemptId: string;
   part: ListeningRunnerPart;
@@ -471,6 +509,10 @@ function PartPanel({
   mode: ListeningPlayerMode;
   alreadyPlayed: boolean;
   onPlayStarted: (part: number) => void;
+  autoStart: boolean;
+  onAutoStartConsumed: () => void;
+  onPartFinished: (part: number) => void;
+  isLastPart: boolean;
 }) {
   const speakerLabelById = useMemo(() => {
     const m = new Map<string, string>();
@@ -528,6 +570,10 @@ function PartPanel({
           part={part}
           alreadyPlayed={alreadyPlayed}
           onPlayStarted={onPlayStarted}
+          autoStart={autoStart}
+          onAutoStartConsumed={onAutoStartConsumed}
+          onPartFinished={onPartFinished}
+          isLastPart={isLastPart}
         />
       )}
 
@@ -590,11 +636,19 @@ function StrictAudioPanel({
   part,
   alreadyPlayed,
   onPlayStarted,
+  autoStart,
+  onAutoStartConsumed,
+  onPartFinished,
+  isLastPart,
 }: {
   attemptId: string;
   part: ListeningRunnerPart;
   alreadyPlayed: boolean;
   onPlayStarted: (part: number) => void;
+  autoStart: boolean;
+  onAutoStartConsumed: () => void;
+  onPartFinished: (part: number) => void;
+  isLastPart: boolean;
 }) {
   // If the parent says this part already played (because the learner
   // started it on a previous tab visit), start in "finished" so the UI
@@ -708,6 +762,37 @@ function StrictAudioPanel({
     onPlayStarted(part.part);
   }, [onPlayStarted, part.part, playState]);
 
+  // Auto-start when the parent signals this part is the next in line
+  // (e.g., the learner clicked Continue at the end of the previous
+  // part, or the previous part's audio finished and auto-advanced).
+  // Consumed once so manual tab navigation back to this part doesn't
+  // re-trigger. Deferred via queueMicrotask so the setState cascade
+  // fires after the current effect commits (React strict-mode rule).
+  useEffect(() => {
+    if (!autoStart) return;
+    if (playState !== "idle") {
+      onAutoStartConsumed();
+      return;
+    }
+    queueMicrotask(() => {
+      start();
+      onAutoStartConsumed();
+    });
+  }, [autoStart, playState, start, onAutoStartConsumed]);
+
+  // Notify the parent the moment this part transitions to "finished"
+  // so it can flip the visible tab + queue auto-start for the next
+  // part. Only fires for FRESH completions (not panels that started
+  // life as alreadyPlayed=true, which would re-trigger every remount).
+  const finishedNotifiedRef = useRef(false);
+  useEffect(() => {
+    if (playState !== "finished") return;
+    if (alreadyPlayed) return;
+    if (finishedNotifiedRef.current) return;
+    finishedNotifiedRef.current = true;
+    onPartFinished(part.part);
+  }, [playState, alreadyPlayed, onPartFinished, part.part]);
+
   const currentItem = playState === "playing" ? playlist[segmentIndex] : null;
 
   return (
@@ -723,13 +808,29 @@ function StrictAudioPanel({
           Speakers:{" "}
           {part.speakers.map((s) => `${s.name} (${s.accent})`).join(", ")}
         </p>
-        {audioStatus.missing > 0 ? (
+        {audioStatus.missing > 0 && audioStatus.withAudio > 0 ? (
           <p className="mt-2 font-body text-xs text-brand-red">
             ⚠ {audioStatus.missing} of {audioStatus.total} speech segments
             have no audio. Ask SuperAdmin to re-synth this section.
           </p>
         ) : null}
       </header>
+
+      {audioStatus.withAudio === 0 && audioStatus.total > 0 ? (
+        // Hard "this part has no audio at all" state — make it loud so
+        // the learner doesn't sit waiting for sound that's never coming.
+        <div className="rounded-md bg-brand-red/20 ring-1 ring-brand-red/60 p-4">
+          <p className="font-heading font-bold text-sm text-white">
+            No audio synthesised for Part {part.part}.
+          </p>
+          <p className="mt-1 font-body text-sm text-white/80">
+            Every speech segment in this part is missing its TTS clip.
+            Ask a SuperAdmin to open the moderation page for this section
+            and click <em>Re-synthesise missing clips</em>. You can still
+            navigate to other parts and answer the questions you can hear.
+          </p>
+        </div>
+      ) : null}
 
       {playState === "idle" ? (
         <button
@@ -769,11 +870,24 @@ function StrictAudioPanel({
       ) : null}
 
       {playState === "finished" ? (
-        <p className="font-body text-sm text-white/80">
-          {alreadyPlayed
-            ? `Part ${part.part} audio has already played. It cannot be replayed — the exam plays each part once.`
-            : `Part ${part.part} audio finished. Move on to the next part below.`}
-        </p>
+        <div className="space-y-3">
+          <p className="font-body text-sm text-white/80">
+            {alreadyPlayed
+              ? `Part ${part.part} audio has already played. It cannot be replayed — the exam plays each part once.`
+              : isLastPart
+                ? `Part ${part.part} audio finished. That's the whole section — scroll down to submit your answers.`
+                : `Part ${part.part} audio finished. Part ${part.part + 1} will begin shortly.`}
+          </p>
+          {!alreadyPlayed && !isLastPart ? (
+            <button
+              type="button"
+              onClick={() => onPartFinished(part.part)}
+              className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black"
+            >
+              Continue to Part {part.part + 1} →
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {error ? (
