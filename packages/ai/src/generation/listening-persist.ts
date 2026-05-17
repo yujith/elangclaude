@@ -42,6 +42,116 @@ export type PersistListeningResult = {
   questionIds: string[];
 };
 
+// ─── IELTS-style boilerplate narration ──────────────────────────────────
+//
+// Real IELTS Listening opens with a test-level instruction from the
+// narrator and closes with a "ten minutes to transfer" cue. We inject
+// the same text into every persisted Test so the audio flow matches the
+// real exam. The TTS cache (keyed on text+voice+model) means the bytes
+// are synthesised exactly once across all Tests; every subsequent
+// approval is a cache hit.
+//
+// We mark our injected speaker with a stable id + explicit voice_id so
+// the voice catalogue picker always returns the same George (British
+// male, narration) voice — that's what keeps the cache hot.
+
+const IELTS_NARRATOR_SPEAKER = {
+  id: "__ielts_boilerplate_narrator__",
+  name: "IELTS Narrator",
+  role: "narrator" as const,
+  accent: "british" as const,
+  // George — stable narration voice. Fixing the voice_id here means
+  // the boilerplate clips deduplicate at the cache layer across every
+  // Test that uses them.
+  voice_id: "JBFqnCBsd6RMkjVDRZzb",
+};
+
+const OPENING_NARRATION =
+  "This is the IELTS Listening test. There will be time for you to " +
+  "read the instructions and questions, and you will have a chance " +
+  "to check your work. All the recordings will be played once only. " +
+  "The test is in four parts. At the end of the test you will be " +
+  "given ten minutes to transfer your answers to an answer sheet. " +
+  "Now turn to Part 1.";
+
+const CLOSING_NARRATION =
+  "That is the end of the Listening test. You now have ten minutes to " +
+  "transfer your answers to the answer sheet.";
+
+type RawPart = GeneratedListening["parts"][number];
+type RawSpeaker = RawPart["speakers"][number];
+type RawSegment = RawPart["transcript"][number];
+
+function withBoilerplateSpeaker(speakers: readonly RawSpeaker[]): RawSpeaker[] {
+  if (speakers.some((s) => s.id === IELTS_NARRATOR_SPEAKER.id)) {
+    return [...speakers];
+  }
+  return [IELTS_NARRATOR_SPEAKER, ...speakers];
+}
+
+function injectOpening(part: RawPart): RawPart {
+  // Idempotent — if Part 1 already starts with our injected narration
+  // (re-persist of the same value), don't double up.
+  const first = part.transcript[0];
+  if (
+    first &&
+    first.kind === "narration" &&
+    first.text === OPENING_NARRATION
+  ) {
+    return part;
+  }
+  const openingSegment: RawSegment = {
+    kind: "narration",
+    text: OPENING_NARRATION,
+  };
+  return {
+    ...part,
+    speakers: withBoilerplateSpeaker(part.speakers),
+    transcript: [openingSegment, ...part.transcript],
+  };
+}
+
+function injectClosing(part: RawPart): RawPart {
+  const last = part.transcript[part.transcript.length - 1];
+  if (
+    last &&
+    last.kind === "narration" &&
+    last.text === CLOSING_NARRATION
+  ) {
+    return part;
+  }
+  const closingSegment: RawSegment = {
+    kind: "narration",
+    text: CLOSING_NARRATION,
+  };
+  return {
+    ...part,
+    speakers: withBoilerplateSpeaker(part.speakers),
+    transcript: [...part.transcript, closingSegment],
+  };
+}
+
+// Pre-process the generated parts so Part 1 carries the test-level
+// opening narration and Part 4 carries the test-level closing. Both
+// go through the normal TTS pipeline on approval — no special-case
+// player handling required.
+function injectBoilerplate(
+  parts: readonly RawPart[],
+): GeneratedListening["parts"] {
+  const out = [...parts] as GeneratedListening["parts"];
+  if (out.length > 0) {
+    out[0] = injectOpening(out[0]!);
+  }
+  if (out.length >= 4) {
+    out[3] = injectClosing(out[3]!);
+  } else if (out.length > 0) {
+    // Schema enforces length===4 in practice. Defensive: if a future
+    // generation has fewer parts, append the closing to the last one.
+    out[out.length - 1] = injectClosing(out[out.length - 1]!);
+  }
+  return out;
+}
+
 function buildBodyJson(value: GeneratedListening): Prisma.InputJsonValue {
   // The runtime parser (packages/ai/src/listening/content.ts) requires
   // schema_version: 1 + parts[] in part-number order. The generator
@@ -49,7 +159,7 @@ function buildBodyJson(value: GeneratedListening): Prisma.InputJsonValue {
   // version on the way in.
   return {
     schema_version: 1,
-    parts: value.parts,
+    parts: injectBoilerplate(value.parts),
   } as unknown as Prisma.InputJsonValue;
 }
 

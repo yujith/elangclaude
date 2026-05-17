@@ -101,3 +101,119 @@ describe("persistGeneratedListening", () => {
     expect((call[0] as { data: Record<string, unknown> }).data.points).toBe(2);
   });
 });
+
+describe("persistGeneratedListening — IELTS boilerplate injection", () => {
+  type SerializedPart = {
+    transcript: { kind: string; text?: string }[];
+    speakers: { id: string }[];
+  };
+
+  function readPersistedParts(testCreateArg: unknown): SerializedPart[] {
+    const data = (testCreateArg as { data: { body_json: unknown } }).data
+      .body_json as { parts: SerializedPart[] };
+    return data.parts;
+  }
+
+  it("prepends the test-level opening narration to Part 1", async () => {
+    const { db, test } = makeDb();
+    await persistGeneratedListening(db, validatorCleanGeneration(), {
+      generatedById: "super_1",
+    });
+    const parts = readPersistedParts(test.create.mock.calls[0]![0]);
+    const firstSeg = parts[0]!.transcript[0]!;
+    expect(firstSeg.kind).toBe("narration");
+    expect(firstSeg.text).toMatch(/^This is the IELTS Listening test\./);
+    expect(firstSeg.text).toMatch(/ten minutes to transfer your answers/);
+    expect(firstSeg.text).toMatch(/Now turn to Part 1\.$/);
+  });
+
+  it("appends the test-level closing narration to Part 4", async () => {
+    const { db, test } = makeDb();
+    await persistGeneratedListening(db, validatorCleanGeneration(), {
+      generatedById: "super_1",
+    });
+    const parts = readPersistedParts(test.create.mock.calls[0]![0]);
+    const last = parts[3]!.transcript[parts[3]!.transcript.length - 1]!;
+    expect(last.kind).toBe("narration");
+    expect(last.text).toMatch(/^That is the end of the Listening test\./);
+    expect(last.text).toMatch(/ten minutes to transfer your answers/);
+  });
+
+  it("adds the IELTS narrator speaker to Parts 1 and 4 (only)", async () => {
+    const { db, test } = makeDb();
+    await persistGeneratedListening(db, validatorCleanGeneration(), {
+      generatedById: "super_1",
+    });
+    const parts = readPersistedParts(test.create.mock.calls[0]![0]);
+    expect(
+      parts[0]!.speakers.some(
+        (s) => s.id === "__ielts_boilerplate_narrator__",
+      ),
+    ).toBe(true);
+    expect(
+      parts[3]!.speakers.some(
+        (s) => s.id === "__ielts_boilerplate_narrator__",
+      ),
+    ).toBe(true);
+    // Parts 2 and 3 don't get the boilerplate speaker — no injection there.
+    expect(
+      parts[1]!.speakers.some(
+        (s) => s.id === "__ielts_boilerplate_narrator__",
+      ),
+    ).toBe(false);
+    expect(
+      parts[2]!.speakers.some(
+        (s) => s.id === "__ielts_boilerplate_narrator__",
+      ),
+    ).toBe(false);
+  });
+
+  it("is idempotent — re-persisting the same value doesn't double-inject", async () => {
+    const { db, test } = makeDb();
+    const gen = validatorCleanGeneration();
+    await persistGeneratedListening(db, gen, { generatedById: "super_1" });
+    const firstParts = readPersistedParts(test.create.mock.calls[0]![0]);
+
+    // Re-feed the persisted body_json shape back through persistence.
+    // The injection must detect existing boilerplate and skip.
+    const reFeed = {
+      ...gen,
+      parts: firstParts as unknown as typeof gen.parts,
+    };
+    await persistGeneratedListening(db, reFeed, { generatedById: "super_1" });
+    const secondParts = readPersistedParts(test.create.mock.calls[1]![0]);
+
+    // Part 1 should still have exactly ONE opening narration as its
+    // first segment (not two), and Part 4 should still have ONE closing
+    // as its last (not two).
+    expect(secondParts[0]!.transcript[0]!.text).toMatch(
+      /^This is the IELTS Listening test\./,
+    );
+    expect(secondParts[0]!.transcript[1]!.text).not.toMatch(
+      /^This is the IELTS Listening test\./,
+    );
+    const last4 = secondParts[3]!.transcript;
+    expect(last4[last4.length - 1]!.text).toMatch(
+      /^That is the end of the Listening test\./,
+    );
+    expect(last4[last4.length - 2]!.text).not.toMatch(
+      /^That is the end of the Listening test\./,
+    );
+  });
+
+  it("still produces a body_json the runtime parser accepts after injection", async () => {
+    const { db, test } = makeDb();
+    await persistGeneratedListening(db, validatorCleanGeneration(), {
+      generatedById: "super_1",
+    });
+    const body = (
+      test.create.mock.calls[0]![0] as { data: { body_json: unknown } }
+    ).data.body_json;
+    const parsed = parseListeningContent(body);
+    expect(parsed).not.toBeNull();
+    // First segment is the test-level opening narration; the part's
+    // original first segment is now second.
+    const seg0 = parsed?.parts[0]?.transcript[0];
+    expect(seg0?.kind).toBe("narration");
+  });
+});

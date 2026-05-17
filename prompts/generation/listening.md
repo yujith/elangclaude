@@ -78,11 +78,35 @@ the `track` tag is required on the output for catalog consistency.
 | 3    | academic | 2–4 speakers, discussion        | Tutorial, student project, study group              |
 | 4    | academic | 1 speaker monologue (+ narrator)| Lecture / academic talk                             |
 
-Each part begins with a narrator turn ("Now turn to Part N.") and a
-`questions-preview` segment naming the positions the learner reads
-ahead. The narrator should also announce the silent reading-check pause
-near the end of each part ("You now have 30 seconds to check your
-answers to Part N.").
+Each part follows the **real IELTS narration pattern** exactly. In
+order, the transcript for each part contains:
+
+1. A narrator turn announcing the part: `"Part N."` (one short
+   sentence — DO NOT write "Now turn to Part N." for parts 2-4, the
+   system inserts the test-level intro/outro automatically).
+2. A narrator turn giving **context for what the learner is about to
+   hear**, in the real IELTS style: *"You will hear a conversation
+   between a hotel receptionist and a customer who wants to book a
+   room."* or *"You will hear a tour guide talking to a group of
+   visitors at a community garden."* or *"You will hear a lecturer
+   talking about the history of mechanical clockmaking."* This
+   context-setting narration is what makes the audio feel like the
+   real exam — do not skip it.
+3. A narrator turn pointing at the first batch of questions: *"First
+   you have some time to look at questions 1 to 6."*
+4. A `questions-preview` segment (30 seconds of silent reading time)
+   listing those positions.
+5. A narrator turn cueing the listener: *"Now listen carefully and
+   answer questions 1 to 6."*
+6. The actual speech / dialogue segments.
+7. A narrator turn announcing the answer-check pause: *"That is the
+   end of Part N. You now have half a minute to check your answers."*
+8. A `reading-pause` segment (~30 seconds).
+
+Test-level opening ("This is the IELTS Listening test...") and
+closing ("That is the end of the Listening test. You now have ten
+minutes...") narrations are injected automatically — do NOT include
+them in the generated content.
 
 ## Question mix per part
 
