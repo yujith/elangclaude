@@ -182,8 +182,16 @@ export function ListeningPractice({
     [parts],
   );
 
+  // Tracks the wall-clock instant the global audio finished. The
+  // SubmitBar reads this to start a 10-minute auto-submit countdown:
+  // real IELTS gives 10 minutes at the end to transfer answers; we
+  // give 10 minutes for the learner to review + click Submit, after
+  // which we auto-submit so they don't sit forever on a half-done test.
+  const [audioFinishedAt, setAudioFinishedAt] = useState<number | null>(null);
+
   const handleFinished = useCallback(() => {
     setCurrentlyPlayingPart(null);
+    setAudioFinishedAt((prev) => prev ?? Date.now());
   }, []);
 
   // Group questions by part position membership for fast lookup.
@@ -302,7 +310,10 @@ export function ListeningPractice({
           onNext={() => setPartIndex((i) => Math.min(parts.length - 1, i + 1))}
         />
 
-        <SubmitBar attemptId={attemptId} />
+        <SubmitBar
+          attemptId={attemptId}
+          audioFinishedAt={audioFinishedAt}
+        />
       </div>
     </section>
   );
@@ -1209,36 +1220,85 @@ function CompletionBlankInput({
 
 // ─── Submit bar ─────────────────────────────────────────────────────────
 
-function SubmitBar({ attemptId }: { attemptId: string }) {
+// 10-minute window after the audio finishes before we auto-submit. Real
+// IELTS gives 10 minutes at the end for the learner to transfer their
+// answers; we give them 10 minutes to review + click Submit and then
+// fire it ourselves so the test doesn't sit half-done forever.
+const AUTO_SUBMIT_WINDOW_MS = 10 * 60 * 1000;
+
+function SubmitBar({
+  attemptId,
+  audioFinishedAt,
+}: {
+  attemptId: string;
+  audioFinishedAt: number | null;
+}) {
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const autoFiredRef = useRef(false);
+  const deadline =
+    audioFinishedAt !== null ? audioFinishedAt + AUTO_SUBMIT_WINDOW_MS : null;
+  const remaining = useCountdown(deadline);
+
+  // Auto-submit when the deadline lapses. requestSubmit() goes through
+  // the same code path as the user click so all the server-action
+  // wiring stays consistent.
+  useEffect(() => {
+    if (autoFiredRef.current) return;
+    if (remaining === null) return;
+    if (remaining > 0) return;
+    autoFiredRef.current = true;
+    formRef.current?.requestSubmit();
+  }, [remaining]);
+
   return (
     <form
+      ref={formRef}
       action={submitListeningAttempt}
       className="mt-10 rounded-lg bg-brand-black text-white p-6 flex flex-wrap items-center justify-between gap-4"
     >
       <input type="hidden" name="attemptId" value={attemptId} />
       <div>
         <p className="font-heading font-bold text-lg">
-          Done? Submit for grading.
+          {audioFinishedAt === null
+            ? "Submit when the audio is done."
+            : "Check your answers and submit."}
         </p>
         <p className="font-body text-sm text-white/70">
-          Listening is auto-graded — you&apos;ll see your raw score, band, and
-          per-question feedback on the next screen.
+          {audioFinishedAt === null ? (
+            <>
+              Listening is auto-graded — you&apos;ll see your raw score, band,
+              and per-question feedback on the next screen.
+            </>
+          ) : (
+            <>
+              Auto-submit in{" "}
+              <span className="font-heading font-bold text-white">
+                {formatRemaining(remaining ?? 0)}
+              </span>{" "}
+              if you don&apos;t click first.
+            </>
+          )}
         </p>
       </div>
-      <SubmitButton />
+      <SubmitButton autoFiring={remaining !== null && remaining <= 0} />
     </form>
   );
 }
 
-function SubmitButton() {
+function SubmitButton({ autoFiring }: { autoFiring: boolean }) {
   const { pending } = useFormStatus();
+  const label = autoFiring
+    ? "Auto-submitting…"
+    : pending
+      ? "Submitting…"
+      : "Submit Listening";
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || autoFiring}
       className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black"
     >
-      {pending ? "Submitting…" : "Submit Listening"}
+      {label}
     </button>
   );
 }
@@ -1328,5 +1388,28 @@ function formatElapsed(sec: number): string {
     .toString()
     .padStart(2, "0");
   const ss = (sec % 60).toString().padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+// Returns the milliseconds remaining until `deadline`, or null if there
+// is no deadline set. Ticks once per second so a visible countdown
+// stays in sync without churning the parent tree.
+function useCountdown(deadline: number | null): number | null {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (deadline === null) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [deadline]);
+  if (deadline === null) return null;
+  return Math.max(0, deadline - now);
+}
+
+function formatRemaining(ms: number): string {
+  const totalSec = Math.ceil(ms / 1000);
+  const mm = Math.floor(totalSec / 60)
+    .toString()
+    .padStart(2, "0");
+  const ss = (totalSec % 60).toString().padStart(2, "0");
   return `${mm}:${ss}`;
 }

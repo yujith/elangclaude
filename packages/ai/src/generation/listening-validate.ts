@@ -42,6 +42,7 @@ export type ListeningValidationIssue = {
     | "slots.duplicate-id"
     | "completion-blank.block-not-found"
     | "completion-blank.slot-not-found"
+    | "completion-blank.slot-already-claimed"
     | "answer.not-in-transcript";
   message: string;
   // Indices into the input shape, when applicable. Surfaced so the
@@ -246,6 +247,32 @@ function checkQuestionPositions(
   }
 }
 
+function checkSlotClaims(
+  value: GeneratedListening,
+  issues: ListeningValidationIssue[],
+): void {
+  // Two questions referencing the same (block_id, slot_id) is a data
+  // integrity bug — the learner sees the same blank twice with no way
+  // to satisfy both. Surfaced here so the cleaner can drop the
+  // duplicate.
+  const seen = new Map<string, number>();
+  for (let qi = 0; qi < value.questions.length; qi += 1) {
+    const q = value.questions[qi]!;
+    if (q.type !== "listening-completion-blank") continue;
+    const key = `${q.correct_answer.block_id}::${q.correct_answer.slot_id}`;
+    const firstClaim = seen.get(key);
+    if (firstClaim === undefined) {
+      seen.set(key, qi);
+    } else {
+      issues.push({
+        code: "completion-blank.slot-already-claimed",
+        message: `Slot ${q.correct_answer.slot_id} in block ${q.correct_answer.block_id} is already claimed by the question at index ${firstClaim} (position ${value.questions[firstClaim]!.position}).`,
+        questionIndex: qi,
+      });
+    }
+  }
+}
+
 function checkAnswerGrounding(
   value: GeneratedListening,
   blockIndex: Map<string, { partIndex: number; slotIds: Set<string> }>,
@@ -333,6 +360,7 @@ export function validateGeneratedListening(
   checkPreviewPositions(value.parts, issues);
   const { blockIndex } = checkBlocksAndSlots(value.parts, issues);
   checkQuestionPositions(value, issues);
+  checkSlotClaims(value, issues);
   checkAnswerGrounding(value, blockIndex, issues);
   if (issues.length === 0) return { ok: true };
   return { ok: false, issues };
@@ -366,7 +394,8 @@ export type CleanResult = {
     reason:
       | "answer-not-in-transcript"
       | "completion-blank-block-not-found"
-      | "completion-blank-slot-not-found";
+      | "completion-blank-slot-not-found"
+      | "completion-blank-slot-already-claimed";
   }[];
 };
 
@@ -398,6 +427,10 @@ export function cleanGeneratedListening(
 
   const dropped: CleanResult["droppedQuestions"] = [];
   const droppedPositions = new Set<number>();
+  // Track which (block_id, slot_id) tuples have already been claimed
+  // by an earlier question so we can drop later duplicates instead of
+  // shipping a test where two questions point at the same blank.
+  const claimedSlots = new Set<string>();
 
   const keptQuestions = value.questions.filter((q) => {
     if (q.type === "listening-mcq-single" || q.type === "listening-mcq-multi") {
@@ -427,6 +460,17 @@ export function cleanGeneratedListening(
         droppedPositions.add(q.position);
         return false;
       }
+      const slotKey = `${q.correct_answer.block_id}::${q.correct_answer.slot_id}`;
+      if (claimedSlots.has(slotKey)) {
+        dropped.push({
+          position: q.position,
+          type: q.type,
+          reason: "completion-blank-slot-already-claimed",
+        });
+        droppedPositions.add(q.position);
+        return false;
+      }
+      claimedSlots.add(slotKey);
     }
 
     // Common grounding check for completion / sentence / short-answer.

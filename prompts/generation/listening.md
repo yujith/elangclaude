@@ -108,6 +108,41 @@ closing ("That is the end of the Listening test. You now have ten
 minutes...") narrations are injected automatically — do NOT include
 them in the generated content.
 
+## Length & coverage — the most important quality rule
+
+**Every question's answer MUST be naturally spoken in the transcript.**
+A common failure mode: the model writes 8 questions for a part but
+only 3 of them have answers that the speakers actually say. The
+resulting test asks the learner to write down information that was
+never given.
+
+To avoid this:
+
+- A Part with 5 questions needs a transcript of **at least 200 words
+  of speech** (excluding narrator turns) — that's the baseline. Closer
+  to 300–400 words is better.
+- For every completion-blank / sentence-completion / short-answer
+  question you write, the speaker(s) must say the answer **out loud**
+  in a normal-sounding sentence, not just list it. A receptionist
+  saying *"That's twenty-eight pounds a year"* grounds an answer of
+  *"28"*. A bare *"It is 28."* doesn't sound real.
+- For every MCQ question, the speaker(s) must say enough that one of
+  the options is clearly the right one — don't ask "which of these
+  did the speaker mention?" if the speaker only mentions one of them
+  and you have to infer the others as distractors.
+- If you can't naturally fit all the answers into the transcript,
+  WRITE FEWER QUESTIONS. A 4-question Part with full coverage beats
+  an 8-question Part where half the answers are missing.
+
+## Slot uniqueness
+
+When a Part uses a completion block (form / notes / table), each
+`slot_id` in that block is filled by **exactly one** question. Do not
+write two questions whose `correct_answer` references the same
+`(block_id, slot_id)` — the learner sees the same blank twice. If you
+need two questions about the same row of a table, give the table two
+columns and one slot per cell.
+
 ## Question mix per part
 
 Each part should contain 5–8 questions. Aim for variety across the five

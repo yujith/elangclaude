@@ -123,6 +123,41 @@ describe("validateGeneratedListening — block + slot issues", () => {
     }
   });
 
+  it("rejects two completion-blank questions claiming the same (block, slot) pair", () => {
+    const v = validatorFixture() as GeneratedListening;
+    const original = v.questions[0]!;
+    if (original.type !== "listening-completion-blank") {
+      throw new Error("expected completion-blank at index 0");
+    }
+    // Inject a second completion-blank question that points at the
+    // same (block, slot). Its position is added to Part 1 so the
+    // earlier positions check doesn't blow up.
+    const duplicateQuestion = {
+      type: "listening-completion-blank" as const,
+      position: 99,
+      prompt: "Duplicate slot claim",
+      points: 1,
+      correct_answer: {
+        block_id: original.correct_answer.block_id,
+        slot_id: original.correct_answer.slot_id,
+        word_limit: original.correct_answer.word_limit,
+        accepted: original.correct_answer.accepted,
+      },
+    };
+    v.questions.push(duplicateQuestion);
+    v.parts[0]!.question_positions.push(99);
+
+    const r = validateGeneratedListening(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some(
+          (i) => i.code === "completion-blank.slot-already-claimed",
+        ),
+      ).toBe(true);
+    }
+  });
+
   it("rejects a completion-blank referencing an unknown slot_id within an existing block", () => {
     const v = validatorFixture() as GeneratedListening;
     const q = v.questions[0]!;
@@ -231,6 +266,39 @@ describe("cleanGeneratedListening", () => {
     expect(r.droppedQuestions[0]!.reason).toBe(
       "completion-blank-block-not-found",
     );
+  });
+
+  it("drops a duplicate-slot completion-blank (keeps the first, drops the second)", () => {
+    const v = validatorFixture();
+    const first = v.questions[0]!;
+    if (first.type !== "listening-completion-blank") {
+      throw new Error("expected completion-blank at index 0");
+    }
+    const droppedPosition = 99;
+    v.questions.push({
+      type: "listening-completion-blank" as const,
+      position: droppedPosition,
+      prompt: "Duplicate slot claim",
+      points: 1,
+      correct_answer: {
+        block_id: first.correct_answer.block_id,
+        slot_id: first.correct_answer.slot_id,
+        word_limit: first.correct_answer.word_limit,
+        accepted: first.correct_answer.accepted,
+      },
+    });
+    v.parts[0]!.question_positions.push(droppedPosition);
+
+    const r = cleanGeneratedListening(v);
+    expect(r.droppedQuestions).toHaveLength(1);
+    expect(r.droppedQuestions[0]!.reason).toBe(
+      "completion-blank-slot-already-claimed",
+    );
+    expect(r.droppedQuestions[0]!.position).toBe(droppedPosition);
+    // The first claimant survives.
+    expect(
+      r.cleaned.questions.some((q) => q.position === first.position),
+    ).toBe(true);
   });
 
   it("never drops MCQ questions even with weirdly-worded options", () => {

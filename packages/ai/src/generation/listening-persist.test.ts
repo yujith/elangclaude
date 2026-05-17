@@ -123,11 +123,13 @@ describe("persistGeneratedListening — IELTS boilerplate injection", () => {
     const firstSeg = parts[0]!.transcript[0]!;
     expect(firstSeg.kind).toBe("narration");
     expect(firstSeg.text).toMatch(/^This is the IELTS Listening test\./);
-    expect(firstSeg.text).toMatch(/ten minutes to transfer your answers/);
-    expect(firstSeg.text).toMatch(/Now turn to Part 1\.$/);
+    expect(firstSeg.text).toMatch(/played once only/);
+    // The per-part narration introduces each part — don't duplicate
+    // "Now turn to Part 1" in the test-level opening.
+    expect(firstSeg.text).not.toMatch(/Now turn to Part/);
   });
 
-  it("appends the test-level closing narration to Part 4", async () => {
+  it("appends the test-level closing narration to Part 4 (submit-flow, not transfer-sheet)", async () => {
     const { db, test } = makeDb();
     await persistGeneratedListening(db, validatorCleanGeneration(), {
       generatedById: "super_1",
@@ -136,7 +138,11 @@ describe("persistGeneratedListening — IELTS boilerplate injection", () => {
     const last = parts[3]!.transcript[parts[3]!.transcript.length - 1]!;
     expect(last.kind).toBe("narration");
     expect(last.text).toMatch(/^That is the end of the Listening test\./);
-    expect(last.text).toMatch(/ten minutes to transfer your answers/);
+    expect(last.text).toMatch(/click Submit/);
+    expect(last.text).toMatch(/submitted automatically/);
+    // We don't have a separate transfer-sheet step — the previous
+    // wording was misleading.
+    expect(last.text).not.toMatch(/transfer your answers/);
   });
 
   it("adds the IELTS narrator speaker to Parts 1 and 4 (only)", async () => {

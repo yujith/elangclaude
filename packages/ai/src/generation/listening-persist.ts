@@ -70,13 +70,14 @@ const OPENING_NARRATION =
   "This is the IELTS Listening test. There will be time for you to " +
   "read the instructions and questions, and you will have a chance " +
   "to check your work. All the recordings will be played once only. " +
-  "The test is in four parts. At the end of the test you will be " +
-  "given ten minutes to transfer your answers to an answer sheet. " +
-  "Now turn to Part 1.";
+  "The test is in four parts. When the recording for each part " +
+  "begins, you will hear it once and once only. Let's begin.";
 
 const CLOSING_NARRATION =
-  "That is the end of the Listening test. You now have ten minutes to " +
-  "transfer your answers to the answer sheet.";
+  "That is the end of the Listening test. Please take a moment to " +
+  "check your answers, then click Submit when you are ready. If you " +
+  "do not submit within ten minutes, your answers will be submitted " +
+  "automatically.";
 
 type RawPart = GeneratedListening["parts"][number];
 type RawSpeaker = RawPart["speakers"][number];
