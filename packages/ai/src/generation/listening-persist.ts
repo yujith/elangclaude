@@ -60,20 +60,30 @@ const IELTS_NARRATOR_SPEAKER = {
   name: "IELTS Narrator",
   role: "narrator" as const,
   accent: "british" as const,
-  // George — stable narration voice. Fixing the voice_id here means
-  // the boilerplate clips deduplicate at the cache layer across every
-  // Test that uses them.
-  voice_id: "JBFqnCBsd6RMkjVDRZzb",
+  // NOTE: deliberately NOT pinning a voice_id here. Earlier versions
+  // pinned to George (JBFqnCBsd6RMkjVDRZzb) for maximum cache reuse,
+  // but if that specific ElevenLabs voice id isn't in the operator's
+  // account, ONLY the boilerplate clips fail synth — every other
+  // narration in the section still works (because the picker hashes
+  // (testId, speaker.id) across the catalogue and lands on a valid
+  // voice 2 of 3 times). Letting the catalogue picker resolve the
+  // voice means the boilerplate succeeds whenever the per-part
+  // narration succeeds. We lose a sliver of cross-Test dedup; we
+  // gain a much more reliable opening + closing clip.
 };
 
-const OPENING_NARRATION =
+// Exported so the player can detect WHEN these specific clips are
+// missing audio and surface a targeted "official narration didn't
+// synth" callout — rather than the small per-segment skip indicator
+// that's easy to miss.
+export const OPENING_NARRATION =
   "This is the IELTS Listening test. There will be time for you to " +
   "read the instructions and questions, and you will have a chance " +
   "to check your work. All the recordings will be played once only. " +
   "The test is in four parts. When the recording for each part " +
   "begins, you will hear it once and once only. Let's begin.";
 
-const CLOSING_NARRATION =
+export const CLOSING_NARRATION =
   "That is the end of the Listening test. Please take a moment to " +
   "check your answers, then click Submit when you are ready. If you " +
   "do not submit within ten minutes, your answers will be submitted " +

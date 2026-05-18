@@ -30,6 +30,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { CLOSING_NARRATION, OPENING_NARRATION } from "@elc/ai";
 import {
   autosaveListeningAnswer,
   issueSignedAudioUrl,
@@ -823,6 +824,29 @@ function GlobalAudioPanel({
     };
   }, [parts]);
 
+  // Detect specifically when the test-level IELTS opening or closing
+  // narration is missing its TTS clip. Those are the "this is the
+  // listening test…" and "that is the end of the listening test…"
+  // boilerplate clips — if they fail synth, the learner experiences
+  // them as a 1-second silent gap and easily misses that an OFFICIAL
+  // opening was supposed to be there. Surfaced as its own callout so
+  // the SuperAdmin knows to re-synth.
+  const boilerplateStatus = useMemo(() => {
+    let openingMissing = false;
+    let closingMissing = false;
+    for (const part of parts) {
+      for (const seg of part.transcript) {
+        if (seg.kind !== "narration") continue;
+        if (seg.text === OPENING_NARRATION && !seg.audio_sha256) {
+          openingMissing = true;
+        } else if (seg.text === CLOSING_NARRATION && !seg.audio_sha256) {
+          closingMissing = true;
+        }
+      }
+    }
+    return { openingMissing, closingMissing };
+  }, [parts]);
+
   // Drive a pure-by-construction advance: compute next state outside
   // the setSegmentIndex updater so React strict-mode's double-invoke
   // can't trigger side effects.
@@ -914,6 +938,32 @@ function GlobalAudioPanel({
             Ask a SuperAdmin to open the moderation page and click{" "}
             <em>Re-synthesise missing clips</em>. Playback will skip the
             silent segments and continue.
+          </p>
+        </div>
+      ) : null}
+
+      {boilerplateStatus.openingMissing || boilerplateStatus.closingMissing ? (
+        <div className="rounded-md bg-brand-red/20 ring-1 ring-brand-red/60 p-4">
+          <p className="font-heading font-bold text-sm text-white">
+            Official IELTS{" "}
+            {boilerplateStatus.openingMissing && boilerplateStatus.closingMissing
+              ? "opening and closing narrations"
+              : boilerplateStatus.openingMissing
+                ? "opening narration"
+                : "closing narration"}{" "}
+            didn&apos;t synthesise.
+          </p>
+          <p className="mt-1 font-body text-sm text-white/80">
+            The &quot;This is the IELTS Listening test…&quot;
+            {boilerplateStatus.openingMissing && boilerplateStatus.closingMissing
+              ? " / \"That is the end of the Listening test…\" clips "
+              : boilerplateStatus.openingMissing
+                ? " clip "
+                : "That is the end of the Listening test…\" clip "}
+            is missing its audio. Ask a SuperAdmin to open this Test on
+            the moderation page and click <em>Re-synthesise missing
+            clips</em> — the boilerplate will play through cleanly
+            after that.
           </p>
         </div>
       ) : null}

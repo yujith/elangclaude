@@ -364,7 +364,11 @@ export type {
   ListeningValidationResult,
 } from "./generation/listening-validate";
 
-export { persistGeneratedListening } from "./generation/listening-persist";
+export {
+  CLOSING_NARRATION,
+  OPENING_NARRATION,
+  persistGeneratedListening,
+} from "./generation/listening-persist";
 export type {
   PersistGeneratedListeningDb,
   PersistListeningResult,
