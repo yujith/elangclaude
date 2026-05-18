@@ -495,22 +495,36 @@ export function cleanGeneratedListening(
     return true;
   });
 
-  if (droppedPositions.size === 0) {
-    return { cleaned: value, droppedQuestions: [] };
-  }
+  // Compute the FINAL set of question positions that survived the
+  // filter. Anything in a part's question_positions (or in a
+  // questions-preview segment) that ISN'T in this set is an "orphan"
+  // — either because the cleaner just dropped it, OR because the
+  // model declared a position in question_positions but never wrote
+  // a question for it. Both cases get the same treatment: pruned.
+  const survivingPositions = new Set<number>();
+  for (const q of keptQuestions) survivingPositions.add(q.position);
 
-  // Build cleaned parts with the dropped positions removed from each
-  // part's question_positions array. We also strip them from any
-  // questions-preview segments that referenced them.
+  // Build cleaned parts with non-surviving positions removed from
+  // each part's question_positions AND from any questions-preview
+  // segments. This catches the model's "I declared 5 question slots
+  // but only wrote 4 questions" failure mode, which would otherwise
+  // trip the positions.unreferenced-by-question validator.
+  let didPrune = droppedPositions.size > 0;
   const cleanedParts = value.parts.map((part) => {
-    const filteredPositions = part.question_positions.filter(
-      (p) => !droppedPositions.has(p),
+    const filteredPositions = part.question_positions.filter((p) =>
+      survivingPositions.has(p),
     );
+    if (filteredPositions.length !== part.question_positions.length) {
+      didPrune = true;
+    }
     const cleanedTranscript = part.transcript.map((seg) => {
       if (seg.kind !== "questions-preview") return seg;
-      const filtered = seg.question_positions.filter(
-        (p) => !droppedPositions.has(p),
+      const filtered = seg.question_positions.filter((p) =>
+        survivingPositions.has(p),
       );
+      if (filtered.length !== seg.question_positions.length) {
+        didPrune = true;
+      }
       return { ...seg, question_positions: filtered };
     });
     return {
@@ -519,6 +533,10 @@ export function cleanGeneratedListening(
       transcript: cleanedTranscript,
     };
   });
+
+  if (!didPrune) {
+    return { cleaned: value, droppedQuestions: [] };
+  }
 
   return {
     cleaned: { ...value, parts: cleanedParts, questions: keptQuestions },

@@ -301,6 +301,39 @@ describe("cleanGeneratedListening", () => {
     ).toBe(true);
   });
 
+  it("prunes orphan question_positions that no question backs (model declared too many slots)", () => {
+    const v = validatorFixture();
+    // Model declared an extra position in part 1 but never wrote the
+    // matching question. This is what trips
+    // 'positions.unreferenced-by-question' in raw validation.
+    v.parts[0]!.question_positions.push(999);
+    // Also reference it from a questions-preview segment so we can
+    // verify the segment gets cleaned too.
+    const preview = v.parts[0]!.transcript.find(
+      (s) => s.kind === "questions-preview",
+    );
+    if (!preview || preview.kind !== "questions-preview") {
+      throw new Error("fixture missing questions-preview in part 1");
+    }
+    preview.question_positions.push(999);
+
+    const r = cleanGeneratedListening(v);
+    // No question was dropped (the orphan was never a question to begin with).
+    expect(r.droppedQuestions).toEqual([]);
+    // The orphan position is gone from question_positions.
+    expect(r.cleaned.parts[0]!.question_positions).not.toContain(999);
+    // And from the preview segment.
+    const cleanedPreview = r.cleaned.parts[0]!.transcript.find(
+      (s) => s.kind === "questions-preview",
+    );
+    if (cleanedPreview && cleanedPreview.kind === "questions-preview") {
+      expect(cleanedPreview.question_positions).not.toContain(999);
+    }
+    // The pruned content now validates cleanly.
+    const validation = validateGeneratedListening(r.cleaned);
+    expect(validation.ok).toBe(true);
+  });
+
   it("never drops MCQ questions even with weirdly-worded options", () => {
     const v = validatorFixture();
     const q = v.questions[3]!;
