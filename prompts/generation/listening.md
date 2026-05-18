@@ -85,13 +85,11 @@ order, the transcript for each part contains:
    sentence — DO NOT write "Now turn to Part N." for parts 2-4, the
    system inserts the test-level intro/outro automatically).
 2. A narrator turn giving **context for what the learner is about to
-   hear**, in the real IELTS style: *"You will hear a conversation
-   between a hotel receptionist and a customer who wants to book a
-   room."* or *"You will hear a tour guide talking to a group of
-   visitors at a community garden."* or *"You will hear a lecturer
-   talking about the history of mechanical clockmaking."* This
-   context-setting narration is what makes the audio feel like the
-   real exam — do not skip it.
+   hear**, in the real IELTS style: a single sentence of the form
+   *"You will hear &lt;structural description of the audio&gt;."* The
+   description names WHO is speaking and WHAT the scene is, briefly.
+   Pick a fresh scenario every generation — do NOT default to the
+   same handful of topics (see "Topic diversity" below).
 3. A narrator turn pointing at the first batch of questions: *"First
    you have some time to look at questions 1 to 6."*
 4. A `questions-preview` segment (30 seconds of silent reading time)
@@ -107,6 +105,51 @@ Test-level opening ("This is the IELTS Listening test...") and
 closing ("That is the end of the Listening test. You now have ten
 minutes...") narrations are injected automatically — do NOT include
 them in the generated content.
+
+## Topic diversity — critical
+
+Pick **fresh, varied topics** every generation. The user may pass a
+`Broad topic hint` in the user turn — if so, anchor on that hint. If
+no hint is given, pick scenarios you have NOT used recently. Real
+IELTS test pools rotate through dozens of scenarios; never default
+to the same shortlist.
+
+**Topics to AVOID** (overused in earlier generations — pick something
+else unless the user hint explicitly asks for one):
+
+- hotel / library / room booking
+- community garden / park / volunteering
+- university study group / dissertation tutorial
+- mechanical clockmaking / history of clocks
+
+**Healthy topic pools to draw from instead** (illustrative — invent
+your own variations):
+
+- Part 1 (social transactional): renting a flat, registering for a
+  cycling club, ordering catering for an event, claiming insurance
+  on a damaged parcel, signing up for a cooking class, returning a
+  faulty appliance, applying for a swimming pool membership, joining
+  a language exchange, requesting a refund from an airline, reserving
+  a campsite, hiring camera equipment, scheduling a vet appointment.
+- Part 2 (social monologue): audio guide at a maritime museum, radio
+  segment on local recycling rules, voiceover for a city walking
+  tour app, training induction for new volunteers at a food bank,
+  in-flight safety briefing, podcast on regional festivals, opening
+  of a community art exhibition, briefing for hikers on a national
+  park trail.
+- Part 3 (academic discussion): two students planning a field trip,
+  group reviewing peer feedback on a presentation, tutor and student
+  refining a research proposal in marketing / urban planning /
+  ecology / linguistics / public health / industrial design, students
+  debating methodology for a case study.
+- Part 4 (academic lecture): history of cartography, neuroscience of
+  sleep, economics of recycling, evolution of children's literature,
+  architecture of opera houses, archaeology of trade routes,
+  psychology of decision-making, geology of a mountain range,
+  sociology of urban housing, materials science of textiles.
+
+If the user passes a topic hint, ignore the avoid-list and follow
+the hint — they are intentionally driving the topic.
 
 ## Length & coverage — the most important quality rule
 
@@ -197,6 +240,11 @@ the most speakers). Each `speaker` entry MUST carry an `accent` field.
 Emit JSON that matches this shape exactly. Trailing commas are not
 allowed. Comments are not allowed.
 
+> The values below ending in `…` are **placeholders that demonstrate
+> shape only** — do NOT copy them into your output. Replace every
+> placeholder with content that fits the topic you have chosen for
+> this generation.
+
 ```json
 {
   "track": "Academic" | "GeneralTraining",
@@ -205,53 +253,56 @@ allowed. Comments are not allowed.
     {
       "part": 1,
       "context": "social",
-      "title": "<short part title, e.g. 'Booking a library card'>",
+      "title": "<short part title — the scenario you chose>",
       "speakers": [
         {
-          "id": "<stable id like 'narrator', 'receptionist', 'caller'>",
-          "name": "<human label like 'Library receptionist'>",
+          "id": "<stable id, e.g. 'narrator', 'speaker-a', 'caller'>",
+          "name": "<human label, e.g. the role this speaker plays>",
           "role": "narrator" | "speaker",
           "accent": "british" | "american" | "australian" | "canadian" | "new-zealand"
         }
       ],
       "transcript": [
-        { "kind": "narration", "text": "Now turn to Part 1." },
+        { "kind": "narration", "text": "Part 1." },
+        { "kind": "narration", "text": "You will hear <one-sentence scene description>." },
+        { "kind": "narration", "text": "First you have some time to look at questions 1 to N." },
         {
           "kind": "questions-preview",
           "seconds": 30,
           "question_positions": [0, 1, 2, 3]
         },
+        { "kind": "narration", "text": "Now listen carefully and answer questions 1 to N." },
         {
           "kind": "speech",
-          "speaker_id": "receptionist",
-          "text": "Good morning, how can I help?"
+          "speaker_id": "<speaker id from above>",
+          "text": "<natural opening line for your chosen scenario>"
         },
+        { "kind": "narration", "text": "That is the end of Part 1. You now have half a minute to check your answers." },
         {
           "kind": "reading-pause",
-          "seconds": 30,
-          "instruction": "You now have 30 seconds to check your answers to Part 1."
+          "seconds": 30
         }
       ],
       "question_positions": [0, 1, 2, 3, 4],
       "completion_blocks": [
         {
-          "id": "p1-form",
+          "id": "p1-<short-id>",
           "layout": "form",
-          "title": "Library card application",
+          "title": "<title that names this form/notes/table>",
           "instructions": "Write NO MORE THAN TWO WORDS AND/OR A NUMBER for each answer.",
           "rows": [
             {
-              "label": "Surname",
+              "label": "<field label>",
               "cells": [
-                [ { "kind": "blank", "slot_id": "p1-surname" } ]
+                [ { "kind": "blank", "slot_id": "p1-<unique-slot-id>" } ]
               ]
             },
             {
-              "label": "Saturday arrival",
+              "label": "<another field label>",
               "cells": [
                 [
-                  { "kind": "text", "text": "Saturdays at " },
-                  { "kind": "blank", "slot_id": "p2-arrival-time" }
+                  { "kind": "text", "text": "<optional prefix text> " },
+                  { "kind": "blank", "slot_id": "p1-<another-slot-id>" }
                 ]
               ]
             }
@@ -265,13 +316,13 @@ allowed. Comments are not allowed.
     {
       "type": "listening-mcq-single",
       "position": 5,
-      "prompt": "When was the community garden founded?",
+      "prompt": "<a question whose answer the speaker(s) actually say>",
       "points": 1,
       "correct_answer": {
         "options": [
-          { "id": "A", "text": "2004" },
-          { "id": "B", "text": "2014" },
-          { "id": "C", "text": "2024" }
+          { "id": "A", "text": "<option A>" },
+          { "id": "B", "text": "<option B>" },
+          { "id": "C", "text": "<option C>" }
         ],
         "correct": "B"
       }
@@ -279,15 +330,15 @@ allowed. Comments are not allowed.
     {
       "type": "listening-mcq-multi",
       "position": 6,
-      "prompt": "Which TWO activities are described as well-attended?",
+      "prompt": "Which TWO of the following are mentioned by the speaker?",
       "points": 2,
       "correct_answer": {
         "options": [
-          { "id": "A", "text": "Beekeeping" },
-          { "id": "B", "text": "Composting workshops" },
-          { "id": "C", "text": "Seed-swap evenings" },
-          { "id": "D", "text": "Yoga classes" },
-          { "id": "E", "text": "Storytime" }
+          { "id": "A", "text": "<option A>" },
+          { "id": "B", "text": "<option B>" },
+          { "id": "C", "text": "<option C>" },
+          { "id": "D", "text": "<option D>" },
+          { "id": "E", "text": "<option E>" }
         ],
         "pick_count": 2,
         "correct": ["B", "C"]
@@ -299,31 +350,31 @@ allowed. Comments are not allowed.
       "prompt": "Complete the sentence using NO MORE THAN ONE WORD AND/OR A NUMBER from the recording.",
       "points": 1,
       "correct_answer": {
-        "stem": "The Premium membership costs ___ pounds a year.",
+        "stem": "<sentence with ___ marking the blank>",
         "word_limit": 2,
-        "accepted": ["28", "twenty-eight"]
+        "accepted": ["<verbatim word from the transcript>"]
       }
     },
     {
       "type": "listening-short-answer",
       "position": 17,
-      "prompt": "What innovation regulated the release of energy in early mechanical clocks? (NO MORE THAN FOUR WORDS)",
+      "prompt": "<a question the speaker(s) answer aloud> (NO MORE THAN FOUR WORDS)",
       "points": 1,
       "correct_answer": {
         "word_limit": 4,
-        "accepted": ["verge-and-foliot escapement", "escapement"]
+        "accepted": ["<verbatim phrase from the transcript>"]
       }
     },
     {
       "type": "listening-completion-blank",
       "position": 0,
-      "prompt": "Surname",
+      "prompt": "<field label matching the row in the completion block>",
       "points": 1,
       "correct_answer": {
-        "block_id": "p1-form",
-        "slot_id": "p1-surname",
+        "block_id": "<block id from a part above>",
+        "slot_id": "<slot id from that block>",
         "word_limit": 2,
-        "accepted": ["Costa"]
+        "accepted": ["<verbatim phrase from the transcript>"]
       }
     }
   ]
