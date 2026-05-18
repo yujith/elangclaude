@@ -480,6 +480,115 @@ function PartNavigation({
 // GlobalAudioPanel above; this component is presentational over the
 // learner's responses for the part they are CURRENTLY VIEWING.
 
+// A grouped render-unit. Real IELTS booklets present completion-block
+// questions as one visual structure (form / notes / table) with the
+// question numbers IN the blanks, and consecutive sentence-completion
+// questions under one shared instruction header. Rendering each question
+// as its own isolated card — what we did before — was a learning-app UI,
+// not an IELTS UI.
+type RenderUnit =
+  | {
+      kind: "completion-block";
+      block: ListeningRunnerBlock;
+      slotToQuestion: Map<string, ListeningRunnerQuestion>;
+      firstPosition: number;
+      lastPosition: number;
+    }
+  | {
+      kind: "sentence-completion-group";
+      questions: ListeningRunnerQuestion[];
+      sharedPrompt: string;
+    }
+  | { kind: "question"; question: ListeningRunnerQuestion };
+
+function buildRenderUnits(
+  questions: ListeningRunnerQuestion[],
+  blocks: ListeningRunnerBlock[],
+): RenderUnit[] {
+  const sorted = [...questions].sort((a, b) => a.position - b.position);
+  const blockById = new Map(blocks.map((b) => [b.id, b]));
+  const units: RenderUnit[] = [];
+  const emittedBlocks = new Set<string>();
+  let i = 0;
+  while (i < sorted.length) {
+    const q = sorted[i]!;
+    const payload = q.payload;
+
+    // Completion-blank → emit the parent block ONCE at the position
+    // of the first question that references it; subsequent
+    // completion-blank questions for the same block are swallowed
+    // (they'll render as their numbered slots inside the block).
+    if (payload.kind === "listening-completion-blank") {
+      const block = blockById.get(payload.block_id);
+      if (block && !emittedBlocks.has(payload.block_id)) {
+        const slotToQuestion = new Map<string, ListeningRunnerQuestion>();
+        const positions: number[] = [];
+        for (const q2 of sorted) {
+          if (
+            q2.payload.kind === "listening-completion-blank" &&
+            q2.payload.block_id === payload.block_id
+          ) {
+            slotToQuestion.set(q2.payload.slot_id, q2);
+            positions.push(q2.position);
+          }
+        }
+        units.push({
+          kind: "completion-block",
+          block,
+          slotToQuestion,
+          firstPosition: Math.min(...positions),
+          lastPosition: Math.max(...positions),
+        });
+        emittedBlocks.add(payload.block_id);
+      }
+      i++;
+      continue;
+    }
+
+    // Sentence-completion → group consecutive questions with the
+    // SAME prompt under one IELTS-style instruction header.
+    if (payload.kind === "listening-sentence-completion") {
+      const sharedPrompt = q.prompt;
+      const group: ListeningRunnerQuestion[] = [q];
+      let j = i + 1;
+      while (j < sorted.length) {
+        const next = sorted[j]!;
+        if (
+          next.payload.kind === "listening-sentence-completion" &&
+          next.prompt === sharedPrompt
+        ) {
+          group.push(next);
+          j++;
+        } else {
+          break;
+        }
+      }
+      if (group.length > 1) {
+        units.push({
+          kind: "sentence-completion-group",
+          questions: group,
+          sharedPrompt,
+        });
+        i = j;
+        continue;
+      }
+      // Single sentence-completion falls through to standalone card.
+    }
+
+    units.push({ kind: "question", question: q });
+    i++;
+  }
+  return units;
+}
+
+function questionRange(positions: readonly number[]): string {
+  if (positions.length === 0) return "";
+  const min = Math.min(...positions);
+  const max = Math.max(...positions);
+  if (min === max) return `${min + 1}`;
+  return `${min + 1}–${max + 1}`;
+}
+
 function QuestionsList({
   part,
   questions,
@@ -497,6 +606,11 @@ function QuestionsList({
     return m;
   }, [part]);
 
+  const units = useMemo(
+    () => buildRenderUnits(questions, part.completion_blocks),
+    [questions, part.completion_blocks],
+  );
+
   return (
     <article aria-label={`Part ${part.part} questions`} className="space-y-5">
       <header>
@@ -512,33 +626,79 @@ function QuestionsList({
       </header>
 
       <ol className="space-y-5">
-        {questions.map((q) => (
-          <li
-            key={q.id}
-            className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-5 space-y-3"
-          >
-            <header className="flex items-start gap-3">
-              <span className="inline-flex items-center justify-center min-w-[2.25rem] h-9 rounded-pill bg-brand-black font-heading font-bold text-sm text-white px-2">
-                {q.position + 1}
-              </span>
-              <div>
-                <p className="font-body text-sm font-bold text-brand-black leading-snug">
-                  {q.prompt}
-                </p>
-                <p className="font-body text-xs text-brand-grey-500">
-                  {q.payload.kind.replace("listening-", "")} · {q.points} pt
-                </p>
-              </div>
-            </header>
+        {units.map((unit) => {
+          if (unit.kind === "completion-block") {
+            return (
+              <li
+                key={`block-${unit.block.id}`}
+                className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-5 space-y-3"
+              >
+                <CompletionBlockGroupHeader
+                  block={unit.block}
+                  firstPosition={unit.firstPosition}
+                  lastPosition={unit.lastPosition}
+                />
+                <CompletionBlockView
+                  block={unit.block}
+                  slotToQuestion={unit.slotToQuestion}
+                  responses={responses}
+                  onChange={onChange}
+                />
+              </li>
+            );
+          }
+          if (unit.kind === "sentence-completion-group") {
+            return (
+              <li
+                key={`sc-group-${unit.questions[0]!.id}`}
+                className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-5 space-y-3"
+              >
+                <SentenceCompletionGroupHeader
+                  positions={unit.questions.map((q) => q.position)}
+                  sharedPrompt={unit.sharedPrompt}
+                />
+                <ol className="space-y-3">
+                  {unit.questions.map((q) => (
+                    <SentenceCompletionRow
+                      key={q.id}
+                      question={q}
+                      value={responses[q.id]}
+                      onChange={onChange}
+                    />
+                  ))}
+                </ol>
+              </li>
+            );
+          }
+          const q = unit.question;
+          return (
+            <li
+              key={q.id}
+              className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-5 space-y-3"
+            >
+              <header className="flex items-start gap-3">
+                <span className="inline-flex items-center justify-center min-w-[2.25rem] h-9 rounded-pill bg-brand-black font-heading font-bold text-sm text-white px-2">
+                  {q.position + 1}
+                </span>
+                <div>
+                  <p className="font-body text-sm font-bold text-brand-black leading-snug">
+                    {q.prompt}
+                  </p>
+                  <p className="font-body text-xs text-brand-grey-500">
+                    {q.payload.kind.replace("listening-", "")} · {q.points} pt
+                  </p>
+                </div>
+              </header>
 
-            <QuestionInput
-              question={q}
-              value={responses[q.id]}
-              onChange={onChange}
-              blockById={blockById}
-            />
-          </li>
-        ))}
+              <QuestionInput
+                question={q}
+                value={responses[q.id]}
+                onChange={onChange}
+                blockById={blockById}
+              />
+            </li>
+          );
+        })}
       </ol>
     </article>
   );
@@ -912,6 +1072,333 @@ function StrictAudioSegment({
       // affordance; the audio element still exists in the DOM and
       // determined users will find ways around it.
     />
+  );
+}
+
+// ─── IELTS-booklet group renderers ──────────────────────────────────────
+
+function CompletionBlockGroupHeader({
+  block,
+  firstPosition,
+  lastPosition,
+}: {
+  block: ListeningRunnerBlock;
+  firstPosition: number;
+  lastPosition: number;
+}) {
+  const range =
+    firstPosition === lastPosition
+      ? `Question ${firstPosition + 1}`
+      : `Questions ${firstPosition + 1}–${lastPosition + 1}`;
+  return (
+    <header className="space-y-1 border-b border-brand-grey-200 pb-3">
+      <p className="font-heading font-bold text-sm text-brand-black">{range}</p>
+      {block.title ? (
+        <p className="font-heading font-bold text-base text-brand-black">
+          {block.title}
+        </p>
+      ) : null}
+      {block.instructions ? (
+        <p className="font-body text-xs italic text-brand-grey-700">
+          {block.instructions}
+        </p>
+      ) : null}
+    </header>
+  );
+}
+
+function SentenceCompletionGroupHeader({
+  positions,
+  sharedPrompt,
+}: {
+  positions: number[];
+  sharedPrompt: string;
+}) {
+  return (
+    <header className="space-y-1 border-b border-brand-grey-200 pb-3">
+      <p className="font-heading font-bold text-sm text-brand-black">
+        Questions {questionRange(positions)}
+      </p>
+      <p className="font-body text-xs italic text-brand-grey-700">
+        {sharedPrompt}
+      </p>
+    </header>
+  );
+}
+
+function SentenceCompletionRow({
+  question,
+  value,
+  onChange,
+}: {
+  question: ListeningRunnerQuestion;
+  value: ClientListeningResponse | undefined;
+  onChange: (questionId: string, next: ClientListeningResponse) => void;
+}) {
+  if (question.payload.kind !== "listening-sentence-completion") {
+    return null;
+  }
+  const stem = question.payload.stem;
+  const wordLimit = question.payload.word_limit;
+  const text =
+    value && value.kind === "listening-sentence-completion" ? value.text : "";
+  const [before, after] = stem.split("___", 2);
+  return (
+    <li className="flex items-start gap-3">
+      <span className="inline-flex items-center justify-center min-w-[2.25rem] h-9 rounded-pill bg-brand-black font-heading font-bold text-sm text-white px-2">
+        {question.position + 1}
+      </span>
+      <div className="flex-1 space-y-1">
+        <p className="font-body text-sm text-brand-grey-900 leading-relaxed">
+          {before}
+          <input
+            id={question.id}
+            type="text"
+            value={text}
+            onChange={(e) =>
+              onChange(question.id, {
+                kind: "listening-sentence-completion",
+                text: e.target.value,
+              })
+            }
+            aria-label={`Question ${question.position + 1} answer`}
+            className="mx-2 inline-block min-w-[8rem] rounded-md ring-1 ring-brand-grey-300 bg-white px-2 py-1 font-body text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
+          />
+          {after ?? ""}
+        </p>
+        <p className="font-body text-xs text-brand-grey-500">
+          Up to {wordLimit} word{wordLimit === 1 ? "" : "s"}.
+        </p>
+      </div>
+    </li>
+  );
+}
+
+// Renders a completion block (form / notes / table / flow-chart /
+// summary / diagram) as ONE visual unit with the question numbers inside
+// the blanks — closer to a real IELTS booklet than the old "one card per
+// blank" view. Each blank cell looks up its question from slotToQuestion
+// and renders a numbered input.
+function CompletionBlockView({
+  block,
+  slotToQuestion,
+  responses,
+  onChange,
+}: {
+  block: ListeningRunnerBlock;
+  slotToQuestion: Map<string, ListeningRunnerQuestion>;
+  responses: Record<string, ClientListeningResponse>;
+  onChange: (questionId: string, next: ClientListeningResponse) => void;
+}) {
+  // table layout uses an actual <table>; everything else uses a
+  // form-flavoured stack of label/input rows. Real flow-chart and
+  // diagram are out of scope for v1 — the fallback still surfaces the
+  // numbered inputs in row order, which is functional even if not
+  // visually perfect.
+  if (block.layout === "table") {
+    return (
+      <TableCompletionView
+        block={block}
+        slotToQuestion={slotToQuestion}
+        responses={responses}
+        onChange={onChange}
+      />
+    );
+  }
+  return (
+    <FormCompletionView
+      block={block}
+      slotToQuestion={slotToQuestion}
+      responses={responses}
+      onChange={onChange}
+    />
+  );
+}
+
+function TableCompletionView({
+  block,
+  slotToQuestion,
+  responses,
+  onChange,
+}: {
+  block: ListeningRunnerBlock;
+  slotToQuestion: Map<string, ListeningRunnerQuestion>;
+  responses: Record<string, ClientListeningResponse>;
+  onChange: (questionId: string, next: ClientListeningResponse) => void;
+}) {
+  const headerRows = block.rows.filter((r) => r.is_header);
+  const bodyRows = block.rows.filter((r) => !r.is_header);
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full border-collapse text-sm">
+        {headerRows.length > 0 ? (
+          <thead>
+            {headerRows.map((row, ri) => (
+              <tr key={`h-${ri}`}>
+                {row.cells.map((cell, ci) => (
+                  <th
+                    key={ci}
+                    className="border border-brand-grey-300 bg-brand-grey-50 px-3 py-2 text-left font-heading font-bold text-brand-black"
+                  >
+                    {row.label && ci === 0 ? `${row.label}` : null}
+                    <CellContents
+                      cell={cell}
+                      slotToQuestion={slotToQuestion}
+                      responses={responses}
+                      onChange={onChange}
+                    />
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+        ) : null}
+        <tbody>
+          {bodyRows.map((row, ri) => (
+            <tr key={`b-${ri}`}>
+              {row.label && row.cells.length > 0 ? (
+                <th
+                  scope="row"
+                  className="border border-brand-grey-300 px-3 py-2 text-left font-heading font-bold text-brand-grey-900"
+                >
+                  {row.label}
+                </th>
+              ) : null}
+              {row.cells.map((cell, ci) => (
+                <td
+                  key={ci}
+                  className="border border-brand-grey-300 px-3 py-2 align-top"
+                >
+                  <CellContents
+                    cell={cell}
+                    slotToQuestion={slotToQuestion}
+                    responses={responses}
+                    onChange={onChange}
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FormCompletionView({
+  block,
+  slotToQuestion,
+  responses,
+  onChange,
+}: {
+  block: ListeningRunnerBlock;
+  slotToQuestion: Map<string, ListeningRunnerQuestion>;
+  responses: Record<string, ClientListeningResponse>;
+  onChange: (questionId: string, next: ClientListeningResponse) => void;
+}) {
+  return (
+    <ul className="space-y-2">
+      {block.rows.map((row, ri) => (
+        <li
+          key={ri}
+          className={
+            row.is_header
+              ? "font-heading font-bold text-sm text-brand-black"
+              : "grid grid-cols-[minmax(8rem,auto)_1fr] gap-3 items-baseline"
+          }
+        >
+          {row.label ? (
+            <span
+              className={
+                row.is_header
+                  ? "font-heading font-bold text-sm text-brand-black"
+                  : "font-body text-sm text-brand-grey-900"
+              }
+            >
+              {row.label}
+            </span>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+          <span className="font-body text-sm text-brand-grey-900 leading-relaxed">
+            {row.cells.map((cell, ci) => (
+              <CellContents
+                key={ci}
+                cell={cell}
+                slotToQuestion={slotToQuestion}
+                responses={responses}
+                onChange={onChange}
+              />
+            ))}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Per-cell renderer: text segments stream as inline prose; blank
+// segments look up the matching question and render a numbered input.
+function CellContents({
+  cell,
+  slotToQuestion,
+  responses,
+  onChange,
+}: {
+  cell: ListeningRunnerCell[];
+  slotToQuestion: Map<string, ListeningRunnerQuestion>;
+  responses: Record<string, ClientListeningResponse>;
+  onChange: (questionId: string, next: ClientListeningResponse) => void;
+}) {
+  return (
+    <>
+      {cell.map((seg, i) => {
+        if (seg.kind === "text") {
+          return <span key={i}>{seg.text}</span>;
+        }
+        const question = slotToQuestion.get(seg.slot_id);
+        if (!question) {
+          return (
+            <span
+              key={i}
+              className="font-body text-xs italic text-brand-red mx-1"
+            >
+              [missing slot: {seg.slot_id}]
+            </span>
+          );
+        }
+        const value = responses[question.id];
+        const text =
+          value && value.kind === "listening-completion-blank" ? value.text : "";
+        const wordLimit =
+          question.payload.kind === "listening-completion-blank"
+            ? question.payload.word_limit
+            : 1;
+        return (
+          <span
+            key={i}
+            className="inline-flex items-baseline gap-1 mx-1 align-baseline"
+          >
+            <span className="inline-flex items-center justify-center min-w-[1.75rem] h-6 rounded-pill bg-brand-black font-heading font-bold text-xs text-white px-1.5">
+              {question.position + 1}
+            </span>
+            <input
+              type="text"
+              value={text}
+              onChange={(e) =>
+                onChange(question.id, {
+                  kind: "listening-completion-blank",
+                  text: e.target.value,
+                })
+              }
+              aria-label={`Question ${question.position + 1} answer (max ${wordLimit} word${wordLimit === 1 ? "" : "s"})`}
+              title={`Up to ${wordLimit} word${wordLimit === 1 ? "" : "s"}`}
+              className="inline-block min-w-[7rem] rounded-md ring-1 ring-brand-grey-300 bg-white px-2 py-1 font-body text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
+            />
+          </span>
+        );
+      })}
+    </>
   );
 }
 
