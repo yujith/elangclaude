@@ -20,16 +20,9 @@ import {
 } from "@elc/db";
 import type { OrgContext } from "@elc/db";
 import { requireOrgContext } from "@/lib/auth/context";
-
-// Section order is hard-coded — see ADR 0008 D4. Speaking is the
-// optional fourth leg; the orchestrator marks it skipped if no
-// approved Test exists or the runner refuses to start.
-export const MOCK_SECTION_ORDER = [
-  "Listening",
-  "Reading",
-  "Writing",
-  "Speaking",
-] as const satisfies readonly Section[];
+// MOCK_SECTION_ORDER lives in ./constants because Next.js 16 forbids
+// non-async exports from "use server" files.
+import { MOCK_SECTION_ORDER } from "./constants";
 
 export type MockSectionState =
   | { section: Section; state: "not-started"; attemptId: null }

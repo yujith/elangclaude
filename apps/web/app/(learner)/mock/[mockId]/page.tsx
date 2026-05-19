@@ -4,13 +4,13 @@ import { notFound, redirect } from "next/navigation";
 import type { Section } from "@elc/db";
 import { requireOrgContext } from "@/lib/auth/context";
 import {
-  MOCK_SECTION_ORDER,
   ensureMockSectionAttempt,
   readMockState,
   readSkippedSections,
   skipMockSection,
   abandonMockSession,
 } from "@/lib/mock/actions";
+import { MOCK_SECTION_ORDER } from "@/lib/mock/constants";
 
 export const metadata: Metadata = {
   title: "Full Mock — in progress",

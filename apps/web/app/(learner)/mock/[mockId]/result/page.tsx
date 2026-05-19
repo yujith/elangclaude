@@ -10,11 +10,8 @@ import {
   writingGradeSchema,
 } from "@elc/ai";
 import { requireOrgContext } from "@/lib/auth/context";
-import {
-  MOCK_SECTION_ORDER,
-  readSkippedSections,
-  submitMockSession,
-} from "@/lib/mock/actions";
+import { readSkippedSections, submitMockSession } from "@/lib/mock/actions";
+import { MOCK_SECTION_ORDER } from "@/lib/mock/constants";
 
 export const metadata: Metadata = {
   title: "Full Mock — result",
