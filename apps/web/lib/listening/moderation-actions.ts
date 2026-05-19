@@ -83,9 +83,18 @@ export async function approveListeningTest(formData: FormData): Promise<void> {
   const synth = await synthesiseListeningClips(ctx, testId);
 
   revalidatePath("/content/listening");
+  revalidatePath(`/content/listening/${testId}`);
   if (synth.failures > 0) {
+    // Drop the SuperAdmin on the review page, not back at the queue —
+    // the queue page lists pending tests only, so a partial-fail approve
+    // used to dead-end with no way to reach the re-synth form. The review
+    // page hosts the form and now renders the same hint banner.
+    const hint = synth.errorSamples.join(" || ");
+    const hintParam = hint
+      ? `&synth_hint=${encodeURIComponent(hint)}`
+      : "";
     redirect(
-      `/content/listening?approved=${test.id}&synth_error=${synth.failures}-of-${synth.attempted}-failed`,
+      `/content/listening/${test.id}?approved=1&synth_error=${synth.failures}-of-${synth.attempted}-failed${hintParam}`,
     );
   }
   redirect("/content/listening?approved=" + test.id);
@@ -105,8 +114,12 @@ export async function resynthesiseListeningAudio(
   const synth = await synthesiseListeningClips(ctx, testId);
   revalidatePath(`/content/listening/${testId}`);
   if (synth.failures > 0) {
+    const hint = synth.errorSamples.join(" || ");
+    const hintParam = hint
+      ? `&synth_hint=${encodeURIComponent(hint)}`
+      : "";
     redirect(
-      `/content/listening/${testId}?synth_error=${synth.failures}-of-${synth.attempted}-failed`,
+      `/content/listening/${testId}?synth_error=${synth.failures}-of-${synth.attempted}-failed${hintParam}`,
     );
   }
   redirect(`/content/listening/${testId}?synth_ok=${synth.synthed}-of-${synth.attempted}`);
@@ -174,7 +187,28 @@ type SynthRunResult = {
   synthed: number;
   cached: number;
   failures: number;
+  // Up to ~3 distinct failure fingerprints (one per unique voice_id × HTTP
+  // status). Surfaced in the redirect so the SuperAdmin sees WHY synth
+  // failed without grepping the server console — a 72%-fail "voice not
+  // found" run looks identical to a 72%-fail "quota exhausted" run in the
+  // counts alone.
+  errorSamples: string[];
 };
+
+// Pull a compact, single-line message out of whatever the TTS layer threw.
+// ProviderError messages look like:
+//   `Upstream provider "elevenlabs" failed: ElevenLabs 404: {"detail":...}`
+// Trim the prefix and clamp so the result fits in a URL banner.
+function describeSynthError(err: unknown): string {
+  if (err instanceof Error) {
+    const msg = err.message
+      .replace(/^Upstream provider "elevenlabs" failed:\s*/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    return msg.length > 220 ? `${msg.slice(0, 217)}…` : msg;
+  }
+  return "unknown error";
+}
 
 async function synthesiseListeningClips(
   ctx: OrgContext,
@@ -194,13 +228,17 @@ async function synthesiseListeningClips(
   }
   const jobs = planSynthesisJobs(content, testId);
   if (jobs.length === 0) {
-    return { attempted: 0, synthed: 0, cached: 0, failures: 0 };
+    return { attempted: 0, synthed: 0, cached: 0, failures: 0, errorSamples: [] };
   }
 
   const clips: SynthesizedClip[] = [];
   let synthed = 0;
   let cached = 0;
   let failures = 0;
+  // Dedupe samples by (voice_id, http-status-or-prefix) so 37 identical
+  // "voice not found" failures collapse to a single banner line.
+  const seenFingerprints = new Set<string>();
+  const errorSamples: string[] = [];
   for (const job of jobs) {
     try {
       const result = await ttsCache.synthesizeAndCache({
@@ -223,6 +261,7 @@ async function synthesiseListeningClips(
       });
     } catch (err) {
       failures += 1;
+      const description = describeSynthError(err);
       console.error("[listening-tts] synth failed", {
         org_id: ctx.org_id,
         user_id: ctx.user_id,
@@ -232,6 +271,12 @@ async function synthesiseListeningClips(
         voice_id: job.voice_id,
         err,
       });
+      const httpStatus = /\b(\d{3})\b/.exec(description)?.[1] ?? "ERR";
+      const fingerprint = `${job.voice_id}|${httpStatus}`;
+      if (!seenFingerprints.has(fingerprint) && errorSamples.length < 3) {
+        seenFingerprints.add(fingerprint);
+        errorSamples.push(`voice ${job.voice_id} → ${description}`);
+      }
     }
   }
 
@@ -248,5 +293,5 @@ async function synthesiseListeningClips(
     });
   }
 
-  return { attempted: jobs.length, synthed, cached, failures };
+  return { attempted: jobs.length, synthed, cached, failures, errorSamples };
 }

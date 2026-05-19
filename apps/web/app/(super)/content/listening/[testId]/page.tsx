@@ -25,6 +25,7 @@ type Params = { testId: string };
 type SearchParams = {
   approved?: string;
   synth_error?: string;
+  synth_hint?: string;
   synth_ok?: string;
 };
 
@@ -111,8 +112,21 @@ export default async function ReviewListeningTestPage({
         ) : null}
         {sp.synth_error ? (
           <Banner tone="error">
-            Synthesis run reported failures: <code>{sp.synth_error}</code>.
-            Re-run from the form below; failed segments will be re-attempted.
+            <span className="block">
+              Synthesis run reported failures:{" "}
+              <code>{sp.synth_error}</code>. Re-run from the form below;
+              failed segments will be re-attempted.
+            </span>
+            {sp.synth_hint
+              ? sp.synth_hint.split(" || ").map((line, i) => (
+                  <span
+                    key={i}
+                    className="mt-2 block font-mono text-xs leading-snug break-all"
+                  >
+                    {line}
+                  </span>
+                ))
+              : null}
           </Banner>
         ) : null}
 

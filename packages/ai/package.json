@@ -8,7 +8,8 @@
     "./gateway": "./src/gateway.ts",
     "./grading/schema": "./src/grading/schema.ts",
     "./errors": "./src/errors.ts",
-    "./models": "./src/models.ts"
+    "./models": "./src/models.ts",
+    "./listening/boilerplate": "./src/listening/boilerplate.ts"
   },
   "scripts": {
     "test": "vitest run",

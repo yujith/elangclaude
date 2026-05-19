@@ -26,11 +26,19 @@ import { softNormalize } from "../reading/normalize";
 import type {
   GeneratedListening,
   GeneratedListeningPart,
-  GeneratedListeningQuestion,
 } from "./listening-schema";
 
 export type ListeningValidationIssue = {
   code:
+    | "track.mismatch"
+    | "section.question-count-out-of-range"
+    | "section.accent-variety-too-low"
+    | "part.context-mismatch"
+    | "part.question-count-out-of-range"
+    | "part.invalid-speaker-role"
+    | "part.speaker-pattern-mismatch"
+    | "preview.incomplete-coverage"
+    | "transcript.invalid-ielts-structure"
     | "positions.duplicate-on-question"
     | "positions.in-multiple-parts"
     | "positions.unreferenced-by-question"
@@ -55,6 +63,23 @@ export type ListeningValidationIssue = {
 export type ListeningValidationResult =
   | { ok: true }
   | { ok: false; issues: ListeningValidationIssue[] };
+
+const QUESTION_COUNT_RANGE = { min: 20, max: 32 } as const;
+const PART_QUESTION_COUNT_RANGE = { min: 5, max: 8 } as const;
+const PREVIEW_SECONDS_RANGE = { min: 20, max: 45 } as const;
+const READING_PAUSE_SECONDS_RANGE = { min: 20, max: 45 } as const;
+const EXPECTED_PART_CONTEXT: Record<1 | 2 | 3 | 4, "social" | "academic"> = {
+  1: "social",
+  2: "social",
+  3: "academic",
+  4: "academic",
+};
+const EXPECTED_SCENE_SPEAKERS: Record<1 | 2 | 3 | 4, { min: number; max: number }> = {
+  1: { min: 2, max: 2 },
+  2: { min: 1, max: 1 },
+  3: { min: 2, max: 4 },
+  4: { min: 1, max: 1 },
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -91,6 +116,182 @@ function findQuestionPart(
     }
   }
   return { partIndex, ambiguous };
+}
+
+function normaliseCueText(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function isNarrationLike(
+  part: GeneratedListeningPart,
+  index: number,
+  pattern: RegExp,
+): boolean {
+  const segment = part.transcript[index];
+  return (
+    segment?.kind === "narration" &&
+    pattern.test(normaliseCueText(segment.text))
+  );
+}
+
+function checkIELTSPartContract(
+  value: GeneratedListening,
+  issues: ListeningValidationIssue[],
+): void {
+  if (
+    value.questions.length < QUESTION_COUNT_RANGE.min ||
+    value.questions.length > QUESTION_COUNT_RANGE.max
+  ) {
+    issues.push({
+      code: "section.question-count-out-of-range",
+      message: `Listening sections need ${QUESTION_COUNT_RANGE.min}-${QUESTION_COUNT_RANGE.max} questions; found ${value.questions.length}.`,
+    });
+  }
+
+  const accents = new Set(
+    value.parts.flatMap((part) => part.speakers.map((speaker) => speaker.accent)),
+  );
+  if (accents.size < 3) {
+    issues.push({
+      code: "section.accent-variety-too-low",
+      message: `Listening sections should expose at least 3 distinct accents; found ${accents.size}.`,
+    });
+  }
+
+  for (let pi = 0; pi < value.parts.length; pi += 1) {
+    const part = value.parts[pi]!;
+    const expectedContext = EXPECTED_PART_CONTEXT[part.part];
+    if (part.context !== expectedContext) {
+      issues.push({
+        code: "part.context-mismatch",
+        message: `Part ${part.part} must use the ${expectedContext} context, not ${part.context}.`,
+        partIndex: pi,
+      });
+    }
+
+    const partQuestionCount = part.question_positions.length;
+    if (
+      partQuestionCount < PART_QUESTION_COUNT_RANGE.min ||
+      partQuestionCount > PART_QUESTION_COUNT_RANGE.max
+    ) {
+      issues.push({
+        code: "part.question-count-out-of-range",
+        message: `Part ${part.part} must contain ${PART_QUESTION_COUNT_RANGE.min}-${PART_QUESTION_COUNT_RANGE.max} question positions; found ${partQuestionCount}.`,
+        partIndex: pi,
+      });
+    }
+
+    if (part.speakers.some((speaker) => speaker.role === "examiner")) {
+      issues.push({
+        code: "part.invalid-speaker-role",
+        message: `Part ${part.part} uses the examiner role, which is reserved for Speaking.`,
+        partIndex: pi,
+      });
+    }
+
+    const sceneSpeakerCount = part.speakers.filter(
+      (speaker) => speaker.role === "speaker",
+    ).length;
+    const expectedSpeakers = EXPECTED_SCENE_SPEAKERS[part.part];
+    if (
+      sceneSpeakerCount < expectedSpeakers.min ||
+      sceneSpeakerCount > expectedSpeakers.max
+    ) {
+      issues.push({
+        code: "part.speaker-pattern-mismatch",
+        message: `Part ${part.part} should have ${expectedSpeakers.min === expectedSpeakers.max ? expectedSpeakers.min : `${expectedSpeakers.min}-${expectedSpeakers.max}`} scene speaker(s); found ${sceneSpeakerCount}.`,
+        partIndex: pi,
+      });
+    }
+
+    if (
+      !isNarrationLike(part, 0, new RegExp(`^part\\s+${part.part}\\b`)) ||
+      !isNarrationLike(part, 1, /^you\s+will\s+hear\b/) ||
+      !isNarrationLike(
+        part,
+        2,
+        /^(first\s+)?you\s+have\s+some\s+time\s+to\s+look\s+at\s+questions\b/,
+      ) ||
+      part.transcript[3]?.kind !== "questions-preview" ||
+      !isNarrationLike(
+        part,
+        4,
+        /^now\s+listen\s+carefully\s+and\s+answer\s+questions\b/,
+      )
+    ) {
+      issues.push({
+        code: "transcript.invalid-ielts-structure",
+        message:
+          `Part ${part.part} must begin with the canonical IELTS scaffold: "Part ${part.part}.", "You will hear ...", preview cue, questions-preview, then "Now listen carefully ...".`,
+        partIndex: pi,
+      });
+    }
+
+    const previewSegment = part.transcript[3];
+    if (
+      previewSegment?.kind === "questions-preview" &&
+      (previewSegment.seconds < PREVIEW_SECONDS_RANGE.min ||
+        previewSegment.seconds > PREVIEW_SECONDS_RANGE.max)
+    ) {
+      issues.push({
+        code: "transcript.invalid-ielts-structure",
+        message: `Part ${part.part} questions-preview should last ${PREVIEW_SECONDS_RANGE.min}-${PREVIEW_SECONDS_RANGE.max} seconds; found ${previewSegment.seconds}.`,
+        partIndex: pi,
+        segmentIndex: 3,
+      });
+    }
+
+    const endingCueIndex = part.transcript.length - 2;
+    if (
+      !isNarrationLike(
+        part,
+        endingCueIndex,
+        new RegExp(
+          `^that\\s+is\\s+the\\s+end\\s+of\\s+part\\s+${part.part}\\b.*check\\s+your\\s+answers`,
+        ),
+      )
+    ) {
+      issues.push({
+        code: "transcript.invalid-ielts-structure",
+        message: `Part ${part.part} must end with the canonical end-of-part check-your-answers narration.`,
+        partIndex: pi,
+        segmentIndex: endingCueIndex,
+      });
+    }
+
+    const pauseSegment = part.transcript[part.transcript.length - 1];
+    if (
+      pauseSegment?.kind !== "reading-pause" ||
+      pauseSegment.seconds < READING_PAUSE_SECONDS_RANGE.min ||
+      pauseSegment.seconds > READING_PAUSE_SECONDS_RANGE.max
+    ) {
+      issues.push({
+        code: "transcript.invalid-ielts-structure",
+        message: `Part ${part.part} must end with a ${READING_PAUSE_SECONDS_RANGE.min}-${READING_PAUSE_SECONDS_RANGE.max} second reading-pause.`,
+        partIndex: pi,
+        segmentIndex: part.transcript.length - 1,
+      });
+    }
+
+    const previewCoverage = new Set<number>();
+    for (const segment of part.transcript) {
+      if (segment.kind === "questions-preview") {
+        for (const position of segment.question_positions) {
+          previewCoverage.add(position);
+        }
+      }
+    }
+    const missingPreviewPositions = part.question_positions.filter(
+      (position) => !previewCoverage.has(position),
+    );
+    if (missingPreviewPositions.length > 0) {
+      issues.push({
+        code: "preview.incomplete-coverage",
+        message: `Part ${part.part} does not preview every question position. Missing: ${missingPreviewPositions.join(", ")}.`,
+        partIndex: pi,
+      });
+    }
+  }
 }
 
 // ─── Per-aspect validators ──────────────────────────────────────────────
@@ -356,6 +557,7 @@ export function validateGeneratedListening(
   value: GeneratedListening,
 ): ListeningValidationResult {
   const issues: ListeningValidationIssue[] = [];
+  checkIELTSPartContract(value, issues);
   checkSpeakers(value.parts, issues);
   checkPreviewPositions(value.parts, issues);
   const { blockIndex } = checkBlocksAndSlots(value.parts, issues);

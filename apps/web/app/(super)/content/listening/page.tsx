@@ -19,6 +19,7 @@ type SearchParams = {
   generate_error?: string;
   validation_issues?: string;
   synth_error?: string;
+  synth_hint?: string;
   dropped?: string;
 };
 
@@ -38,7 +39,7 @@ export default async function ListeningModerationPage({
   const db = withSuperAdminContext(ctx);
   const sp = await searchParams;
 
-  const [pending, approvedCount, rejectedCount] = await Promise.all([
+  const [pending, approved, approvedCount, rejectedCount] = await Promise.all([
     db.test.findMany({
       where: { section: "Listening", status: "PendingReview" },
       orderBy: { createdAt: "desc" },
@@ -48,6 +49,22 @@ export default async function ListeningModerationPage({
         track: true,
         difficulty: true,
         body_json: true,
+        createdAt: true,
+        _count: { select: { questions: true } },
+      },
+    }),
+    // Approved-but-recent list. Without this the queue page is a dead end
+    // after approval: pending list is empty, and there's no link to the
+    // review page where re-synth lives. Keep it short — 10 rows is plenty
+    // for the SuperAdmin to find what they just touched.
+    db.test.findMany({
+      where: { section: "Listening", status: "Approved" },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        track: true,
+        difficulty: true,
         createdAt: true,
         _count: { select: { questions: true } },
       },
@@ -110,9 +127,21 @@ export default async function ListeningModerationPage({
         ) : null}
         {sp.synth_error ? (
           <Banner tone="error">
-            TTS synth reported one or more failures: <code>{sp.synth_error}</code>.
-            The test is approved but some clips will be missing — re-trigger
-            synth from the review page.
+            <span className="block">
+              TTS synth reported one or more failures:{" "}
+              <code>{sp.synth_error}</code>. The test is approved but some
+              clips will be missing — re-trigger synth from the review page.
+            </span>
+            {sp.synth_hint
+              ? sp.synth_hint.split(" || ").map((line, i) => (
+                  <span
+                    key={i}
+                    className="mt-2 block font-mono text-xs leading-snug break-all"
+                  >
+                    {line}
+                  </span>
+                ))
+              : null}
           </Banner>
         ) : null}
 
@@ -268,6 +297,58 @@ export default async function ListeningModerationPage({
                       className="mt-auto w-full inline-flex items-center justify-center gap-2 rounded-pill bg-brand-red px-5 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
                     >
                       Review
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section>
+          <h2 className="font-heading font-bold text-xl text-brand-black mb-4">
+            Approved (recent)
+          </h2>
+          {approved.length === 0 ? (
+            <div className="rounded-lg bg-brand-white p-6 ring-1 ring-brand-grey-200">
+              <p className="font-body text-base text-brand-grey-700">
+                No approved Listening sections yet.
+              </p>
+            </div>
+          ) : (
+            <ul className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 divide-y divide-brand-grey-200">
+              {approved.map((t) => {
+                const trackLabel =
+                  t.track === "Academic" ? "Academic" : "General Training";
+                return (
+                  <li
+                    key={t.id}
+                    className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="inline-flex items-center rounded-pill bg-brand-black text-white font-heading font-bold text-xs px-3 py-1">
+                        {trackLabel}
+                      </span>
+                      <span
+                        className="font-body text-xs text-brand-grey-500"
+                        aria-label={`Difficulty ${t.difficulty} of 5`}
+                        title={`Difficulty ${t.difficulty} of 5`}
+                      >
+                        {difficultyDots(t.difficulty)}
+                      </span>
+                      <code className="font-mono text-xs text-brand-grey-600">
+                        {t.id}
+                      </code>
+                      <span className="font-body text-xs text-brand-grey-500">
+                        {t._count.questions} Q · approved{" "}
+                        {t.createdAt.toISOString().slice(0, 10)}
+                      </span>
+                    </div>
+                    <Link
+                      href={`/content/listening/${t.id}`}
+                      className="inline-flex items-center gap-2 rounded-pill bg-brand-white text-brand-red font-heading font-bold text-sm px-4 py-2 ring-1 ring-brand-red transition-colors hover:bg-brand-red hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+                    >
+                      Review / re-synth
                     </Link>
                   </li>
                 );

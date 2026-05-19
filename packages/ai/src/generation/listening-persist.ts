@@ -72,22 +72,11 @@ const IELTS_NARRATOR_SPEAKER = {
   // gain a much more reliable opening + closing clip.
 };
 
-// Exported so the player can detect WHEN these specific clips are
-// missing audio and surface a targeted "official narration didn't
-// synth" callout — rather than the small per-segment skip indicator
-// that's easy to miss.
-export const OPENING_NARRATION =
-  "This is the IELTS Listening test. There will be time for you to " +
-  "read the instructions and questions, and you will have a chance " +
-  "to check your work. All the recordings will be played once only. " +
-  "The test is in four parts. When the recording for each part " +
-  "begins, you will hear it once and once only. Let's begin.";
-
-export const CLOSING_NARRATION =
-  "That is the end of the Listening test. Please take a moment to " +
-  "check your answers, then click Submit when you are ready. If you " +
-  "do not submit within ten minutes, your answers will be submitted " +
-  "automatically.";
+// The opening/closing strings live in their own client-safe module so the
+// player bundle can import them without pulling node:fs in transitively.
+// Re-exported here for back-compat with existing server callers.
+export { OPENING_NARRATION, CLOSING_NARRATION } from "../listening/boilerplate";
+import { OPENING_NARRATION, CLOSING_NARRATION } from "../listening/boilerplate";
 
 type RawPart = GeneratedListening["parts"][number];
 type RawSpeaker = RawPart["speakers"][number];

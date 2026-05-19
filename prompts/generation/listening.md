@@ -18,9 +18,10 @@ output_format: json
 # IELTS Listening — full 4-part section generation
 
 You are generating one complete IELTS Listening practice section for the
-eLanguage Center platform. A Listening section is the full ~30 minute
-sitting: four parts, played end-to-end, ~10 questions per part. The output
-is a **single JSON object** that conforms exactly to the schema described
+eLanguage Center platform. A Listening section is the full shortened
+four-part sitting we ship in product: four parts, played end-to-end,
+**20–32 questions in total** (usually 5–8 per part). The output is a
+**single JSON object** that conforms exactly to the schema described
 below. No prose outside the JSON. No Markdown code fences. No preamble.
 No trailing commentary.
 
@@ -56,7 +57,7 @@ the `track` tag is required on the output for catalog consistency.
    schema below). DO NOT write `"cells": [["Surname"]]` — write
    `"cells": [[ { "kind": "text", "text": "Surname" } ]]`.
 7. **Question positions are globally unique integers from 0 upwards.**
-   Contiguous numbering is preferred (0, 1, 2, …) but not required.
+   Generate them contiguously (0, 1, 2, …) in section order.
 8. **An `mcq-multi` question counts as ONE Question row, with `pick_count`
    set to the number of correct answers** (always equal to
    `correct.length`). The renderer will display it as "Choose TWO answers"
@@ -188,8 +189,9 @@ columns and one slot per cell.
 
 ## Question mix per part
 
-Each part should contain 5–8 questions. Aim for variety across the five
-supported kinds. A passable per-section distribution is:
+Each part should contain 5–8 questions. Treat this as a hard target, not
+just a style hint. Aim for variety across the five supported kinds. A
+passable per-section distribution is:
 
 - 6–10 `listening-completion-blank` (form/notes/table — most common in
   Part 1 and Part 4)
@@ -310,7 +312,6 @@ allowed. Comments are not allowed.
         }
       ]
     }
-    // ... parts 2, 3, 4 in the same shape
   ],
   "questions": [
     {
@@ -347,7 +348,7 @@ allowed. Comments are not allowed.
     {
       "type": "listening-sentence-completion",
       "position": 4,
-      "prompt": "Complete the sentence using NO MORE THAN ONE WORD AND/OR A NUMBER from the recording.",
+      "prompt": "Complete the sentence using NO MORE THAN TWO WORDS AND/OR A NUMBER from the recording.",
       "points": 1,
       "correct_answer": {
         "stem": "<sentence with ___ marking the blank>",
@@ -389,8 +390,13 @@ re-rolled:
 - For every `completion-blank` question, `block_id` must reference an
   existing block in some part's `completion_blocks`, and `slot_id` must
   reference an existing blank slot within that block.
+- Each part must keep the IELTS Part 1/2/3/4 context pattern, use 5–8
+  question positions, and follow the narrator → preview → listen →
+  speech → end-of-part → reading-pause scaffold.
 - For every question, `position` must appear in exactly one part's
   `question_positions` array.
+- The section must use only `narrator` / `speaker` roles and expose at
+  least three distinct accents across the four parts.
 - For every `mcq-single`, the `correct` id must be one of the option ids.
 - For every `mcq-multi`, every entry of `correct` must be an option id,
   `correct` must have at least 2 entries with no duplicates, and

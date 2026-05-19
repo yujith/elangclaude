@@ -61,7 +61,7 @@ describe("createListeningGenerator — happy path", () => {
     });
     expect(result.attempts).toBe(1);
     expect(result.value.parts).toHaveLength(4);
-    expect(result.value.questions.length).toBeGreaterThanOrEqual(12);
+    expect(result.value.questions.length).toBeGreaterThanOrEqual(20);
     expect(ai.recorded[0]?.system).toBe(PROMPT_BODY);
     expect(ai.recorded[0]?.messages[0]?.content).toMatch(/Academic/);
   });
@@ -93,10 +93,9 @@ describe("createListeningGenerator — retry", () => {
 });
 
 describe("createListeningGenerator — validation", () => {
-  it("silently drops an ungrounded answer (cleaner) rather than rejecting the whole section", async () => {
+  it("rejects when cleaning an ungrounded answer would leave a part below the 5-question floor", async () => {
     const broken = validatorCleanGeneration();
     const q = broken.questions[1]!;
-    const droppedPosition = q.position;
     if (q.type === "listening-sentence-completion") {
       q.correct_answer.accepted = ["unobtainium"];
     } else {
@@ -104,23 +103,16 @@ describe("createListeningGenerator — validation", () => {
     }
     const ai = makeAi([{ text: JSON.stringify(broken) }]);
     const gen = createListeningGenerator({ ai, loadPrompt: loader });
-    const result = await gen.generate({
-      ctx: CTX,
-      track: "Academic",
-      difficulty: 3,
-    });
-    // The bad question is gone; the rest of the section ships.
-    expect(result.value.questions.length).toBe(broken.questions.length - 1);
-    expect(
-      result.value.questions.some((q) => q.position === droppedPosition),
-    ).toBe(false);
-    expect(result.droppedQuestions).toHaveLength(1);
-    expect(result.droppedQuestions[0]!.reason).toBe(
-      "answer-not-in-transcript",
-    );
+    await expect(
+      gen.generate({
+        ctx: CTX,
+        track: "Academic",
+        difficulty: 3,
+      }),
+    ).rejects.toBeInstanceOf(GenerationValidationError);
   });
 
-  it("does reject if the cleaner has to drop so many questions that fewer than 10 remain", async () => {
+  it("does reject if the cleaner has to drop so many questions that fewer than 20 remain", async () => {
     const broken = validatorCleanGeneration();
     // Wipe accepted strings on every completion-style question — cleaner
     // ends up dropping more than we can spare.

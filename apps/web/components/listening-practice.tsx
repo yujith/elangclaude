@@ -30,7 +30,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { CLOSING_NARRATION, OPENING_NARRATION } from "@elc/ai";
+// Deep import — `@elc/ai` (the barrel) transitively loads the generation
+// prompt loader, which calls node:fs. That dependency is fine on the
+// server but breaks Turbopack's client chunking. Bypass via the
+// no-import sub-path so the client bundle only pulls in two strings.
+import {
+  CLOSING_NARRATION,
+  OPENING_NARRATION,
+} from "@elc/ai/listening/boilerplate";
 import {
   autosaveListeningAnswer,
   issueSignedAudioUrl,

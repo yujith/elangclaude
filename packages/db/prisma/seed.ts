@@ -26,8 +26,13 @@ const ORG_A: OrgSpec = {
   id: "seed_org_demo_english_academy",
   name: "Demo English Academy",
   seat_limit: 25,
-  quota_daily: 100,
-  quota_monthly: 2000,
+  // Dev-only quota — ORG_A houses the SuperAdmin who exercises every
+  // generation + approval flow. Approving one Listening test triggers
+  // ~55 gateway-counted TTS synth calls; production orgs would never see
+  // that profile, so the seed-time quota sits well above prod defaults
+  // to keep dev iteration unblocked.
+  quota_daily: 2000,
+  quota_monthly: 40000,
 };
 
 const ORG_B: OrgSpec = {

@@ -72,7 +72,7 @@ describe("validateGeneratedListening — position issues", () => {
 describe("validateGeneratedListening — speaker + preview issues", () => {
   it("rejects a speech segment referencing an unknown speaker_id", () => {
     const v = validatorFixture() as GeneratedListening;
-    const seg = v.parts[0]!.transcript[2];
+    const seg = v.parts[0]!.transcript.find((segment) => segment.kind === "speech");
     if (seg && seg.kind === "speech") {
       seg.speaker_id = "ghost";
     } else {
@@ -89,7 +89,9 @@ describe("validateGeneratedListening — speaker + preview issues", () => {
 
   it("rejects a questions-preview that points outside the part", () => {
     const v = validatorFixture() as GeneratedListening;
-    const seg = v.parts[0]!.transcript[1];
+    const seg = v.parts[0]!.transcript.find(
+      (segment) => segment.kind === "questions-preview",
+    );
     if (seg && seg.kind === "questions-preview") {
       seg.question_positions = [99];
     } else {
@@ -100,6 +102,82 @@ describe("validateGeneratedListening — speaker + preview issues", () => {
     if (!r.ok) {
       expect(
         r.issues.some((i) => i.code === "preview.position-outside-part"),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects a part that uses the wrong IELTS context", () => {
+    const v = validatorFixture() as GeneratedListening;
+    v.parts[0]!.context = "academic";
+    const r = validateGeneratedListening(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.issues.some((i) => i.code === "part.context-mismatch")).toBe(
+        true,
+      );
+    }
+  });
+
+  it("rejects a part that uses the examiner role", () => {
+    const v = validatorFixture() as GeneratedListening;
+    v.parts[0]!.speakers[1]!.role = "examiner";
+    const r = validateGeneratedListening(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some((i) => i.code === "part.invalid-speaker-role"),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects a section with too little accent variety", () => {
+    const v = validatorFixture() as GeneratedListening;
+    for (const part of v.parts) {
+      for (const speaker of part.speakers) {
+        speaker.accent = "british";
+      }
+    }
+    const r = validateGeneratedListening(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some((i) => i.code === "section.accent-variety-too-low"),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects a part whose transcript does not begin with the canonical IELTS scaffold", () => {
+    const v = validatorFixture() as GeneratedListening;
+    const opening = v.parts[0]!.transcript[0];
+    if (opening && opening.kind === "narration") {
+      opening.text = "Now turn to Part 1.";
+    } else {
+      throw new Error("fixture mis-shaped");
+    }
+    const r = validateGeneratedListening(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some((i) => i.code === "transcript.invalid-ielts-structure"),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects a part when not every question is covered by preview time", () => {
+    const v = validatorFixture() as GeneratedListening;
+    const preview = v.parts[0]!.transcript.find(
+      (segment) => segment.kind === "questions-preview",
+    );
+    if (preview && preview.kind === "questions-preview") {
+      preview.question_positions = [0, 1, 2, 3];
+    } else {
+      throw new Error("fixture mis-shaped");
+    }
+    const r = validateGeneratedListening(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some((i) => i.code === "preview.incomplete-coverage"),
       ).toBe(true);
     }
   });

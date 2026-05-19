@@ -92,7 +92,7 @@ function trackLabel(track: GenerateListeningRequest["track"]): string {
 
 function userTurn(req: GenerateListeningRequest): string {
   const lines: string[] = [
-    `Generate one IELTS Listening section (4 parts, ~20-32 questions total).`,
+    `Generate one IELTS Listening section (4 parts, 20-32 questions total).`,
     ``,
     `Track: ${trackLabel(req.track)}`,
     `Difficulty: ${req.difficulty} (1=easy ~band 5.0, 5=hard ~band 8.0)`,
@@ -104,10 +104,14 @@ function userTurn(req: GenerateListeningRequest): string {
     ``,
     `Reminders:`,
     `- Exactly 4 parts in order 1..4.`,
+    `- Each part needs 5-8 questions.`,
+    `- Part 1 = social with 2 scene speakers; Part 2 = social with 1 scene speaker; Part 3 = academic with 2-4 scene speakers; Part 4 = academic with 1 scene speaker.`,
+    `- Each part transcript must open with "Part N.", then "You will hear ...", then a preview cue, a questions-preview segment, and "Now listen carefully ..."; it must end with the end-of-part check cue and a reading-pause.`,
     `- Every accepted answer string for completion / sentence / short-answer questions MUST appear in the parent part's transcript.`,
     `- Slot ids globally unique across all completion_blocks.`,
     `- Question positions globally unique; each appears in exactly one part's question_positions.`,
     `- mcq-multi is ONE Question row with pick_count = correct.length.`,
+    `- Use only narrator/speaker roles and cover at least three accents across the full section.`,
     ``,
     `Return ONLY the JSON object described in the schema above. No prose, no markdown fences.`,
   );
@@ -169,19 +173,6 @@ export function createListeningGenerator(deps: ListeningGeneratorDeps) {
         throw new GenerationValidationError(validation.issues);
       }
 
-      // After cleaning we might be below the schema's questions.min(10)
-      // floor. Re-check that explicitly so the operator sees a clear
-      // "too many bad questions, re-roll" signal instead of a silent
-      // half-section ship.
-      if (cleanResult.cleaned.questions.length < 10) {
-        throw new GenerationValidationError([
-          {
-            code: "answer.not-in-transcript",
-            message: `Cleaner dropped ${cleanResult.droppedQuestions.length} questions; only ${cleanResult.cleaned.questions.length} remain (need ≥ 10). Re-roll.`,
-          },
-        ]);
-      }
-
       // Cross-check the requested track matches what the model produced.
       // Listening content is track-agnostic in practice (ADR 0006-style
       // reasoning), but the caller asked for a specific tag and a
@@ -190,7 +181,7 @@ export function createListeningGenerator(deps: ListeningGeneratorDeps) {
       if (cleanResult.cleaned.track !== req.track) {
         throw new GenerationValidationError([
           {
-            code: "positions.question-not-in-any-part",
+            code: "track.mismatch",
             message: `Model returned track ${cleanResult.cleaned.track}, caller asked for ${req.track}.`,
           },
         ]);

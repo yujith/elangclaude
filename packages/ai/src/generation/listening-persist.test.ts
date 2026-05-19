@@ -202,9 +202,12 @@ describe("persistGeneratedListening — IELTS boilerplate injection", () => {
     expect(last4[last4.length - 1]!.text).toMatch(
       /^That is the end of the Listening test\./,
     );
-    expect(last4[last4.length - 2]!.text).not.toMatch(
-      /^That is the end of the Listening test\./,
-    );
+    const closingCount = last4.filter(
+      (segment) =>
+        segment.kind === "narration" &&
+        /^That is the end of the Listening test\./.test(segment.text ?? ""),
+    ).length;
+    expect(closingCount).toBe(1);
   });
 
   it("still produces a body_json the runtime parser accepts after injection", async () => {
