@@ -88,7 +88,7 @@ export default async function MockResultPage({
     session.track === "Academic" ? "Academic" : "General Training";
 
   return (
-    <section className="px-6 py-12 md:py-16">
+    <section className="bg-brand-grey-50 px-6 py-12 md:py-16">
       <div className="mx-auto max-w-4xl space-y-8">
         <header>
           <p className="font-body text-sm uppercase tracking-widest text-brand-red">

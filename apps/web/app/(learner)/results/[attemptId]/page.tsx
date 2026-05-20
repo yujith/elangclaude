@@ -200,7 +200,7 @@ export default async function ResultsPage({
     );
     if (parsed.success) {
       return (
-        <section className="px-6 py-12 md:py-16">
+        <section className="bg-brand-grey-50 px-6 py-12 md:py-16">
           <div className="mx-auto max-w-4xl">
             <header className="mb-8">
               <p className="font-body text-sm uppercase tracking-widest text-brand-red">
@@ -254,7 +254,7 @@ export default async function ResultsPage({
 
   const errorKind = sp.error;
   return (
-    <section className="px-6 py-16 md:py-24">
+    <section className="bg-brand-grey-50 px-6 py-16 md:py-24">
       <div className="mx-auto max-w-2xl">
         <header className="mb-6">
           <p className="font-body text-sm uppercase tracking-widest text-brand-red">
@@ -328,7 +328,7 @@ function FailureCard({
   backLabel: string;
 }) {
   return (
-    <section className="px-6 py-16 md:py-24">
+    <section className="bg-brand-grey-50 px-6 py-16 md:py-24">
       <div className="mx-auto max-w-2xl">
         <header className="mb-6">
           <p className="font-body text-sm uppercase tracking-widest text-brand-red">

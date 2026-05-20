@@ -11,7 +11,7 @@ export function ListeningResult({ grade }: Props) {
       ? Math.round((grade.raw_correct / grade.raw_total) * 100)
       : 0;
   return (
-    <section className="px-6 py-12 md:py-16">
+    <section className="bg-brand-grey-50 px-6 py-12 md:py-16">
       <div className="mx-auto max-w-4xl">
         <header className="mb-8">
           <p className="font-body text-sm uppercase tracking-widest text-brand-red">

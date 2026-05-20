@@ -34,8 +34,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full">
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className="min-h-full bg-brand-grey-50">
+      <body className="min-h-full flex flex-col bg-brand-grey-50">{children}</body>
     </html>
   );
 }
