@@ -1,7 +1,20 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { prisma } from "@elc/db/client";
+import type { Role } from "@elc/db";
 import { devLogin } from "./actions";
+
+function defaultLandingFor(role: Role): string {
+  switch (role) {
+    case "SuperAdmin":
+      return "/content/reading";
+    case "OrgAdmin":
+      return "/admin";
+    case "Learner":
+    default:
+      return "/practice/writing";
+  }
+}
 
 export const metadata: Metadata = {
   title: "Dev login",
@@ -18,7 +31,10 @@ export default async function DevLoginPage({
   if (process.env.NODE_ENV === "production") notFound();
 
   const params = await searchParams;
-  const redirectTo = params.to ?? "/practice/writing";
+  // Honor the middleware-supplied ?to= for everyone. When absent (someone
+  // hit /dev/login directly), default each user to a role-appropriate
+  // landing page so OrgAdmins don't get dumped into /practice/writing.
+  const explicitRedirect = params.to;
 
   const users = await prisma.user.findMany({
     select: {
@@ -87,7 +103,7 @@ export default async function DevLoginPage({
                         <input
                           type="hidden"
                           name="redirectTo"
-                          value={redirectTo}
+                          value={explicitRedirect ?? defaultLandingFor(u.role)}
                         />
                         <button
                           type="submit"
