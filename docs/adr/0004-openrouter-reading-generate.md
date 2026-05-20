@@ -59,10 +59,11 @@ Each generation call is hard-capped at:
 
 - **Input tokens:** prompt is ~3,000 tokens (the canonical prompt at
   `prompts/generation/reading.md` plus a system header).
-- **Output tokens:** `max_tokens = 4000`. A full passage + 6–10 questions
-  + answer key in the structured JSON fits comfortably under this.
+- **Output tokens:** `max_tokens = 6000`. A full passage + 6–10 questions
+  + answer key in the structured JSON fits comfortably under this, with
+  enough headroom for validator repair attempts that need a longer passage.
 - **Worst-case cost per call (Gemini 2.0 Flash, May 2026 rates):** roughly
-  US$0.0006 input + US$0.0024 output = **~$0.003 per generation**.
+  US$0.0006 input + US$0.0036 output = **~$0.004 per generation attempt**.
 - **Llama 3.3 / Mistral Large fallback ceiling:** ~$0.01 per call.
 
 These numbers go in the cost dashboard alongside the existing Writing
@@ -83,19 +84,25 @@ admin's or a learner's. Implications:
 - The existing gateway-level `reserveQuota` / `refundQuota` covers
   generation exactly as it covers grading. No new accounting required.
 
-### D5 — Validator-rejection threshold gate
+### D5 — Validator repair attempts and rejection threshold gate
 
-A generation is rejected at the validator step when any of the following
-fails:
+The generator may make up to three attempts for a single request. Malformed
+JSON/schema failures get a strict JSON reminder. Schema-valid but
+semantically invalid Reading output gets a validator-specific repair prompt
+with stable issue codes. A generation is rejected at the validator step only
+after the retry budget is exhausted and any of the following still fails:
 
 - The output is not valid JSON, or does not match the Zod schema.
-- A `sentence-completion`, `short-answer`, or `completion-blank` accepted
-  string is not locatable in the passage (soft-normalised substring
-  search).
-- A `matching-information` correct paragraph label does not match any
-  paragraph on the passage.
+- A `sentence-completion` or `short-answer` accepted string is not locatable
+  in the passage (soft-normalised substring search).
+- The correct MCQ option is not grounded in any substantive passage token
+  or number.
 - The passage word count falls outside 600–950 (Academic) or 400–800
   (GeneralTraining).
+- General Training output omits `passage.gt_context`.
+- Paragraph count, paragraph labels, question count, or question positions
+  drift from the Reading prompt contract.
+- The model returns a different `track` from the caller's requested track.
 
 The gate for opening generation beyond SuperAdmin is **validator-
 rejection rate ≤ 30%** over a rolling sample of at least 20 generations.

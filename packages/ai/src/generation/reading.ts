@@ -11,8 +11,8 @@
 //   QuotaExceededError       → caller already at daily limit.
 //   ModelNotAllowedError     → registry misconfigured (programming error).
 //   ProviderError            → OpenRouter failed (502 upstream).
-//   GenerationShapeError     → JSON / schema rejected after one retry.
-//   GenerationValidationError→ schema OK but content rejected (re-roll).
+//   GenerationShapeError     → JSON / schema rejected after retry budget.
+//   GenerationValidationError→ schema OK but content rejected after retry budget.
 
 import type { OrgContext } from "@elc/db";
 import { ai as productionAi } from "../gateway";
@@ -28,9 +28,14 @@ import {
   parseGeneratedReading,
   type GeneratedReading,
 } from "./schema";
-import { validateGeneratedReading } from "./validate";
+import {
+  validateGeneratedReading,
+  type ValidationIssue,
+  type ValidationResult,
+} from "./validate";
 
-const MAX_OUTPUT_TOKENS = 4000;
+const MAX_OUTPUT_TOKENS = 6000;
+const MAX_GENERATION_ATTEMPTS = 3;
 const STRICTER_RETRY_NUDGE =
   "Your previous response was not valid JSON or did not match the required schema. " +
   "Return ONLY a single JSON object that matches the schema. " +
@@ -98,6 +103,15 @@ function userTurn(req: GenerateReadingRequest): string {
   }
   lines.push(
     ``,
+    `Structure reminders:`,
+    req.track === "Academic"
+      ? `- Academic outputs need 5-7 paragraphs labelled A.. and 6-10 questions.`
+      : `- General Training outputs need 4-6 paragraphs labelled A.., 6-10 questions, and a required passage.gt_context value.`,
+    `- Use contiguous 0-indexed question positions in display order.`,
+    `- Every accepted answer for sentence-completion and short-answer questions must be a literal passage substring.`,
+  );
+  lines.push(
+    ``,
     `Before you submit, count the words in the passage paragraphs. If the total is below the minimum above, rewrite a longer passage rather than truncate.`,
     ``,
     `Return ONLY the JSON object described in the schema above. No prose, no markdown fences.`,
@@ -105,72 +119,125 @@ function userTurn(req: GenerateReadingRequest): string {
   return lines.join("\n");
 }
 
+function validationAdvice(issue: ValidationIssue): string {
+  switch (issue.code) {
+    case "track.mismatch":
+      return "Set the top-level track exactly to the requested track and follow that track's passage rules.";
+    case "passage.too-short":
+      return "Expand the passage paragraphs before returning JSON; Academic should land around 750-850 words and General Training around 550-700 words.";
+    case "passage.too-long":
+      return "Condense the passage paragraphs while preserving enough detail for the answers.";
+    case "passage.missing-gt-context":
+      return 'For General Training, include passage.gt_context as "social-survival", "workplace", or "general-reading".';
+    case "passage.too-few-paragraphs":
+    case "passage.too-many-paragraphs":
+      return "Use exactly 5-7 paragraphs for Academic or 4-6 paragraphs for General Training.";
+    case "passage.invalid-paragraph-labels":
+      return 'Label paragraphs sequentially from "A" with no gaps or repeats.';
+    case "questions.too-few":
+    case "questions.too-many":
+      return "Return 6-10 Reading questions total.";
+    case "questions.non-contiguous-positions":
+      return "Set question positions to 0, 1, 2, ... in display order with no gaps.";
+    case "completion.answer-not-in-passage":
+      return "For sentence-completion questions, every accepted answer must be a literal passage substring.";
+    case "short-answer.answer-not-in-passage":
+      return "For short-answer questions, every accepted answer must be a literal passage substring.";
+    case "mcq.correct-not-grounded":
+      return "Rewrite the correct MCQ option so it is clearly grounded in words, numbers, or facts present in the passage.";
+  }
+}
+
+function validationRetryNudge(issues: ValidationIssue[]): string {
+  const lines = [
+    "Your previous JSON parsed, but failed the Reading content validator.",
+    "Return a complete replacement JSON object, not a patch. Fix every issue below:",
+  ];
+  for (const issue of issues) {
+    lines.push(
+      `- ${issue.code}: ${issue.message} ${validationAdvice(issue)}`,
+    );
+  }
+  lines.push(
+    "Re-count the passage words, paragraph labels, question count, and question positions before returning.",
+    "Return ONLY the corrected JSON object. No prose, no markdown fences.",
+  );
+  return lines.join("\n");
+}
+
+function validateForRequest(
+  value: GeneratedReading,
+  req: GenerateReadingRequest,
+): ValidationResult {
+  const validation = validateGeneratedReading(value);
+  const issues = validation.ok ? [] : [...validation.issues];
+  if (value.track !== req.track) {
+    issues.push({
+      code: "track.mismatch",
+      message: `Model returned track ${value.track}, caller asked for ${req.track}.`,
+    });
+  }
+  return issues.length === 0 ? { ok: true } : { ok: false, issues };
+}
+
 export function createReadingGenerator(deps: ReadingGeneratorDeps) {
   return {
     async generate(req: GenerateReadingRequest): Promise<GenerateReadingResult> {
       const system = deps.loadPrompt("reading");
       const turn1 = userTurn(req);
+      const messages: { role: "user" | "assistant"; content: string }[] = [
+        { role: "user", content: turn1 },
+      ];
+      let last:
+        | {
+            text: string;
+            model: string;
+            usage: { input_tokens: number; output_tokens: number };
+          }
+        | null = null;
 
-      const first = await deps.ai.chat({
-        ctx: req.ctx,
-        purpose: "reading-generate",
-        system,
-        messages: [{ role: "user", content: turn1 }],
-        maxTokens: MAX_OUTPUT_TOKENS,
-      });
-
-      let parsed = parseGeneratedReading(first.text);
-      let attempts = 1;
-      let last = first;
-
-      if (!parsed.ok) {
-        // One retry, including the model's own malformed output so it can
-        // see and fix it. Mirrors the writingGrader pattern.
-        const second = await deps.ai.chat({
+      for (let attempts = 1; attempts <= MAX_GENERATION_ATTEMPTS; attempts++) {
+        last = await deps.ai.chat({
           ctx: req.ctx,
           purpose: "reading-generate",
           system,
-          messages: [
-            { role: "user", content: turn1 },
-            { role: "assistant", content: first.text },
-            { role: "user", content: STRICTER_RETRY_NUDGE },
-          ],
+          messages,
           maxTokens: MAX_OUTPUT_TOKENS,
         });
-        attempts = 2;
-        last = second;
-        parsed = parseGeneratedReading(second.text);
+
+        const parsed = parseGeneratedReading(last.text);
         if (!parsed.ok) {
-          throw new GenerationShapeError(parsed.issues, parsed.raw);
+          if (attempts === MAX_GENERATION_ATTEMPTS) {
+            throw new GenerationShapeError(parsed.issues, parsed.raw);
+          }
+          messages.push(
+            { role: "assistant", content: last.text },
+            { role: "user", content: STRICTER_RETRY_NUDGE },
+          );
+          continue;
         }
+
+        const validation = validateForRequest(parsed.value, req);
+        if (!validation.ok) {
+          if (attempts === MAX_GENERATION_ATTEMPTS) {
+            throw new GenerationValidationError(validation.issues);
+          }
+          messages.push(
+            { role: "assistant", content: last.text },
+            { role: "user", content: validationRetryNudge(validation.issues) },
+          );
+          continue;
+        }
+
+        return {
+          value: parsed.value,
+          model: last.model,
+          usage: last.usage,
+          attempts,
+        };
       }
 
-      // Schema parsed — now the semantic validator. The validator does
-      // not retry: a re-roll is the caller's decision, not the
-      // generator's.
-      const validation = validateGeneratedReading(parsed.value);
-      if (!validation.ok) {
-        throw new GenerationValidationError(validation.issues);
-      }
-
-      // Cross-check the requested track matches what the model produced.
-      // The schema allows either value, but the caller asked for one
-      // specifically; mismatch is a re-roll-worthy content failure.
-      if (parsed.value.track !== req.track) {
-        throw new GenerationValidationError([
-          {
-            code: "passage.too-short",
-            message: `Model returned track ${parsed.value.track}, caller asked for ${req.track}.`,
-          },
-        ]);
-      }
-
-      return {
-        value: parsed.value,
-        model: last.model,
-        usage: last.usage,
-        attempts,
-      };
+      throw new GenerationShapeError([], last?.text ?? "");
     },
   };
 }

@@ -76,7 +76,8 @@ is treated as a hard validation failure.
     descriptions, contracts).
   - `"general-reading"` — longer magazine-style or general-interest
     articles (usually slightly more formal; one is enough per mock).
-  - Pick the closest match; if genuinely ambiguous, omit the field.
+  - Pick the closest match. General Training outputs MUST include one of
+    these three values.
 
 ## Question mix
 
@@ -106,7 +107,6 @@ allowed. Comments are not allowed.
       { "label": "B", "text": "<paragraph B prose>" }
     ],
     "gt_context": "social-survival" | "workplace" | "general-reading"
-    // (gt_context is OPTIONAL — required for GT outputs, omit on Academic)
   },
   "questions": [
     {

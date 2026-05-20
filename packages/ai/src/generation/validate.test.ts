@@ -19,9 +19,11 @@ function baseAcademicValue(): GeneratedReading {
     passage: {
       title: "A short history of paper",
       paragraphs: [
-        { label: "A", text: bigParagraph(PASSAGE_TEXT, 5) },
-        { label: "B", text: bigParagraph(PASSAGE_TEXT, 5) },
-        { label: "C", text: bigParagraph(PASSAGE_TEXT, 5) },
+        { label: "A", text: bigParagraph(PASSAGE_TEXT, 3) },
+        { label: "B", text: bigParagraph(PASSAGE_TEXT, 3) },
+        { label: "C", text: bigParagraph(PASSAGE_TEXT, 3) },
+        { label: "D", text: bigParagraph(PASSAGE_TEXT, 3) },
+        { label: "E", text: bigParagraph(PASSAGE_TEXT, 3) },
       ],
     },
     questions: [
@@ -45,6 +47,36 @@ function baseAcademicValue(): GeneratedReading {
             { id: "B", text: "papyrus reeds" },
           ],
           correct: "A",
+        },
+      },
+      {
+        type: "reading-short-answer",
+        position: 2,
+        prompt: "What could not keep pace with demand from printing?",
+        correct_answer: {
+          word_limit: 4,
+          accepted: ["the supply of rags"],
+        },
+      },
+      {
+        type: "reading-true-false-not-given",
+        position: 3,
+        prompt: "The passage says demand from printing increased.\n\nTrue / False / Not Given",
+        correct_answer: { correct: "true" },
+      },
+      {
+        type: "reading-yes-no-not-given",
+        position: 4,
+        prompt: "The author approves of bark-based paper.\n\nYes / No / Not Given",
+        correct_answer: { correct: "not given" },
+      },
+      {
+        type: "reading-short-answer",
+        position: 5,
+        prompt: "In which year did wood-based processes replace older recipes?",
+        correct_answer: {
+          word_limit: 1,
+          accepted: ["1843"],
         },
       },
     ],
@@ -113,15 +145,76 @@ describe("validateGeneratedReading", () => {
   it("uses the GT window for GeneralTraining", () => {
     const v = baseAcademicValue();
     v.track = "GeneralTraining";
+    v.passage.gt_context = "workplace";
     // Shrink the passage to ~150 words — below GT's 400-word minimum.
     v.passage.paragraphs = [
       { label: "A", text: PASSAGE_TEXT },
       { label: "B", text: PASSAGE_TEXT },
+      { label: "C", text: PASSAGE_TEXT },
+      { label: "D", text: PASSAGE_TEXT },
     ];
     const r = validateGeneratedReading(v);
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.issues.some((i) => i.code === "passage.too-short")).toBe(true);
+    }
+  });
+
+  it("requires gt_context on GeneralTraining passages", () => {
+    const v = baseAcademicValue();
+    v.track = "GeneralTraining";
+    const r = validateGeneratedReading(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some((i) => i.code === "passage.missing-gt-context"),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects Academic passages with too few paragraphs", () => {
+    const v = baseAcademicValue();
+    v.passage.paragraphs = v.passage.paragraphs.slice(0, 4);
+    const r = validateGeneratedReading(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some((i) => i.code === "passage.too-few-paragraphs"),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects non-sequential paragraph labels", () => {
+    const v = baseAcademicValue();
+    v.passage.paragraphs[2]!.label = "F";
+    const r = validateGeneratedReading(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some((i) => i.code === "passage.invalid-paragraph-labels"),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects Reading generations with fewer than 6 questions", () => {
+    const v = baseAcademicValue();
+    v.questions = v.questions.slice(0, 5);
+    const r = validateGeneratedReading(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.issues.some((i) => i.code === "questions.too-few")).toBe(true);
+    }
+  });
+
+  it("rejects non-contiguous question positions", () => {
+    const v = baseAcademicValue();
+    v.questions[5]!.position = 7;
+    const r = validateGeneratedReading(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some((i) => i.code === "questions.non-contiguous-positions"),
+      ).toBe(true);
     }
   });
 });

@@ -19,8 +19,16 @@ import type {
 export type ValidationIssue = {
   // Stable code for telemetry. The SuperAdmin UI can group by code.
   code:
+    | "track.mismatch"
     | "passage.too-short"
     | "passage.too-long"
+    | "passage.missing-gt-context"
+    | "passage.too-few-paragraphs"
+    | "passage.too-many-paragraphs"
+    | "passage.invalid-paragraph-labels"
+    | "questions.too-few"
+    | "questions.too-many"
+    | "questions.non-contiguous-positions"
     | "completion.answer-not-in-passage"
     | "short-answer.answer-not-in-passage"
     | "mcq.correct-not-grounded";
@@ -36,6 +44,9 @@ export type ValidationResult =
 
 const ACADEMIC_WINDOW = { min: 600, max: 950 } as const;
 const GT_WINDOW = { min: 400, max: 800 } as const;
+const ACADEMIC_PARAGRAPHS = { min: 5, max: 7 } as const;
+const GT_PARAGRAPHS = { min: 4, max: 6 } as const;
+const QUESTION_COUNT = { min: 6, max: 10 } as const;
 
 function wordCount(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -62,6 +73,80 @@ function inHaystack(haystack: string, needle: string): boolean {
   const n = softNormalize(needle);
   if (n.length === 0) return false;
   return haystack.includes(n);
+}
+
+function expectedParagraphLabel(index: number): string {
+  return String.fromCharCode("A".charCodeAt(0) + index);
+}
+
+function validatePassageContract(
+  value: GeneratedReading,
+  issues: ValidationIssue[],
+): void {
+  if (value.track === "GeneralTraining" && !value.passage.gt_context) {
+    issues.push({
+      code: "passage.missing-gt-context",
+      message: "General Training passages must include passage.gt_context.",
+    });
+  }
+
+  const range =
+    value.track === "Academic" ? ACADEMIC_PARAGRAPHS : GT_PARAGRAPHS;
+  const count = value.passage.paragraphs.length;
+  if (count < range.min) {
+    issues.push({
+      code: "passage.too-few-paragraphs",
+      message: `${value.track} passages need ${range.min}-${range.max} paragraphs; found ${count}.`,
+    });
+  } else if (count > range.max) {
+    issues.push({
+      code: "passage.too-many-paragraphs",
+      message: `${value.track} passages need ${range.min}-${range.max} paragraphs; found ${count}.`,
+    });
+  }
+
+  for (let i = 0; i < value.passage.paragraphs.length; i++) {
+    const paragraph = value.passage.paragraphs[i]!;
+    const expected = expectedParagraphLabel(i);
+    if (paragraph.label !== expected) {
+      issues.push({
+        code: "passage.invalid-paragraph-labels",
+        message: `Paragraph ${i + 1} should be labelled "${expected}" but found "${paragraph.label}".`,
+      });
+      return;
+    }
+  }
+}
+
+function validateQuestionContract(
+  value: GeneratedReading,
+  issues: ValidationIssue[],
+): void {
+  const count = value.questions.length;
+  if (count < QUESTION_COUNT.min) {
+    issues.push({
+      code: "questions.too-few",
+      message: `Reading generations need ${QUESTION_COUNT.min}-${QUESTION_COUNT.max} questions; found ${count}.`,
+    });
+  } else if (count > QUESTION_COUNT.max) {
+    issues.push({
+      code: "questions.too-many",
+      message: `Reading generations need ${QUESTION_COUNT.min}-${QUESTION_COUNT.max} questions; found ${count}.`,
+    });
+  }
+
+  const positions = value.questions
+    .map((q) => q.position)
+    .sort((a, b) => a - b);
+  for (let i = 0; i < positions.length; i++) {
+    if (positions[i] !== i) {
+      issues.push({
+        code: "questions.non-contiguous-positions",
+        message: `Question positions must be 0-indexed and contiguous; found [${positions.join(", ")}].`,
+      });
+      return;
+    }
+  }
 }
 
 function validateCompletionOrShortAnswer(
@@ -134,6 +219,9 @@ export function validateGeneratedReading(
   value: GeneratedReading,
 ): ValidationResult {
   const issues: ValidationIssue[] = [];
+
+  validatePassageContract(value, issues);
+  validateQuestionContract(value, issues);
 
   const wc = passageWordCount(value);
   const win = value.track === "Academic" ? ACADEMIC_WINDOW : GT_WINDOW;

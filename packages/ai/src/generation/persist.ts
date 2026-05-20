@@ -29,6 +29,19 @@ function questionPayloadToJson(
   return q.correct_answer as unknown as Prisma.InputJsonValue;
 }
 
+function passageBodyJson(value: GeneratedReading): Prisma.InputJsonValue {
+  return {
+    ...(value.passage.title ? { title: value.passage.title } : {}),
+    paragraphs: value.passage.paragraphs,
+    // gt_context only meaningful on GT outputs; we still pass it
+    // through on Academic outputs if the model bothered to set it,
+    // since the picker ignores it for Academic anyway.
+    ...(value.passage.gt_context
+      ? { gt_context: value.passage.gt_context }
+      : {}),
+  } as unknown as Prisma.InputJsonValue;
+}
+
 export async function persistGeneratedReading(
   db: PersistGeneratedDb,
   value: GeneratedReading,
@@ -53,16 +66,7 @@ export async function persistGeneratedReading(
       difficulty: opts.difficulty ?? value.difficulty,
       // PendingReview rows have no approver until Phase 6 promotes them.
       status: "PendingReview",
-      body_json: {
-        title: value.passage.title,
-        paragraphs: value.passage.paragraphs,
-        // gt_context only meaningful on GT outputs; we still pass it
-        // through on Academic outputs if the model bothered to set it,
-        // since the picker ignores it for Academic anyway.
-        ...(value.passage.gt_context
-          ? { gt_context: value.passage.gt_context }
-          : {}),
-      } as unknown as Prisma.InputJsonValue,
+      body_json: passageBodyJson(value),
     },
     select: { id: true },
   });
