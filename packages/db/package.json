@@ -8,6 +8,7 @@
     "./client": "./src/client.ts",
     "./tenancy": "./src/tenancy.ts",
     "./admin-invite": "./src/admin-invite.ts",
+    "./org-learner-admin": "./src/org-learner-admin.ts",
     "./super-user-admin": "./src/super-user-admin.ts",
     "./super-metrics": "./src/super-metrics.ts"
   },
