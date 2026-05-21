@@ -6,46 +6,95 @@
 // unscoped anyway — so we use withSuperAdminContext() per the multi-
 // tenancy rule. NEVER mix the two helpers in the same function.
 //
-// ActivityLog rows are tenant-scoped, so we log under the SuperAdmin's
-// home org. That's the same org that bears the generation cost (ADR
-// 0004 D4). When the SuperAdmin moves to a dedicated "system" org in a
-// later phase, these logs follow.
+// ActivityLog rows are tenant-scoped, so we park super-level events under
+// the singleton SYSTEM_ORG_ID. OrgAdmin views never see these because
+// withOrg() filters by the caller's org_id.
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma, withSuperAdminContext } from "@elc/db";
+import { Prisma, SYSTEM_ORG_ID, withSuperAdminContext } from "@elc/db";
 import { requireRole } from "@/lib/auth/context";
+import {
+  serializeReadingIssueCodes,
+  validateReadingReviewRecord,
+} from "@/lib/reading/review-validation";
 
 export type ModerationResult =
   | { ok: true }
   | { ok: false; error: "not_found" | "wrong_state" | "wrong_section" };
 
-async function loadTestForModeration(
-  testId: string,
-): Promise<{
+type SuperAdminDb = ReturnType<typeof withSuperAdminContext>;
+
+type ReadingModerationRecord = {
   id: string;
+  track: "Academic" | "GeneralTraining";
+  difficulty: number;
   status: "Draft" | "PendingReview" | "Approved" | "Rejected";
   section: "Reading" | "Listening" | "Writing" | "Speaking";
-} | null> {
-  const ctx = await requireRole("SuperAdmin");
-  const db = withSuperAdminContext(ctx);
-  const test = await db.test.findUnique({
+  body_json: unknown;
+  questions: {
+    id: string;
+    type: string;
+    prompt: string;
+    position: number;
+    correct_answer: unknown;
+  }[];
+};
+
+async function loadTestForModeration(
+  db: SuperAdminDb,
+  testId: string,
+): Promise<ReadingModerationRecord | null> {
+  return db.test.findUnique({
     where: { id: testId },
-    select: { id: true, status: true, section: true },
+    select: {
+      id: true,
+      track: true,
+      difficulty: true,
+      status: true,
+      section: true,
+      body_json: true,
+      questions: {
+        select: {
+          id: true,
+          type: true,
+          prompt: true,
+          position: true,
+          correct_answer: true,
+        },
+        orderBy: { position: "asc" },
+      },
+    },
   });
-  return test;
+}
+
+function readTestId(formData: FormData): string {
+  const testId = formData.get("testId");
+  if (typeof testId !== "string" || testId.length === 0) {
+    throw new Error("Missing testId.");
+  }
+  return testId;
+}
+
+function redirectWithValidationFailure(
+  path: string,
+  result: Extract<ReturnType<typeof validateReadingReviewRecord>, { ok: false }>,
+): never {
+  const params = new URLSearchParams({ approve_error: result.reason });
+  const issueCodes = serializeReadingIssueCodes(result.issueCodes);
+  if (issueCodes.length > 0) {
+    params.set("validation_issues", issueCodes);
+  }
+  redirect(`${path}?${params.toString()}`);
 }
 
 export async function approveReadingTest(
   formData: FormData,
 ): Promise<void> {
   const ctx = await requireRole("SuperAdmin");
-  const testId = formData.get("testId");
-  if (typeof testId !== "string" || testId.length === 0) {
-    throw new Error("Missing testId.");
-  }
+  const testId = readTestId(formData);
   const db = withSuperAdminContext(ctx);
-  const test = await loadTestForModeration(testId);
+  const test = await loadTestForModeration(db, testId);
   if (!test) throw new Error("Test not found.");
   if (test.section !== "Reading") {
     throw new Error("Only Reading tests can be moderated here.");
@@ -58,13 +107,23 @@ export async function approveReadingTest(
     throw new Error(`Cannot approve a ${test.status} test.`);
   }
 
+  const validation = validateReadingReviewRecord({
+    track: test.track,
+    difficulty: test.difficulty,
+    body_json: test.body_json,
+    questions: test.questions,
+  });
+  if (!validation.ok) {
+    redirectWithValidationFailure(`/content/reading/${testId}`, validation);
+  }
+
   await db.test.update({
     where: { id: test.id },
     data: { status: "Approved", approved_by: ctx.user_id },
   });
   await db.activityLog.create({
     data: {
-      org_id: ctx.org_id,
+      org_id: SYSTEM_ORG_ID,
       user_id: ctx.user_id,
       action: "content.reading.approved",
       metadata: { test_id: test.id } as Prisma.InputJsonValue,
@@ -80,10 +139,7 @@ export async function approveReadingTest(
 
 export async function rejectReadingTest(formData: FormData): Promise<void> {
   const ctx = await requireRole("SuperAdmin");
-  const testId = formData.get("testId");
-  if (typeof testId !== "string" || testId.length === 0) {
-    throw new Error("Missing testId.");
-  }
+  const testId = readTestId(formData);
   const reasonRaw = formData.get("reason");
   const reason =
     typeof reasonRaw === "string" && reasonRaw.trim().length > 0
@@ -91,7 +147,7 @@ export async function rejectReadingTest(formData: FormData): Promise<void> {
       : undefined;
 
   const db = withSuperAdminContext(ctx);
-  const test = await loadTestForModeration(testId);
+  const test = await loadTestForModeration(db, testId);
   if (!test) throw new Error("Test not found.");
   if (test.section !== "Reading") {
     throw new Error("Only Reading tests can be moderated here.");
@@ -109,7 +165,7 @@ export async function rejectReadingTest(formData: FormData): Promise<void> {
   });
   await db.activityLog.create({
     data: {
-      org_id: ctx.org_id,
+      org_id: SYSTEM_ORG_ID,
       user_id: ctx.user_id,
       action: "content.reading.rejected",
       metadata: {

@@ -95,6 +95,7 @@ model Organization {
   quotaUsages   QuotaUsage[]
   activityLogs  ActivityLog[]
   mockSessions  MockSession[]
+  aiCallLogs    AiCallLog[]
 }
 
 model Test {
@@ -150,6 +151,12 @@ model User {
   name         String?
   role         Role     @default(Learner)
   ielts_track  Track    @default(Academic)
+  // Soft-delete timestamp. SuperAdmins can remove a user from an org
+  // without losing the audit trail (Attempts / Grades / Recordings stay
+  // intact). A non-null value blocks sign-in (loadOrgContext) and hides
+  // the row from default rosters. Soft-deleted users still occupy a
+  // seat against `Organization.seat_limit` until they are hard-purged.
+  deleted_at   DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -158,10 +165,12 @@ model User {
   activityLogs   ActivityLog[]
   approved_tests Test[]    @relation("TestApprover")
   mockSessions   MockSession[]
+  aiCallLogs     AiCallLog[]
 
   @@index([org_id])
   @@index([org_id, createdAt])
   @@index([org_id, role])
+  @@index([org_id, deleted_at])
 }
 
 model Attempt {
@@ -300,4 +309,35 @@ model MockSession {
   @@index([org_id])
   @@index([org_id, user_id])
   @@index([org_id, status])
+}
+
+// One row per successful AI gateway call (chat / realtime mint / TTS /
+// transcribe). Powers the cross-org spend column on /metrics. Counts
+// in QuotaUsage stay the per-user-per-day quota primitive; this table
+// is the money primitive. Pricing lives in packages/ai/src/pricing.ts;
+// the gateway writes one row at call completion using cost_usd computed
+// from input/output tokens. Unknown models log with cost_usd = 0 and
+// surface a console.warn.
+model AiCallLog {
+  id            String   @id @default(cuid())
+  org_id        String
+  org           Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  // user_id is nullable because some accounting events (e.g. retries,
+  // background jobs) may not have a learner attached. Set null on
+  // user deletion so the cost record survives the user row.
+  user_id       String?
+  user          User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  purpose       String
+  provider      String
+  model         String
+  input_tokens  Int      @default(0)
+  output_tokens Int      @default(0)
+  // Six decimal places fits sub-cent precision for OpenRouter cheap-tier
+  // calls (some <$0.0001). Total cap of 10 digits = up to $9,999.999999.
+  cost_usd      Decimal  @db.Decimal(10, 6)
+  createdAt     DateTime @default(now())
+
+  @@index([org_id])
+  @@index([org_id, createdAt])
+  @@index([org_id, purpose])
 }

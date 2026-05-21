@@ -45,6 +45,29 @@ export type QuotaDb = {
       data: { ai_calls_count: { decrement: number } | { increment: number } };
     }): Promise<unknown>;
   };
+  // Money primitive. One row per successful gateway call; the gateway
+  // wraps the write in try/catch and swallows errors so a logging fault
+  // never breaks the AI response path.
+  //
+  // `org_id` is included explicitly even though production wires this
+  // through `withOrg(ctx)` (which would clamp it anyway). The redundancy
+  // costs nothing and means an unwrapped client — e.g. a misconfigured
+  // test — still writes a correct row instead of silently corrupting
+  // the audit trail.
+  aiCallLog: {
+    create(args: {
+      data: {
+        org_id: string;
+        user_id: string | null;
+        purpose: string;
+        provider: string;
+        model: string;
+        input_tokens: number;
+        output_tokens: number;
+        cost_usd: number | string;
+      };
+    }): Promise<unknown>;
+  };
 };
 
 export function todayUtc(): Date {

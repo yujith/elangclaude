@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./client";
+import { SYSTEM_ORG_ID, SYSTEM_ORG_NAME } from "./system-org";
 import {
   RoleRequiredError,
   withOrg,
@@ -295,5 +296,71 @@ describe("schema/runtime drift guard", () => {
   it("TENANT_SCOPED_MODELS matches the live Prisma datamodel", () => {
     const drift = findTenantSetDrift();
     expect(drift).toEqual({ missingFromSet: [], extraInSet: [] });
+  });
+});
+
+describe("SYSTEM_ORG_ID — super-level events stay out of OrgAdmin views", () => {
+  // The singleton 'system' org parents super-level ActivityLog rows
+  // (content.* moderation, super.org.* CRUD). OrgAdmins must never see
+  // these in their own activity feeds. withOrg(ctx) already filters by
+  // org_id, but the invariant is worth a guard rail.
+  async function ensureSystemOrg() {
+    await prisma.organization.upsert({
+      where: { id: SYSTEM_ORG_ID },
+      update: { name: SYSTEM_ORG_NAME, status: "Archived" },
+      create: {
+        id: SYSTEM_ORG_ID,
+        name: SYSTEM_ORG_NAME,
+        seat_limit: 0,
+        quota_daily: 0,
+        quota_monthly: 0,
+        status: "Archived",
+      },
+    });
+  }
+
+  it("OrgAdmin's withOrg() activity feed never returns system-org rows", async () => {
+    await ensureSystemOrg();
+    const orgA = await createTestOrg("A");
+    await seedActivity(orgA, 1);
+
+    // Simulate a SuperAdmin moderation event landing under the system org.
+    await prisma.activityLog.create({
+      data: {
+        org_id: SYSTEM_ORG_ID,
+        user_id: orgA.adminId,
+        action: "content.reading.approved",
+        metadata: { test_id: "fake-test" },
+      },
+    });
+
+    const dbA = withOrg(ctxFor(orgA));
+    const rows = await dbA.activityLog.findMany();
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.org_id === orgA.id)).toBe(true);
+    expect(rows.some((r) => r.action.startsWith("content."))).toBe(false);
+  });
+
+  it("withSuperAdminContext() can read both system and customer org logs", async () => {
+    await ensureSystemOrg();
+    const orgA = await createTestOrg("A");
+    await prisma.activityLog.create({
+      data: {
+        org_id: SYSTEM_ORG_ID,
+        user_id: orgA.adminId,
+        action: "super.org.created",
+        metadata: { org_id: orgA.id },
+      },
+    });
+
+    const su = withSuperAdminContext({
+      org_id: orgA.id,
+      user_id: orgA.adminId,
+      role: "SuperAdmin",
+    });
+    const systemLogs = await su.activityLog.findMany({
+      where: { org_id: SYSTEM_ORG_ID },
+    });
+    expect(systemLogs.some((r) => r.action === "super.org.created")).toBe(true);
   });
 });

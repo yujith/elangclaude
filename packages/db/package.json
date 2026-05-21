@@ -7,7 +7,9 @@
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
     "./tenancy": "./src/tenancy.ts",
-    "./admin-invite": "./src/admin-invite.ts"
+    "./admin-invite": "./src/admin-invite.ts",
+    "./super-user-admin": "./src/super-user-admin.ts",
+    "./super-metrics": "./src/super-metrics.ts"
   },
   "scripts": {
     "db:generate": "prisma generate",

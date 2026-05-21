@@ -142,6 +142,14 @@ describe("inviteLearnerForOrg", () => {
     const after = await prisma.user.count({ where: { org_id: org.id } });
     expect(after).toBe(before);
   });
+
+  it("refuses to treat a same-org non-learner as an existing roster learner", async () => {
+    const { ctx, admin } = await makeOrg(5);
+    const res = await inviteLearnerForOrg(ctx, { email: admin.email });
+    expect(res.ok).toBe(false);
+    if (res.ok) throw new Error("unreachable");
+    expect(res.reason).toBe("cannot_invite");
+  });
 });
 
 describe("inviteLearnersFromCsvForOrg", () => {

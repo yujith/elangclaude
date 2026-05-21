@@ -6,8 +6,9 @@
 // unscoped anyway — so we use withSuperAdminContext() per the multi-
 // tenancy rule. NEVER mix the two helpers in the same function.
 //
-// ActivityLog rows are tenant-scoped, so we log under the SuperAdmin's
-// home org — the same org that bears the generation cost.
+// ActivityLog rows are tenant-scoped, so we park super-level events under
+// the singleton SYSTEM_ORG_ID. OrgAdmin views never see these because
+// withOrg() filters by the caller's org_id.
 //
 // `editWritingPrompt` is the one thing Writing moderation has that
 // Reading doesn't: Writing tasks are wordy enough that a reviewer will
@@ -17,19 +18,49 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Prisma, withSuperAdminContext } from "@elc/db";
+import { Prisma, SYSTEM_ORG_ID, withSuperAdminContext } from "@elc/db";
 import { requireRole } from "@/lib/auth/context";
+import {
+  serializeWritingIssueCodes,
+  validateWritingReviewRecord,
+} from "@/lib/writing/review-validation";
 
-async function loadWritingTest(testId: string): Promise<{
+type SuperAdminDb = ReturnType<typeof withSuperAdminContext>;
+
+type WritingModerationRecord = {
   id: string;
+  track: "Academic" | "GeneralTraining";
+  difficulty: number;
   status: "Draft" | "PendingReview" | "Approved" | "Rejected";
   section: "Reading" | "Listening" | "Writing" | "Speaking";
-} | null> {
-  const ctx = await requireRole("SuperAdmin");
-  const db = withSuperAdminContext(ctx);
+  body_json: unknown;
+  questions: {
+    id: string;
+    type: string;
+    prompt: string;
+    visual: unknown;
+  }[];
+};
+
+async function loadWritingTest(
+  db: SuperAdminDb,
+  testId: string,
+): Promise<WritingModerationRecord | null> {
   return db.test.findUnique({
     where: { id: testId },
-    select: { id: true, status: true, section: true },
+    select: {
+      id: true,
+      track: true,
+      difficulty: true,
+      status: true,
+      section: true,
+      body_json: true,
+      questions: {
+        select: { id: true, type: true, prompt: true, visual: true },
+        orderBy: { position: "asc" },
+        take: 1,
+      },
+    },
   });
 }
 
@@ -41,12 +72,25 @@ function readTestId(formData: FormData): string {
   return testId;
 }
 
+function redirectWithValidationFailure(
+  path: string,
+  paramName: "approve_error" | "edit_error",
+  result: Extract<ReturnType<typeof validateWritingReviewRecord>, { ok: false }>,
+): never {
+  const params = new URLSearchParams({ [paramName]: result.reason });
+  const issueCodes = serializeWritingIssueCodes(result.issueCodes);
+  if (issueCodes.length > 0) {
+    params.set("validation_issues", issueCodes);
+  }
+  redirect(`${path}?${params.toString()}`);
+}
+
 export async function approveWritingTest(formData: FormData): Promise<void> {
   const ctx = await requireRole("SuperAdmin");
   const testId = readTestId(formData);
   const db = withSuperAdminContext(ctx);
 
-  const test = await loadWritingTest(testId);
+  const test = await loadWritingTest(db, testId);
   if (!test) throw new Error("Test not found.");
   if (test.section !== "Writing") {
     throw new Error("Only Writing tests can be moderated here.");
@@ -57,6 +101,28 @@ export async function approveWritingTest(formData: FormData): Promise<void> {
     }
     throw new Error(`Cannot approve a ${test.status} test.`);
   }
+  const question = test.questions[0];
+  if (!question) {
+    redirectWithValidationFailure(`/content/writing/${testId}`, "approve_error", {
+      ok: false,
+      reason: "schema",
+      issueCodes: ["schema.invalid-generated-writing"],
+    });
+  }
+
+  const validation = validateWritingReviewRecord({
+    track: test.track,
+    difficulty: test.difficulty,
+    body_json: test.body_json,
+    question,
+  });
+  if (!validation.ok) {
+    redirectWithValidationFailure(
+      `/content/writing/${testId}`,
+      "approve_error",
+      validation,
+    );
+  }
 
   await db.test.update({
     where: { id: test.id },
@@ -64,7 +130,7 @@ export async function approveWritingTest(formData: FormData): Promise<void> {
   });
   await db.activityLog.create({
     data: {
-      org_id: ctx.org_id,
+      org_id: SYSTEM_ORG_ID,
       user_id: ctx.user_id,
       action: "content.writing.approved",
       metadata: { test_id: test.id } as Prisma.InputJsonValue,
@@ -85,7 +151,7 @@ export async function rejectWritingTest(formData: FormData): Promise<void> {
       : undefined;
 
   const db = withSuperAdminContext(ctx);
-  const test = await loadWritingTest(testId);
+  const test = await loadWritingTest(db, testId);
   if (!test) throw new Error("Test not found.");
   if (test.section !== "Writing") {
     throw new Error("Only Writing tests can be moderated here.");
@@ -103,7 +169,7 @@ export async function rejectWritingTest(formData: FormData): Promise<void> {
   });
   await db.activityLog.create({
     data: {
-      org_id: ctx.org_id,
+      org_id: SYSTEM_ORG_ID,
       user_id: ctx.user_id,
       action: "content.writing.rejected",
       metadata: {
@@ -133,19 +199,7 @@ export async function editWritingPrompt(formData: FormData): Promise<void> {
   }
 
   const db = withSuperAdminContext(ctx);
-  const test = await db.test.findUnique({
-    where: { id: testId },
-    select: {
-      id: true,
-      status: true,
-      section: true,
-      questions: {
-        select: { id: true, prompt: true },
-        orderBy: { position: "asc" },
-        take: 1,
-      },
-    },
-  });
+  const test = await loadWritingTest(db, testId);
   if (!test) throw new Error("Test not found.");
   if (test.section !== "Writing") {
     throw new Error("Only Writing tests can be edited here.");
@@ -160,13 +214,30 @@ export async function editWritingPrompt(formData: FormData): Promise<void> {
     redirect(`/content/writing/${testId}`);
   }
 
+  const validation = validateWritingReviewRecord({
+    track: test.track,
+    difficulty: test.difficulty,
+    body_json: test.body_json,
+    question: {
+      ...question,
+      prompt: nextPrompt,
+    },
+  });
+  if (!validation.ok) {
+    redirectWithValidationFailure(
+      `/content/writing/${testId}`,
+      "edit_error",
+      validation,
+    );
+  }
+
   await db.question.update({
     where: { id: question.id },
     data: { prompt: nextPrompt },
   });
   await db.activityLog.create({
     data: {
-      org_id: ctx.org_id,
+      org_id: SYSTEM_ORG_ID,
       user_id: ctx.user_id,
       action: "content.writing.prompt_edited",
       metadata: {

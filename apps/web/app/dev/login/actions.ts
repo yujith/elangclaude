@@ -21,9 +21,9 @@ export async function devLogin(formData: FormData): Promise<void> {
   }
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true },
+    select: { id: true, deleted_at: true },
   });
-  if (!user) throw new Error("Unknown user.");
+  if (!user || user.deleted_at !== null) throw new Error("Unknown user.");
 
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, makeSessionToken(user.id), {

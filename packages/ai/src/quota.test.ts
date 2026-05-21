@@ -41,6 +41,7 @@ function makeDb(opts: {
         return {};
       }),
     },
+    aiCallLog: { create: vi.fn(async () => ({})) },
     get __upsertCalls() {
       return calls.upsert;
     },
@@ -153,6 +154,7 @@ describe("refundQuota", () => {
           throw new Error("DB down");
         }),
       },
+      aiCallLog: { create: vi.fn(async () => ({})) },
     };
     await expect(refundQuota(db, CTX, 1, TODAY)).resolves.toBeUndefined();
   });

@@ -7,7 +7,8 @@ import { devLogin } from "./actions";
 function defaultLandingFor(role: Role): string {
   switch (role) {
     case "SuperAdmin":
-      return "/content/reading";
+      // SuperAdmin home is /orgs since Phase 1 of the SuperAdmin console.
+      return "/orgs";
     case "OrgAdmin":
       return "/admin";
     case "Learner":
@@ -37,6 +38,9 @@ export default async function DevLoginPage({
   const explicitRedirect = params.to;
 
   const users = await prisma.user.findMany({
+    // Hide soft-deleted users from the dev switcher — they can't log in
+    // anyway (loadOrgContext refuses them) and listing them is noise.
+    where: { deleted_at: null },
     select: {
       id: true,
       email: true,

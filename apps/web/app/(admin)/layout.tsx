@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Logo } from "@/components/logo";
 import {
   ForbiddenError,
+  OrgSuspendedError,
   UnauthenticatedError,
   devLoginReturnPath,
   requireRole,
@@ -25,10 +26,13 @@ export default async function OrgAdminLayout({
       const to = await devLoginReturnPath("/admin");
       redirect(`/dev/login?to=${encodeURIComponent(to)}`);
     }
+    if (err instanceof OrgSuspendedError) {
+      redirect(`/suspended?status=${err.orgStatus}`);
+    }
     if (err instanceof ForbiddenError) {
       // Bounce non-OrgAdmins to their expected surface rather than
       // leaking the existence of this console.
-      if (err.actualRole === "SuperAdmin") redirect("/content/reading");
+      if (err.actualRole === "SuperAdmin") redirect("/orgs");
       redirect("/practice/reading");
     }
     throw err;

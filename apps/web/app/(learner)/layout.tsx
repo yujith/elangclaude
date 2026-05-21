@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { devLogout } from "../dev/login/actions";
 import {
+  OrgSuspendedError,
   UnauthenticatedError,
+  devLoginReturnPath,
   requireOrgContext,
 } from "@/lib/auth/context";
 import { prisma } from "@elc/db/client";
@@ -20,7 +22,11 @@ export default async function LearnerLayout({
     ctx = await requireOrgContext();
   } catch (err) {
     if (err instanceof UnauthenticatedError) {
-      redirect("/dev/login?to=/practice/writing");
+      const to = await devLoginReturnPath("/practice/writing");
+      redirect(`/dev/login?to=${encodeURIComponent(to)}`);
+    }
+    if (err instanceof OrgSuspendedError) {
+      redirect(`/suspended?status=${err.orgStatus}`);
     }
     throw err;
   }
@@ -40,7 +46,7 @@ export default async function LearnerLayout({
             href="/practice/writing"
             className="flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black rounded-sm"
           >
-            <Logo variant="on-dark" height={28} />
+            <Logo variant="on-dark" height={35} />
           </Link>
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">

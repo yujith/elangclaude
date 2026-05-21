@@ -1,6 +1,6 @@
 # eLanguage Center — Claude Code Memory
 
-> Last updated: 2026-05-09. If this file contradicts newer code, code wins — flag the drift.
+> Last updated: 2026-05-18. If this file contradicts newer code, code wins — flag the drift.
 
 ## What we're building
 
@@ -22,14 +22,15 @@ pnpm db:generate          # Generates the Prisma client (no DB connection needed
 pnpm db:migrate:dev       # Applies migrations to DATABASE_URL — needs packages/db/.env
 pnpm db:seed              # Idempotent: 1 SuperAdmin + 2 demo orgs
 pnpm test                 # Vitest — runs the tenancy fuzzer against DATABASE_URL_TEST
+pnpm --filter web test:e2e   # Playwright — currently covers the Suspended-org gate.
 ```
 
-See `packages/db/README.md` for the Neon dev + test-branch setup that `db:migrate:dev` and `pnpm test` depend on, and `docs/adr/0002-neon-test-branch-for-fuzzer.md` for the rationale behind the test-branch deviation from the architecture rule.
+See `packages/db/README.md` for the Neon dev + test-branch setup (and optional `DATABASE_URL_NEON_CHILD` for a Neon **child branch**) that `db:migrate:dev` and `pnpm test` depend on, and `docs/adr/0002-neon-test-branch-for-fuzzer.md` for the rationale behind the test-branch deviation from the architecture rule.
 
-Wired but deferred:
+E2E setup is one-time:
 
 ```bash
-pnpm test:e2e             # → Playwright. Lands in the auth/learner-flow scaffold.
+cd apps/web && pnpm exec playwright install chromium
 ```
 
 If any of the *currently working* commands fails on a fresh clone, **fix this file first**, then the code.
@@ -60,6 +61,22 @@ Next.js 14 App Router (TypeScript) on Vercel. Postgres via Prisma. Auth via Cler
 **Read `.claude/skills/ielts-domain/SKILL.md`** before writing any test generation or grading prompt. IELTS has specific question types per section, specific band descriptors per criterion, and getting these wrong undermines the whole product.
 </important>
 
+<important if="touching Writing generation, Writing moderation, or Writing prompt edits">
+**Writing tasks are contract-validated twice: at generation time and again before moderation edits/approval.** Manual prompt edits must preserve the canonical IELTS scaffold (GT letter lines, Task 2 subtype instruction, word-target lines), and Academic Task 1 must keep a renderable visual. See `docs/adr/0009-writing-contract-guards.md`.
+</important>
+
+<important if="touching Reading generation, Reading moderation, or Reading approval">
+**Reading tests are contract-validated twice: at generation time and again before approval.** GT passages must carry `gt_context`; paragraph counts/labels and question counts/positions must stay aligned with the canonical Reading prompt contract; approval is blocked if `body_json` or any question payload no longer parses in the Reading renderer. See `docs/adr/0010-reading-contract-guards.md`.
+</important>
+
+<important if="touching Speaking generation, Speaking moderation, or Speaking approval">
+**Speaking tests are contract-validated twice: at generation time and again before approval.** `body_json` must still satisfy the canonical Speaking prompt contract, Part 1 must open with home/work/study, Part 2 follow-ups and Part 3 discussion prompts must stay question-shaped, and the three thin anchor `Question` rows must still be present in the canonical `speaking-part-1` / `speaking-part-2-cue` / `speaking-part-3` order. See `docs/adr/0011-speaking-contract-guards.md`.
+</important>
+
+<important if="touching IELTS generation prompts, generator user-turn reminders, or semantic validators">
+**The prompt markdown, generator user-turn reminders, and semantic validators are one contract.** Do not tighten or loosen only one layer. Reading GT always requires `gt_context`; Listening must keep the shortened-but-IELTS-like 4-part scaffold (contexts, speaker counts, narration cues, 5–8 questions per part, and accent variety); Writing Task 1 / Task 2 canonical instruction lines are exact; Speaking Part 3 must stay in the same topic domain as Part 2. See `docs/adr/0012-ielts-generation-prompt-fidelity.md`.
+</important>
+
 ## Roles & permissions (RBAC)
 
 `SuperAdmin` > `OrgAdmin` > `Reviewer (Phase 2)` > `Learner`. Permissions are checked in `packages/db/src/auth/can.ts`. Never check roles inline in components — call `can(user, action, resource)`.
@@ -67,19 +84,24 @@ Next.js 14 App Router (TypeScript) on Vercel. Postgres via Prisma. Auth via Cler
 ## Data model — quick map
 
 ```
-Organization (id, name, seat_limit, quota_daily, quota_monthly)
-└─ User (id, org_id, role, ielts_track)
+Organization (id, name, seat_limit, quota_daily, quota_monthly, status)
+└─ User (id, org_id, role, ielts_track, deleted_at)   -- soft-delete: deleted_at != null hides + blocks sign-in
    └─ Attempt (id, user_id, test_id, section, started_at, submitted_at)
       ├─ Answer (id, attempt_id, question_id, response, is_correct)
       ├─ Grade (id, attempt_id, band_overall, criteria_scores_json, graded_by)
       └─ Recording (id, attempt_id, storage_url, duration_sec)  -- Speaking
 Test (id, track, section, difficulty, status, approved_by)
 └─ Question (id, test_id, type, prompt, correct_answer, points)
-QuotaUsage (id, user_id, date, ai_calls_count)
+QuotaUsage (id, user_id, date, ai_calls_count)             -- per-user-per-day quota primitive
+AiCallLog (id, org_id, user_id, purpose, model, input_tokens, output_tokens, cost_usd)  -- money primitive; gateway writes one row per call
 ActivityLog (id, org_id, user_id, action, metadata, timestamp)
 ```
 
 Full schema lives in `packages/db/prisma/schema.prisma`. **That file is canonical** — if this README disagrees, trust the schema.
+
+### Singleton "system" Organization
+
+Super-level events (org CRUD, content moderation, anything an OrgAdmin never originates) write `ActivityLog` rows under a fixed `Organization` with `id = "system"` (`SYSTEM_ORG_ID` in `@elc/db`). OrgAdmin views filter by their own `org_id` via `withOrg(ctx)` and therefore never see these rows. **Never write a `super.*` or `content.*` ActivityLog under a customer org's id.** See `packages/db/src/system-org.ts` and the migration `20260520194500_super_activity_to_system_org`.
 
 ## Folder layout
 
@@ -87,8 +109,10 @@ Full schema lives in `packages/db/prisma/schema.prisma`. **That file is canonica
 apps/web/              Next.js app (UI + API routes)
   app/(learner)/       Learner-facing routes
   app/(admin)/         Org admin dashboard
-  app/(super)/         SuperAdmin console
+  app/(super)/         SuperAdmin console: /orgs, /orgs/[id]/users, /users, /metrics, /content
+  app/suspended/       Public landing for Suspended/Archived orgs (OrgSuspendedError target)
   app/api/             API routes (all org-scoped)
+  tests/e2e/           Playwright suite (suspend-gate today)
 packages/db/           Prisma schema + tenancy helpers
 packages/ai/           LLM clients, prompts, grading logic
 packages/ui/           Shared shadcn components + brand tokens

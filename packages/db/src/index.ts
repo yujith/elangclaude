@@ -7,6 +7,7 @@
 
 export { withOrg, withSuperAdminContext, RoleRequiredError, TENANT_SCOPED_MODELS } from "./tenancy";
 export type { OrgContext } from "./tenancy";
+export { SYSTEM_ORG_ID, SYSTEM_ORG_NAME } from "./system-org";
 
 export {
   Prisma,

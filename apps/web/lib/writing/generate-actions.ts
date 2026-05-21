@@ -10,7 +10,7 @@
 // PendingReview. The moderation console promotes it to Approved.
 
 import { redirect } from "next/navigation";
-import { Prisma, withSuperAdminContext } from "@elc/db";
+import { Prisma, SYSTEM_ORG_ID, withSuperAdminContext } from "@elc/db";
 import { prisma } from "@elc/db/client";
 import {
   GenerationShapeError,
@@ -83,12 +83,12 @@ export async function generateWritingTest(input: {
       generatedById: ctx.user_id,
       difficulty: input.difficulty,
     });
-    // ActivityLog is tenant-scoped — log under the SuperAdmin's home org,
-    // which is the org bearing the generation cost.
+    // ActivityLog is tenant-scoped — super-level events live under the
+    // singleton SYSTEM_ORG_ID so customer OrgAdmin views never see them.
     const db = withSuperAdminContext(ctx);
     await db.activityLog.create({
       data: {
-        org_id: ctx.org_id,
+        org_id: SYSTEM_ORG_ID,
         user_id: ctx.user_id,
         action: "content.writing.generated",
         metadata: {

@@ -9,10 +9,29 @@
 // `prisma db seed` and `prisma migrate dev` — never run it against prod.
 
 import { Prisma, PrismaClient, type Track } from "@prisma/client";
+import { SYSTEM_ORG_ID, SYSTEM_ORG_NAME } from "../src/system-org";
 
 const prisma = new PrismaClient();
 
 const SUPER_EMAIL = "super@elanguage.test";
+
+async function upsertSystemOrg() {
+  // Singleton parent for SuperAdmin-level ActivityLog rows (content
+  // moderation, org CRUD). Status is Archived so it can never accidentally
+  // hold real users; the /orgs SuperAdmin list filters this id out.
+  return prisma.organization.upsert({
+    where: { id: SYSTEM_ORG_ID },
+    update: { name: SYSTEM_ORG_NAME, status: "Archived" },
+    create: {
+      id: SYSTEM_ORG_ID,
+      name: SYSTEM_ORG_NAME,
+      seat_limit: 0,
+      quota_daily: 0,
+      quota_monthly: 0,
+      status: "Archived",
+    },
+  });
+}
 
 type OrgSpec = {
   id: string;
@@ -1578,6 +1597,7 @@ async function main() {
   // The SuperAdmin still needs to live in *some* organization (the schema
   // requires `User.org_id`). Park them inside Org A — `withSuperAdminContext`
   // ignores org membership anyway.
+  await upsertSystemOrg();
   const orgA = await upsertOrg(ORG_A);
   const orgB = await upsertOrg(ORG_B);
 

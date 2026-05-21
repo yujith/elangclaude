@@ -1,0 +1,112 @@
+# CI for eLanguage Center.
+#
+# Two jobs run in parallel on every PR + push to main:
+#   - `quality` — typecheck, lint, build, and the @elc/db fuzzer +
+#     @elc/ai unit suite (needs the Neon test branch).
+#   - `e2e` — Playwright suspend-gate suite against a real Next dev
+#     server pointed at the same Neon test branch.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   - DATABASE_URL_TEST   — Neon test-branch URL (the same one
+#                           packages/db/.env uses locally). The fuzzer
+#                           rewrites DATABASE_URL → DATABASE_URL_TEST
+#                           inside test-global-setup.ts, and the e2e
+#                           job sets DATABASE_URL=$DATABASE_URL_TEST
+#                           for the spawned dev server so the test
+#                           run never touches dev/prod data.
+#   - DEV_SESSION_SECRET  — optional; defaults to the dev fallback
+#                           string. Setting it makes the suspend-gate
+#                           cookie signature opaque to anyone reading
+#                           CI logs.
+#
+# Not yet wired into branch protection. Flip on once a few green runs
+# build confidence.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel an in-flight run for the same PR/branch when a new commit lands.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: typecheck · lint · build · unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # The fuzzer reads DATABASE_URL_TEST directly; @elc/db also
+      # needs DATABASE_URL set so prisma generate can validate the
+      # schema. Point both at the same Neon test branch.
+      DATABASE_URL: ${{ secrets.DATABASE_URL_TEST }}
+      DATABASE_URL_TEST: ${{ secrets.DATABASE_URL_TEST }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Prisma generate
+        run: pnpm db:generate
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Build
+        run: pnpm build
+      - name: Unit + fuzzer
+        run: pnpm test
+
+  e2e:
+    name: Playwright e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL_TEST }}
+      DATABASE_URL_TEST: ${{ secrets.DATABASE_URL_TEST }}
+      DEV_SESSION_SECRET: ${{ secrets.DEV_SESSION_SECRET }}
+      # Force CI so playwright.config.ts disables reuseExistingServer
+      # and Playwright spawns a fresh `pnpm dev` for the run.
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Prisma generate
+        run: pnpm db:generate
+      - name: Prisma migrate deploy (test branch)
+        # Direct (non-pooler) Neon URL is needed for advisory locking
+        # during migrate deploy. Strip "-pooler" from the host.
+        run: |
+          export DATABASE_URL="${DATABASE_URL_TEST/-pooler/}"
+          pnpm --filter @elc/db exec prisma migrate deploy
+      - name: Build (web)
+        run: pnpm --filter web build
+      - name: Install Playwright browsers
+        run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: Run Playwright
+        run: pnpm --filter web test:e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7

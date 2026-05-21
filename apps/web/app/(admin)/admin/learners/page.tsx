@@ -23,7 +23,9 @@ export default async function OrgAdminLearnersPage() {
       select: { seat_limit: true },
     }),
     db.user.findMany({
-      where: { role: "Learner" },
+      // Soft-deleted learners are hidden from the roster but still count
+      // against seat_limit (see Phase 2 Q1). Restore is a SuperAdmin op.
+      where: { role: "Learner", deleted_at: null },
       orderBy: { createdAt: "desc" },
       take: PAGE_SIZE,
       select: {

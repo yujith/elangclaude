@@ -35,14 +35,10 @@ export default async function OrgAdminActivityPage({
   const cursorValid =
     cursorTimestamp !== null && !Number.isNaN(cursorTimestamp.getTime());
 
-  // Hide SuperAdmin moderation events (content.*) from OrgAdmin views.
-  // They're parented under the SuperAdmin's home org for cost attribution
-  // today; the proper fix is a dedicated system org.
-  const baseWhere = { NOT: { action: { startsWith: "content." } } };
+  // SuperAdmin content.* events live under SYSTEM_ORG_ID, so withOrg(ctx)
+  // already excludes them — no special filter needed here.
   const rows = await db.activityLog.findMany({
-    where: cursorValid
-      ? { AND: [baseWhere, { timestamp: { lt: cursorTimestamp! } }] }
-      : baseWhere,
+    where: cursorValid ? { timestamp: { lt: cursorTimestamp! } } : undefined,
     orderBy: { timestamp: "desc" },
     take: PAGE_SIZE + 1,
     select: {

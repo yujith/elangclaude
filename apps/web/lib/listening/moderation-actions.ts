@@ -22,7 +22,7 @@ import {
   ttsCache,
   type SynthesizedClip,
 } from "@elc/ai";
-import { Prisma, withSuperAdminContext } from "@elc/db";
+import { Prisma, SYSTEM_ORG_ID, withSuperAdminContext } from "@elc/db";
 import type { OrgContext } from "@elc/db";
 import { requireRole } from "@/lib/auth/context";
 
@@ -73,7 +73,7 @@ export async function approveListeningTest(formData: FormData): Promise<void> {
   });
   await db.activityLog.create({
     data: {
-      org_id: ctx.org_id,
+      org_id: SYSTEM_ORG_ID,
       user_id: ctx.user_id,
       action: "content.listening.approved",
       metadata: { test_id: test.id } as Prisma.InputJsonValue,
@@ -156,7 +156,7 @@ export async function rejectListeningTest(formData: FormData): Promise<void> {
   });
   await db.activityLog.create({
     data: {
-      org_id: ctx.org_id,
+      org_id: SYSTEM_ORG_ID,
       user_id: ctx.user_id,
       action: "content.listening.rejected",
       metadata: {

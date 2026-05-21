@@ -34,6 +34,12 @@ import {
   TRANSCRIBE_QUOTA_WEIGHT,
   type ChatPurpose,
 } from "./models";
+import {
+  costFor,
+  costForRealtimeSession,
+  costForTranscribe,
+  costForTts,
+} from "./pricing";
 import { refundQuota, reserveQuota, type QuotaDb } from "./quota";
 
 export type ChatRequest = {
@@ -167,6 +173,22 @@ export function createAI(deps: GatewayDeps) {
           system: req.system,
           maxTokens: req.maxTokens,
         });
+        // Record cost AFTER the provider call resolves so failed calls
+        // don't accrue spend. Logging failures are swallowed — the AI
+        // response must not depend on the cost-log INSERT succeeding.
+        await recordAiCall(db, {
+          ctx: req.ctx,
+          purpose: req.purpose,
+          provider: model.provider,
+          model: model.id,
+          input_tokens: res.usage.input_tokens,
+          output_tokens: res.usage.output_tokens,
+          cost_usd: costFor(
+            model.id,
+            res.usage.input_tokens,
+            res.usage.output_tokens,
+          ),
+        });
         return { text: res.text, usage: res.usage, model: model.id };
       } catch (err) {
         await refundQuota(db, req.ctx);
@@ -190,6 +212,16 @@ export function createAI(deps: GatewayDeps) {
         const session = await deps.openai.mintRealtimeSession({
           instructions: req.instructions,
           voice: req.voice,
+        });
+        // Realtime cost is a flat per-session estimate — the actual
+        // conversation runs client-side and the gateway can't observe
+        // duration. Tune the constant in pricing.ts against real billing.
+        await recordAiCall(db, {
+          ctx: req.ctx,
+          purpose: "speaking-realtime",
+          provider: "openai",
+          model: session.model,
+          cost_usd: costForRealtimeSession(),
         });
         return {
           client_secret: session.client_secret,
@@ -216,6 +248,16 @@ export function createAI(deps: GatewayDeps) {
           filename: req.filename,
           mimeType: req.mimeType,
           language: req.language,
+        });
+        // Whisper bills per second of audio; the response carries
+        // duration_sec via verbose_json, so cost is exact rather than
+        // estimated.
+        await recordAiCall(db, {
+          ctx: req.ctx,
+          purpose: "speaking-transcribe",
+          provider: "openai",
+          model: "whisper-1",
+          cost_usd: costForTranscribe(res.duration_sec),
         });
         return {
           text: res.text,
@@ -246,6 +288,16 @@ export function createAI(deps: GatewayDeps) {
           model_id: req.model_id,
           language_code: req.language_code,
         });
+        // ElevenLabs bills per character of synthesised text. Cache
+        // hits in tts-cache.ts shortcut this path entirely, so every
+        // log row here is a real synth.
+        await recordAiCall(db, {
+          ctx: req.ctx,
+          purpose: "listening-tts",
+          provider: "elevenlabs",
+          model: res.model,
+          cost_usd: costForTts(req.text.length),
+        });
         return {
           audio: res.audio,
           mimeType: res.mimeType,
@@ -258,6 +310,51 @@ export function createAI(deps: GatewayDeps) {
       }
     },
   };
+}
+
+// Best-effort AiCallLog write. Swallow any error — a logging fault
+// never breaks the AI response path. Token counts default to 0 for
+// non-chat paths (Realtime / Whisper / TTS aren't token-priced); the
+// caller computes cost_usd via the appropriate function in pricing.ts.
+async function recordAiCall(
+  db: QuotaDb,
+  args: {
+    ctx: OrgContext;
+    purpose: string;
+    provider: string;
+    model: string;
+    input_tokens?: number;
+    output_tokens?: number;
+    cost_usd: number;
+  },
+): Promise<void> {
+  try {
+    await db.aiCallLog.create({
+      data: {
+        // Explicit even though the production `withOrg(ctx)` proxy
+        // would clamp this to ctx.org_id anyway — a future test or
+        // misconfiguration that hands in an unwrapped client still
+        // writes a correctly-attributed row.
+        org_id: args.ctx.org_id,
+        user_id: args.ctx.user_id,
+        purpose: args.purpose,
+        provider: args.provider,
+        model: args.model,
+        input_tokens: args.input_tokens ?? 0,
+        output_tokens: args.output_tokens ?? 0,
+        // Pass as string to keep full Decimal precision through Prisma.
+        cost_usd: args.cost_usd.toFixed(6),
+      },
+    });
+  } catch (err) {
+    console.warn("[ai/gateway] AiCallLog write failed", {
+      org_id: args.ctx.org_id,
+      user_id: args.ctx.user_id,
+      purpose: args.purpose,
+      model: args.model,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 // Production export. Wires real Anthropic + the org-scoped Prisma client.

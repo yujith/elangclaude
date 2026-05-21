@@ -86,6 +86,11 @@ function fakeDb(opts: {
       upsert: vi.fn(async () => ({ ai_calls_count: opts.countAfterUpsert })),
       update: vi.fn(async () => ({})),
     },
+    // AiCallLog is best-effort logging — the gateway swallows errors,
+    // so a no-op mock keeps these tests focused on quota/allowlist behaviour.
+    aiCallLog: {
+      create: vi.fn(async () => ({})),
+    },
   });
 }
 
@@ -194,6 +199,7 @@ describe("gateway: quota integration", () => {
           return {};
         }),
       },
+      aiCallLog: { create: vi.fn(async () => ({})) },
     });
     const ai = createAI({
       providers: {
@@ -271,6 +277,7 @@ describe("gateway: realtimeSession", () => {
           return {};
         }),
       },
+      aiCallLog: { create: vi.fn(async () => ({})) },
     });
     const ai = createAI({
       providers: {
@@ -352,6 +359,7 @@ describe("gateway: transcribe", () => {
           return {};
         }),
       },
+      aiCallLog: { create: vi.fn(async () => ({})) },
     });
     const ai = createAI({
       providers: {
@@ -435,6 +443,7 @@ describe("gateway: tts (Listening)", () => {
           return {};
         }),
       },
+      aiCallLog: { create: vi.fn(async () => ({})) },
     });
     const ai = createAI({
       providers: {
@@ -453,5 +462,203 @@ describe("gateway: tts (Listening)", () => {
       ai.tts({ ctx: CTX, text: "hello", voice_id: "voice_test_1" }),
     ).rejects.toBeInstanceOf(ProviderError);
     expect(updates).toEqual(["decrement"]);
+  });
+});
+
+// AiCallLog.create is the money primitive — make sure each gateway path
+// writes exactly one row on success with the right shape, and zero rows
+// on failure. The chat path covers token-based pricing; realtime/whisper/
+// tts each have their own cost basis (flat / duration / characters).
+
+type AiCallLogCapture = {
+  user_id: string | null;
+  purpose: string;
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number | string;
+};
+
+function fakeDbCapturing(opts: {
+  quotaDaily: number;
+  countAfterUpsert: number;
+}): {
+  db: (ctx: OrgContext) => QuotaDb;
+  captured: AiCallLogCapture[];
+} {
+  const captured: AiCallLogCapture[] = [];
+  return {
+    captured,
+    db: () => ({
+      organization: {
+        findUniqueOrThrow: vi.fn(async () => ({ quota_daily: opts.quotaDaily })),
+      },
+      quotaUsage: {
+        upsert: vi.fn(async () => ({ ai_calls_count: opts.countAfterUpsert })),
+        update: vi.fn(async () => ({})),
+      },
+      aiCallLog: {
+        create: vi.fn(async (args) => {
+          captured.push(args.data);
+          return {};
+        }),
+      },
+    }),
+  };
+}
+
+describe("gateway: AiCallLog cost capture", () => {
+  it("chat writes one row with token-based cost on success", async () => {
+    const { db, captured } = fakeDbCapturing({
+      quotaDaily: 100,
+      countAfterUpsert: 1,
+    });
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai: fakeOpenAI(),
+      elevenlabs: fakeElevenLabs(),
+      db,
+    });
+    await ai.chat({
+      ctx: CTX,
+      purpose: "writing-grade",
+      messages: [{ role: "user", content: "hi" }],
+      maxTokens: 100,
+    });
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toMatchObject({
+      purpose: "writing-grade",
+      provider: "anthropic",
+      model: "claude-sonnet-4-5-20250929",
+      input_tokens: 100,
+      output_tokens: 50,
+    });
+    // 100 input * $3/M + 50 output * $15/M = $0.0003 + $0.00075 = $0.00105
+    expect(Number(captured[0]!.cost_usd)).toBeCloseTo(0.00105, 6);
+  });
+
+  it("realtime writes one row with a flat-session cost on success", async () => {
+    const { db, captured } = fakeDbCapturing({
+      quotaDaily: 100,
+      countAfterUpsert: 8,
+    });
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai: fakeOpenAI(),
+      elevenlabs: fakeElevenLabs(),
+      db,
+    });
+    await ai.realtimeSession({ ctx: CTX });
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toMatchObject({
+      purpose: "speaking-realtime",
+      provider: "openai",
+      model: "gpt-4o-realtime-preview-2024-12-17",
+      input_tokens: 0,
+      output_tokens: 0,
+    });
+    // Flat estimate $0.30 / session — see pricing.ts.
+    expect(Number(captured[0]!.cost_usd)).toBeCloseTo(0.3, 6);
+  });
+
+  it("transcribe writes one row with duration-based cost on success", async () => {
+    const { db, captured } = fakeDbCapturing({
+      quotaDaily: 100,
+      countAfterUpsert: 1,
+    });
+    const openai: OpenAIAdapter = {
+      mintRealtimeSession: async () => {
+        throw new Error("not used here");
+      },
+      transcribe: async () => ({
+        text: "hi",
+        segments: [],
+        // 12-minute audio = 720s.
+        duration_sec: 720,
+      }),
+    };
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai,
+      elevenlabs: fakeElevenLabs(),
+      db,
+    });
+    await ai.transcribe({
+      ctx: CTX,
+      audio: new Uint8Array([]),
+      filename: "x.webm",
+      mimeType: "audio/webm",
+    });
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toMatchObject({
+      purpose: "speaking-transcribe",
+      provider: "openai",
+      model: "whisper-1",
+    });
+    // 720 sec * $0.0001/sec = $0.072 (12 min at $0.006/min).
+    expect(Number(captured[0]!.cost_usd)).toBeCloseTo(0.072, 6);
+  });
+
+  it("tts writes one row with character-based cost on success", async () => {
+    const { db, captured } = fakeDbCapturing({
+      quotaDaily: 100,
+      countAfterUpsert: 1,
+    });
+    const ai = createAI({
+      providers: {
+        anthropic: fakeProvider(),
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai: fakeOpenAI(),
+      elevenlabs: fakeElevenLabs(),
+      db,
+    });
+    const text = "a".repeat(1000); // exactly 1k chars
+    await ai.tts({ ctx: CTX, text, voice_id: "v_test" });
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toMatchObject({
+      purpose: "listening-tts",
+      provider: "elevenlabs",
+      model: "eleven_multilingual_v2",
+    });
+    // 1000 chars * $0.18/1k = $0.18.
+    expect(Number(captured[0]!.cost_usd)).toBeCloseTo(0.18, 6);
+  });
+
+  it("does NOT write a row when the provider call fails", async () => {
+    const { db, captured } = fakeDbCapturing({
+      quotaDaily: 100,
+      countAfterUpsert: 1,
+    });
+    const ai = createAI({
+      providers: {
+        anthropic: async () => {
+          throw new Error("upstream 500");
+        },
+        openrouter: vi.fn() as unknown as Provider,
+      },
+      openai: fakeOpenAI(),
+      elevenlabs: fakeElevenLabs(),
+      db,
+    });
+    await expect(
+      ai.chat({
+        ctx: CTX,
+        purpose: "writing-grade",
+        messages: [{ role: "user", content: "hi" }],
+        maxTokens: 100,
+      }),
+    ).rejects.toThrow("upstream 500");
+    expect(captured).toHaveLength(0);
   });
 });

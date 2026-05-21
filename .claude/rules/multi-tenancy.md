@@ -43,6 +43,10 @@ Every key prefixed with org: `recordings/{org_id}/{user_id}/{attempt_id}.webm`. 
 
 `SuperAdmin` may query across orgs. This is enforced by `withSuperAdminContext()` which is a separate helper. **`withOrg()` and `withSuperAdminContext()` must never be used in the same function.** Pick one, stick with it.
 
+### Super-level events land under SYSTEM_ORG_ID
+
+`ActivityLog` rows for super-level actions (content moderation, org CRUD, anything an OrgAdmin never originates) write `org_id = SYSTEM_ORG_ID` — the fixed `"system"` Organization seeded by the data migration. **Do NOT write them under a customer org's id**, even the SuperAdmin's home org. OrgAdmin views filter by their own `org_id` via `withOrg(ctx)`, so the system org is invisible to them by construction; the previous "filter out `content.*` actions in the OrgAdmin view" hack was retired by this convention. Constant + helper live in `packages/db/src/system-org.ts`.
+
 ## What "audit a query" looks like
 
 When reviewing or writing any DB code, ask:

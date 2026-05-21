@@ -46,10 +46,8 @@ export default async function OrgAdminOverviewPage() {
       where: { date: startOfUtcToday() },
     }),
     db.activityLog.findMany({
-      // Hide SuperAdmin moderation events (content.*) from OrgAdmin views.
-      // They're parented under the SuperAdmin's home org for cost
-      // attribution today; the proper fix is a dedicated system org.
-      where: { NOT: { action: { startsWith: "content." } } },
+      // SuperAdmin content.* events live under SYSTEM_ORG_ID, so withOrg(ctx)
+      // already excludes them — no special filter needed here.
       orderBy: { timestamp: "desc" },
       take: 5,
       select: {
