@@ -166,7 +166,9 @@ describe("createSpeakingGenerator", () => {
     const gen = createSpeakingGenerator({ ai, loadPrompt: loader });
     await expect(
       gen.generate({ ctx: CTX, track: "Academic", difficulty: 3 }),
-    ).rejects.toBeInstanceOf(GenerationValidationError);
+    ).rejects.toMatchObject({
+      issues: [expect.objectContaining({ code: "track.mismatch" })],
+    });
   });
 
   it("includes the topic hint in the user turn when provided", async () => {

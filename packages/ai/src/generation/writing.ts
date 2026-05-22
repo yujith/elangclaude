@@ -131,6 +131,28 @@ function userTurn(
   if (req.topicHint && req.topicHint.length > 0) {
     lines.push(``, `Topic hint: ${req.topicHint}`);
   }
+  lines.push(``, `Reminders:`);
+  switch (req.taskKind) {
+    case "writing-task-1-academic":
+      lines.push(
+        `- Use the canonical Academic Task 1 instruction sentence verbatim.`,
+        `- Keep the visual preamble to 1-2 short sentences.`,
+        `- Keep the visual inside IELTS-style ranges: bar/line 2-5 series and 3-7 categories, pie 3-6 slices, table 3-5 columns and 3-8 rows, process 4-7 steps.`,
+      );
+      break;
+    case "writing-task-1-general":
+      lines.push(
+        `- Use exactly three bullets, the no-addresses line, the "Begin your letter as follows:" line, and a salutation that matches the register.`,
+        `- End Task 1 with the exact line "Write at least 150 words."`,
+      );
+      break;
+    case "writing-task-2":
+      lines.push(
+        `- Use the subtype-specific question instruction verbatim.`,
+        `- End with the full "Give reasons for your answer and include any relevant examples from your own knowledge or experience." line before the exact 250-word target.`,
+      );
+      break;
+  }
   lines.push(
     ``,
     `Return ONLY the JSON object described in the schema above for this task_kind. No prose, no markdown fences.`,

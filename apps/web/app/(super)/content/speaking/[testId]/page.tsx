@@ -8,6 +8,10 @@ import {
   approveSpeakingTest,
   rejectSpeakingTest,
 } from "@/lib/speaking/moderation-actions";
+import {
+  parseSpeakingIssueCodes,
+  validateSpeakingReviewRecord,
+} from "@/lib/speaking/review-validation";
 
 export const metadata: Metadata = {
   title: "Review Speaking test",
@@ -17,7 +21,15 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 type Params = { testId: string };
-type SearchParams = { approved?: string };
+type SearchParams = {
+  approved?: string;
+  approve_error?: string;
+  validation_issues?: string;
+};
+
+function formatIssueCodes(issueCodes: string[]): string {
+  return issueCodes.join(", ");
+}
 
 export default async function ReviewSpeakingTestPage({
   params,
@@ -41,14 +53,32 @@ export default async function ReviewSpeakingTestPage({
       status: true,
       body_json: true,
       createdAt: true,
+      questions: {
+        select: {
+          id: true,
+          type: true,
+          prompt: true,
+          position: true,
+        },
+        orderBy: { position: "asc" },
+      },
     },
   });
   if (!test || test.section !== "Speaking") notFound();
 
   const content = parseSpeakingContent(test.body_json);
+  const issueCodes = parseSpeakingIssueCodes(sp.validation_issues);
+  const reviewValidation = validateSpeakingReviewRecord({
+    track: test.track,
+    difficulty: test.difficulty,
+    body_json: test.body_json,
+    questions: test.questions,
+  });
   const trackLabel =
     test.track === "Academic" ? "Academic" : "General Training";
   const status = test.status;
+  const approvalBlocked = status === "PendingReview" && !reviewValidation.ok;
+  const currentIssueCodes = reviewValidation.ok ? [] : reviewValidation.issueCodes;
 
   return (
     <section className="px-6 py-10 md:py-12">
@@ -80,6 +110,20 @@ export default async function ReviewSpeakingTestPage({
           <Banner tone="success">
             This test is already approved. It is now visible to learners on
             the Speaking picker.
+          </Banner>
+        ) : null}
+        {sp.approve_error && issueCodes.length > 0 ? (
+          <Banner tone="error">
+            Approval was blocked because this test does not currently satisfy
+            the Speaking contract. Issue codes:{" "}
+            <code>{formatIssueCodes(issueCodes)}</code>.
+          </Banner>
+        ) : null}
+        {approvalBlocked ? (
+          <Banner tone="error">
+            This test cannot be approved in its current state. Fix or reject
+            it first. Issue codes:{" "}
+            <code>{formatIssueCodes(currentIssueCodes)}</code>.
           </Banner>
         ) : null}
 
@@ -181,8 +225,8 @@ export default async function ReviewSpeakingTestPage({
                 <input type="hidden" name="testId" value={test.id} />
                 <button
                   type="submit"
-                  disabled={!content}
-                  className="inline-flex items-center rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={approvalBlocked}
+                  className="inline-flex items-center rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
                 >
                   Approve — release to learners
                 </button>

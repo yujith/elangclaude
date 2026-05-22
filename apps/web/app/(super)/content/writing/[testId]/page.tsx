@@ -5,6 +5,11 @@ import { withSuperAdminContext } from "@elc/db";
 import { requireRole } from "@/lib/auth/context";
 import { isWritingTaskType, taskShortLabel } from "@/lib/writing/task";
 import { parseVisual } from "@/lib/writing/visual";
+import {
+  parseWritingIssueCodes,
+  readWritingBodyMeta,
+  validateWritingReviewRecord,
+} from "@/lib/writing/review-validation";
 import { TaskVisual } from "@/components/task-visual";
 import {
   approveWritingTest,
@@ -20,21 +25,16 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 type Params = { testId: string };
-type SearchParams = { approved?: string; edited?: string; edit_error?: string };
+type SearchParams = {
+  approved?: string;
+  edited?: string;
+  approve_error?: string;
+  edit_error?: string;
+  validation_issues?: string;
+};
 
-// body_json shape written by persistGeneratedWriting: { task_kind, body_meta }.
-// body_meta is a small flat record of strings — render whatever it carries.
-function readBodyMeta(raw: unknown): { label: string; value: string }[] {
-  if (typeof raw !== "object" || raw === null) return [];
-  const meta = (raw as { body_meta?: unknown }).body_meta;
-  if (typeof meta !== "object" || meta === null) return [];
-  const out: { label: string; value: string }[] = [];
-  for (const [key, value] of Object.entries(meta as Record<string, unknown>)) {
-    if (typeof value === "string" && value.length > 0) {
-      out.push({ label: key.replace(/_/g, " "), value });
-    }
-  }
-  return out;
+function formatIssueCodes(issueCodes: string[]): string {
+  return issueCodes.join(", ");
 }
 
 export default async function ReviewWritingTaskPage({
@@ -77,7 +77,16 @@ export default async function ReviewWritingTaskPage({
     test.track === "Academic" ? "Academic" : "General Training";
   const status = test.status;
   const visual = parseVisual(question.visual);
-  const bodyMeta = readBodyMeta(test.body_json);
+  const bodyMeta = readWritingBodyMeta(test.body_json);
+  const issueCodes = parseWritingIssueCodes(sp.validation_issues);
+  const reviewValidation = validateWritingReviewRecord({
+    track: test.track,
+    difficulty: test.difficulty,
+    body_json: test.body_json,
+    question,
+  });
+  const approvalBlocked = status === "PendingReview" && !reviewValidation.ok;
+  const currentIssueCodes = reviewValidation.ok ? [] : reviewValidation.issueCodes;
 
   return (
     <section className="px-6 py-10 md:py-12">
@@ -121,6 +130,29 @@ export default async function ReviewWritingTaskPage({
           <Banner tone="error">
             The edited prompt must be between 20 and 2400 characters. Your
             change was not saved.
+          </Banner>
+        ) : null}
+        {sp.edit_error &&
+        sp.edit_error !== "length" &&
+        issueCodes.length > 0 ? (
+          <Banner tone="error">
+            The edited prompt was not saved because the task would no longer
+            satisfy the Writing contract. Issue codes:{" "}
+            <code>{formatIssueCodes(issueCodes)}</code>.
+          </Banner>
+        ) : null}
+        {sp.approve_error && issueCodes.length > 0 ? (
+          <Banner tone="error">
+            Approval was blocked because this task does not currently satisfy
+            the Writing contract. Issue codes:{" "}
+            <code>{formatIssueCodes(issueCodes)}</code>.
+          </Banner>
+        ) : null}
+        {approvalBlocked ? (
+          <Banner tone="error">
+            This task cannot be approved in its current state. Fix or reject
+            it first. Issue codes:{" "}
+            <code>{formatIssueCodes(currentIssueCodes)}</code>.
           </Banner>
         ) : null}
 
@@ -209,7 +241,8 @@ export default async function ReviewWritingTaskPage({
                 <input type="hidden" name="testId" value={test.id} />
                 <button
                   type="submit"
-                  className="inline-flex items-center rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+                  disabled={approvalBlocked}
+                  className="inline-flex items-center rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
                 >
                   Approve — release to learners
                 </button>

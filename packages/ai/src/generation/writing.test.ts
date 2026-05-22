@@ -54,7 +54,10 @@ const T1_GENERAL = {
     "- explain what you ordered\n" +
     "- describe what went wrong\n" +
     "- say what you want them to do\n\n" +
-    "Write at least 150 words.\n\nBegin your letter as follows:\n\nDear Sir or Madam,",
+    "Write at least 150 words.\n\n" +
+    "You do NOT need to write any addresses.\n\n" +
+    "Begin your letter as follows:\n\n" +
+    "Dear Sir or Madam,",
   body_meta: {
     register: "formal" as const,
     audience: "the company",

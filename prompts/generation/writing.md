@@ -77,6 +77,7 @@ caller's track is `GeneralTraining`.
   `"%"`.
 - `table`: 3–5 columns, 3–8 rows; first column is the row label.
 - `process`: 4–7 ordered steps with concise labels.
+- These ranges are hard limits, not suggestions.
 
 **`body_meta`:**
 - `visual_kind`: matches the `visual.kind`.
@@ -112,8 +113,9 @@ Dear <appropriate salutation>,
   ("explain why you need it", "describe what happened", "suggest a
   solution"). No more, no fewer.
 - The salutation should match the register: `formal` →
-  "Sir or Madam,"; `semi-formal` → "Mr Smith," or similar named
-  honorific; `informal` → first name.
+  "Dear Sir or Madam,"; `semi-formal` → "Dear Mr Smith," or similar
+  named honorific; `informal` → "Dear Maya," or another first-name
+  salutation.
 
 **`body_meta`:**
 - `register`: `formal` | `semi-formal` | `informal`.
@@ -130,6 +132,9 @@ Dear <appropriate salutation>,
 question instruction. End with "Give reasons for your answer and
 include any relevant examples from your own knowledge or experience."
 Then the word-target line: "Write at least 250 words."
+
+Use the subtype instruction sentence and the full "Give reasons ..."
+sentence verbatim.
 
 The question instruction depends on `question_subtype`:
 

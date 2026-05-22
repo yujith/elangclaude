@@ -89,6 +89,12 @@ function userTurn(req: GenerateSpeakingRequest): string {
   }
   lines.push(
     "",
+    `Reminders:`,
+    `- topic_domain must be a 2-5 word noun phrase shared by Part 2 and Part 3.`,
+    `- Part 1 must open with home, hometown, work, or study.`,
+    `- Part 2 cue_card_topic must begin with "Describe", follow-up questions must stay short and question-shaped, and final_prompt must begin with "and ".`,
+    `- Part 3 must stay in the same domain as Part 2, become more abstract, and every Part 3 prompt must end with "?".`,
+    "",
     'Return ONLY the JSON object described in the schema above, with "section": "speaking". No prose, no markdown fences.',
   );
   return lines.join("\n");
@@ -142,7 +148,7 @@ export function createSpeakingGenerator(deps: SpeakingGeneratorDeps) {
       if (parsed.value.track !== req.track) {
         throw new GenerationValidationError([
           {
-            code: "prompt.missing-instruction",
+            code: "track.mismatch",
             message: `Model returned track ${parsed.value.track}, caller asked for ${req.track}.`,
           },
         ]);

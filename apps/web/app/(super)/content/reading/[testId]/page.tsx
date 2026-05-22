@@ -14,6 +14,10 @@ import {
   approveReadingTest,
   rejectReadingTest,
 } from "@/lib/reading/moderation-actions";
+import {
+  parseReadingIssueCodes,
+  validateReadingReviewRecord,
+} from "@/lib/reading/review-validation";
 
 export const metadata: Metadata = {
   title: "Review Reading test",
@@ -23,7 +27,23 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 type Params = { testId: string };
-type SearchParams = { approved?: string };
+type SearchParams = {
+  approved?: string;
+  approve_error?: string;
+  validation_issues?: string;
+};
+
+function formatIssueCodes(issueCodes: string[]): string {
+  return issueCodes.join(", ");
+}
+
+function readStoredPassageTitle(raw: unknown): string | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return null;
+  }
+  const value = raw as Record<string, unknown>;
+  return typeof value.title === "string" ? value.title : null;
+}
 
 export default async function ReviewReadingTestPage({
   params,
@@ -62,14 +82,26 @@ export default async function ReviewReadingTestPage({
   });
   if (!test || test.section !== "Reading") notFound();
   const passage = parseReadingPassage(test.body_json);
-  if (!passage) notFound();
-  const showParagraphLabels = passageNeedsParagraphLabels(
-    test.questions.map((q) => q.type),
-  );
+  const issueCodes = parseReadingIssueCodes(sp.validation_issues);
+  const reviewValidation = validateReadingReviewRecord({
+    track: test.track,
+    difficulty: test.difficulty,
+    body_json: test.body_json,
+    questions: test.questions,
+  });
+  const showParagraphLabels =
+    passage !== null &&
+    passageNeedsParagraphLabels(test.questions.map((q) => q.type));
 
   const trackLabel =
     test.track === "Academic" ? "Academic" : "General Training";
   const status = test.status;
+  const title =
+    passage?.title ??
+    readStoredPassageTitle(test.body_json) ??
+    "(unrenderable passage)";
+  const approvalBlocked = status === "PendingReview" && !reviewValidation.ok;
+  const currentIssueCodes = reviewValidation.ok ? [] : reviewValidation.issueCodes;
 
   return (
     <section className="px-6 py-10 md:py-12">
@@ -88,7 +120,7 @@ export default async function ReviewReadingTestPage({
             Review · {trackLabel} · difficulty {test.difficulty}
           </p>
           <h1 className="font-display italic font-bold text-3xl md:text-4xl text-brand-black leading-tight">
-            {passage.title ?? "(untitled passage)"}
+            {title}
           </h1>
           <p className="font-body text-sm text-brand-grey-700">
             Status <code>{status}</code> · generated{" "}
@@ -98,40 +130,61 @@ export default async function ReviewReadingTestPage({
         </header>
 
         {sp.approved ? (
-          <div className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-4">
-            <p className="font-body text-sm text-brand-grey-900">
-              This test is already approved. It is now visible to{" "}
-              {trackLabel} learners on the picker.
-            </p>
-          </div>
+          <Banner tone="success">
+            This test is already approved. It is now visible to {trackLabel}{" "}
+            learners on the picker.
+          </Banner>
+        ) : null}
+        {sp.approve_error && issueCodes.length > 0 ? (
+          <Banner tone="error">
+            Approval was blocked because this test does not currently satisfy
+            the Reading contract. Issue codes:{" "}
+            <code>{formatIssueCodes(issueCodes)}</code>.
+          </Banner>
+        ) : null}
+        {approvalBlocked ? (
+          <Banner tone="error">
+            This test cannot be approved in its current state. Fix or reject
+            it first. Issue codes:{" "}
+            <code>{formatIssueCodes(currentIssueCodes)}</code>.
+          </Banner>
         ) : null}
 
         <article className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6 space-y-4">
           <h2 className="font-heading font-bold text-xl text-brand-black">
             Passage as the learner will see it
           </h2>
-          <div className="space-y-4">
-            {passage.paragraphs.map((p) => (
-              <p
-                key={p.label}
-                className="font-body text-base text-brand-grey-900 leading-relaxed"
-              >
-                {showParagraphLabels ? (
-                  <span className="font-heading font-bold text-brand-red mr-2">
-                    {p.label}
-                  </span>
-                ) : null}
-                {p.text}
-              </p>
-            ))}
-          </div>
-          {!showParagraphLabels ? (
-            <p className="mt-3 font-body text-xs text-brand-grey-500">
-              Paragraph letters are hidden — this test has no
-              matching-headings or matching-information questions, so the
-              learner sees continuous prose.
-            </p>
-          ) : null}
+          {passage ? (
+            <>
+              <div className="space-y-4">
+                {passage.paragraphs.map((p) => (
+                  <p
+                    key={p.label}
+                    className="font-body text-base text-brand-grey-900 leading-relaxed"
+                  >
+                    {showParagraphLabels ? (
+                      <span className="font-heading font-bold text-brand-red mr-2">
+                        {p.label}
+                      </span>
+                    ) : null}
+                    {p.text}
+                  </p>
+                ))}
+              </div>
+              {!showParagraphLabels ? (
+                <p className="mt-3 font-body text-xs text-brand-grey-500">
+                  Paragraph letters are hidden — this test has no
+                  matching-headings or matching-information questions, so the
+                  learner sees continuous prose.
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <Banner tone="error">
+              This stored passage payload no longer parses in the Reading
+              renderer. Reject it or repair the data before approval.
+            </Banner>
+          )}
         </article>
 
         <article className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6 space-y-4">
@@ -163,8 +216,8 @@ export default async function ReviewReadingTestPage({
                       <AnswerKey payload={payload} />
                     ) : (
                       <p className="font-body text-sm text-brand-red">
-                        Malformed payload — payload parser rejected it. This
-                        question should be rejected at moderation.
+                        Unsupported or malformed payload. This question should
+                        be rejected at moderation.
                       </p>
                     )}
                   </div>
@@ -188,7 +241,8 @@ export default async function ReviewReadingTestPage({
                 <input type="hidden" name="testId" value={test.id} />
                 <button
                   type="submit"
-                  className="inline-flex items-center rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+                  disabled={approvalBlocked}
+                  className="inline-flex items-center rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
                 >
                   Approve — release to learners
                 </button>
@@ -226,6 +280,26 @@ export default async function ReviewReadingTestPage({
         </section>
       </div>
     </section>
+  );
+}
+
+function Banner({
+  tone,
+  children,
+}: {
+  tone: "success" | "warn" | "error";
+  children: React.ReactNode;
+}) {
+  const styles =
+    tone === "error"
+      ? "bg-brand-red-soft ring-brand-red/40 text-brand-grey-900"
+      : tone === "warn"
+        ? "bg-brand-grey-50 ring-brand-grey-300 text-brand-grey-900"
+        : "bg-brand-white ring-brand-grey-200 text-brand-grey-900";
+  return (
+    <div className={`rounded-lg ring-1 px-5 py-3 ${styles}`}>
+      <p className="font-body text-sm">{children}</p>
+    </div>
   );
 }
 

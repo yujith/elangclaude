@@ -39,7 +39,10 @@ function baseGeneral(): GeneratedWritingTask1General {
       "- explain what you ordered\n" +
       "- describe what went wrong\n" +
       "- say what you want them to do\n\n" +
-      "Write at least 150 words.\n\nBegin your letter as follows:\n\nDear Sir or Madam,",
+      "Write at least 150 words.\n\n" +
+      "You do NOT need to write any addresses.\n\n" +
+      "Begin your letter as follows:\n\n" +
+      "Dear Sir or Madam,",
     body_meta: {
       register: "formal",
       audience: "the company",
@@ -100,6 +103,23 @@ describe("validateGeneratedWriting", () => {
     }
   });
 
+  it("rejects Task 1 Academic with a preamble longer than two sentences", () => {
+    const v = baseAcademic();
+    v.prompt =
+      "The bar chart below shows visitor numbers to three museums. " +
+      "It compares figures from two years. " +
+      "It also includes a note about seasonal demand. " +
+      "Summarise the information by selecting and reporting the main features, and make comparisons where relevant.\n\n" +
+      "Write at least 150 words.";
+    const r = validateGeneratedWriting(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.issues.some((i) => i.code === "prompt.preamble-too-long")).toBe(
+        true,
+      );
+    }
+  });
+
   it("rejects Task 1 Academic when body_meta.visual_kind disagrees with visual.kind", () => {
     const v = baseAcademic();
     v.body_meta = { visual_kind: "line", topic: "museum visitors" };
@@ -117,7 +137,10 @@ describe("validateGeneratedWriting", () => {
     v.visual = {
       kind: "bar",
       categories: ["A", "B", "C"],
-      series: [{ name: "2019", values: [10, 20] }],
+      series: [
+        { name: "2019", values: [10, 20] },
+        { name: "2023", values: [15, 25, 35] },
+      ],
     };
     const r = validateGeneratedWriting(v);
     expect(r.ok).toBe(false);
@@ -134,7 +157,10 @@ describe("validateGeneratedWriting", () => {
     v.visual = {
       kind: "line",
       x_values: ["2000", "2010", "2020"],
-      series: [{ name: "rate", values: [1, 2] }],
+      series: [
+        { name: "rate", values: [1, 2] },
+        { name: "trend", values: [2, 3, 4] },
+      ],
     };
     const r = validateGeneratedWriting(v);
     expect(r.ok).toBe(false);
@@ -153,6 +179,7 @@ describe("validateGeneratedWriting", () => {
       headers: ["Country", "2019", "2023"],
       rows: [
         ["UK", 10, 20],
+        ["Spain", 12, 18],
         ["France", 15],
       ],
     };
@@ -174,6 +201,7 @@ describe("validateGeneratedWriting", () => {
       slices: [
         { label: "A", value: 30 },
         { label: "B", value: 30 },
+        { label: "C", value: 10 },
       ],
     };
     const r = validateGeneratedWriting(v);
@@ -193,9 +221,29 @@ describe("validateGeneratedWriting", () => {
       slices: [
         { label: "A", value: 300 },
         { label: "B", value: 1200 },
+        { label: "C", value: 75 },
       ],
     };
     expect(validateGeneratedWriting(v).ok).toBe(true);
+  });
+
+  it("rejects visuals that fall outside the IELTS Task 1 range contract", () => {
+    const v = baseAcademic();
+    v.visual = {
+      kind: "bar",
+      categories: ["A", "B"],
+      series: [
+        { name: "2019", values: [10, 20] },
+        { name: "2023", values: [15, 25] },
+      ],
+    };
+    const r = validateGeneratedWriting(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some((i) => i.code === "visual.out-of-contract-range"),
+      ).toBe(true);
+    }
   });
 
   it("rejects a letter prompt without exactly three bullets", () => {
@@ -225,6 +273,44 @@ describe("validateGeneratedWriting", () => {
     }
   });
 
+  it("rejects a letter prompt without the no-addresses line", () => {
+    const v = baseGeneral();
+    v.prompt = v.prompt.replace("You do NOT need to write any addresses.\n\n", "");
+    const r = validateGeneratedWriting(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some((i) => i.code === "letter.missing-no-addresses-line"),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects a letter prompt without the 'Begin your letter' line", () => {
+    const v = baseGeneral();
+    v.prompt = v.prompt.replace("Begin your letter as follows:\n\n", "");
+    const r = validateGeneratedWriting(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some((i) => i.code === "letter.missing-begin-letter-line"),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects a letter whose salutation does not match the declared register", () => {
+    const v = baseGeneral();
+    v.body_meta = { ...v.body_meta, register: "informal" };
+    const r = validateGeneratedWriting(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some(
+          (i) => i.code === "letter.register-salutation-mismatch",
+        ),
+      ).toBe(true);
+    }
+  });
+
   it("rejects Task 2 missing the word-target line", () => {
     const v = baseTask2();
     v.prompt = v.prompt.replace("Write at least 250 words.", "");
@@ -248,6 +334,36 @@ describe("validateGeneratedWriting", () => {
       expect(r.issues.some((i) => i.code === "prompt.missing-instruction")).toBe(
         true,
       );
+    }
+  });
+
+  it("rejects Task 2 when the 'Give reasons' line is shortened", () => {
+    const v = baseTask2();
+    v.prompt =
+      "Some people believe remote work benefits society. " +
+      "To what extent do you agree or disagree?\n\n" +
+      "Give reasons for your answer.\n\n" +
+      "Write at least 250 words.";
+    const r = validateGeneratedWriting(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.issues.some((i) => i.code === "prompt.missing-instruction")).toBe(
+        true,
+      );
+    }
+  });
+
+  it("rejects Task 2 when the declared subtype disagrees with the prompt instruction", () => {
+    const v = baseTask2();
+    v.body_meta = { question_subtype: "discussion", topic: "remote work" };
+    const r = validateGeneratedWriting(v);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(
+        r.issues.some(
+          (i) => i.code === "task2.subtype-instruction-mismatch",
+        ),
+      ).toBe(true);
     }
   });
 });

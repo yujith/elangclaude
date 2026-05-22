@@ -67,6 +67,18 @@ describe("validateGeneratedSpeaking", () => {
     expect(validateGeneratedSpeaking(base())).toEqual({ ok: true });
   });
 
+  it("flags topic_domain values outside the 2-5 word contract", () => {
+    const v = base();
+    v.topic_domain = "reading";
+    const res = validateGeneratedSpeaking(v);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.issues.map((i) => i.code)).toContain(
+        "topic-domain.word-count",
+      );
+    }
+  });
+
   it("flags a cue card topic that does not start with 'Describe'", () => {
     const v = base();
     v.part2.cue_card_topic = "Talk about a book you enjoyed.";
@@ -103,15 +115,46 @@ describe("validateGeneratedSpeaking", () => {
     }
   });
 
+  it("flags a Part 1 opener that is not about home, work, or study", () => {
+    const v = base();
+    v.part1.subtopics[0] = {
+      topic: "Music",
+      questions: [
+        "Do you enjoy listening to music?",
+        "What kind of music do you like?",
+        "When do you usually listen to music?",
+      ],
+    };
+    const res = validateGeneratedSpeaking(v);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.issues.map((i) => i.code)).toContain(
+        "part1.missing-home-work-study-opening",
+      );
+    }
+  });
+
   it("accepts a Part 1 'Tell me about …' imperative", () => {
     const v = base();
     v.part1.subtopics[1]!.questions[0] = "Tell me about the last book you read.";
     expect(validateGeneratedSpeaking(v)).toEqual({ ok: true });
   });
 
+  it("flags a Part 2 follow-up that is not question-shaped", () => {
+    const v = base();
+    v.part2.followup_questions[0] = "Tell me about that briefly.";
+    const res = validateGeneratedSpeaking(v);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.issues.map((i) => i.code)).toContain(
+        "part2.followup.not-question-shaped",
+      );
+    }
+  });
+
   it("flags a Part 3 prompt that is not question-shaped", () => {
     const v = base();
-    v.part3.questions[0] = "Reading habits have changed a lot.";
+    v.part3.questions[0] = "Tell me about changes in reading habits.";
     const res = validateGeneratedSpeaking(v);
     expect(res.ok).toBe(false);
     if (!res.ok) {
@@ -119,6 +162,46 @@ describe("validateGeneratedSpeaking", () => {
         "part3.not-question-shaped",
       );
     }
+  });
+
+  it("flags a Part 3 discussion that is not thematically linked to Part 2", () => {
+    const v = base();
+    v.topic_domain = "urban transport";
+    v.part3.theme = "Commuting and roads";
+    v.part3.questions = [
+      "How should cities reduce traffic congestion?",
+      "Why do some people prefer to drive rather than use public transport?",
+      "Do governments spend enough money on roads?",
+      "How might driverless cars affect city life?",
+    ];
+    const res = validateGeneratedSpeaking(v);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.issues.map((i) => i.code)).toContain(
+        "part3.not-linked-to-part2",
+      );
+    }
+  });
+
+  it("accepts a broader Part 3 when topic_domain bridges Part 2 and Part 3", () => {
+    const v = base();
+    v.topic_domain = "learning new skills";
+    v.part2.cue_card_topic =
+      "Describe a skill you learned from someone in your family.";
+    v.part2.bullets = [
+      "what the skill was",
+      "who taught you",
+      "when you learned it",
+    ];
+    v.part2.final_prompt = "and explain why the skill was useful.";
+    v.part3.theme = "Education and training";
+    v.part3.questions = [
+      "How important is practical training for young people?",
+      "What skills do schools often fail to teach?",
+      "Why do adults continue learning new skills later in life?",
+      "How has online training changed the way people learn?",
+    ];
+    expect(validateGeneratedSpeaking(v)).toEqual({ ok: true });
   });
 
   it("flags a duplicate prompt anywhere in the test", () => {

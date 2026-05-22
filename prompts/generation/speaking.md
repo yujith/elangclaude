@@ -38,7 +38,9 @@ in the output, but generate the same kind of test either way.
 
 1. **Part 3 must thematically expand Part 2.** If Part 2 is "describe a
    skill you learned", Part 3 is about learning, education, and skills
-   in society — not an unrelated topic.
+   in society — not an unrelated topic. Keep the same domain keywords
+   alive across `topic_domain`, Part 2, and Part 3 instead of switching
+   subjects.
 2. **Cue card format is canonical.** `cue_card_topic` begins with
    "Describe ". `bullets` are the "You should say:" points (3–4 short
    noun/verb phrases like "what it was", "when you did it", "who you
