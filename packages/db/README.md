@@ -24,20 +24,25 @@ packages/db/
 
 ## First-time setup
 
-1. **Provision two Neon branches.** In the Neon console:
+1. **Provision Neon branches.** In the Neon console:
    - Branch `dev` (or whatever you like) — your local dev database.
    - Branch `test` — used only by the tenancy fuzzer + integration tests.
-   Keep them separate so a failed test run can never wipe dev data.
+   - **Optional — child branch:** create a branch *from* `dev` (Neon’s “branch from parent”). This is a cheap copy-on-write database for risky migrations, schema experiments, or previewing migrations without touching `dev`. Wire it as `DATABASE_URL_NEON_CHILD` in `.env` (see `.env.example`). Prisma does **not** read this variable by default — point Prisma at it only when you intend to, e.g. `DATABASE_URL="$DATABASE_URL_NEON_CHILD" pnpm exec prisma migrate dev` from `packages/db`.
+   Keep `dev` and `test` separate so a failed test run can never wipe dev data.
 
-2. **Create `packages/db/.env`** with both URLs (start from `.env.example`: `cp .env.example .env` in this folder):
+2. **Create `packages/db/.env`** with your Neon URLs (start from `.env.example`: `cp .env.example .env` in this folder):
 
    ```sh
-   # Local dev branch on Neon. Pooled connection string.
+   # Local dev branch on Neon. Use the **pooler** host; `@elc/db/client` adds
+   # `pgbouncer=true` and `connect_timeout=15` automatically when missing.
    DATABASE_URL="postgresql://USER:PASSWORD@HOST/dbname?sslmode=require"
 
    # Dedicated Neon branch for the tenancy fuzzer + integration tests.
    # See docs/adr/0002-neon-test-branch-for-fuzzer.md for the deviation.
    DATABASE_URL_TEST="postgresql://USER:PASSWORD@HOST/dbname_test?sslmode=require"
+
+   # Optional: Neon child branch (pooled host). See “Provision Neon branches” above.
+   DATABASE_URL_NEON_CHILD="postgresql://USER:PASSWORD@HOST/dbname?sslmode=require"
    ```
 
    This file is git-ignored. Don't commit it.

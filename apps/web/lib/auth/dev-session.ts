@@ -8,13 +8,15 @@
 // roles. That lives in `context.ts`. Tests can verify sign/verify here in
 // isolation without touching the DB.
 //
-// Production safety: every consumer (the login page, the API route, the
-// requireOrgContext helper) refuses to operate when NODE_ENV === 'production'.
-// When Clerk lands, this module is deleted.
+// Production safety: every consumer (the login page, the dev-login server
+// action, the requireOrgContext fallback) refuses to operate when
+// NODE_ENV === 'production'. Clerk is the canonical auth path; this
+// module is the dev-only escape hatch that keeps `/dev/login` and the
+// suspend-gate e2e working without a Clerk session.
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-const COOKIE_NAME = "elc_dev_session";
+import { SESSION_COOKIE as COOKIE_NAME } from "./session-cookie";
 const DEFAULT_DEV_SECRET = "elc-dev-not-for-production";
 
 function secret(): string {
@@ -47,4 +49,4 @@ export function verifySessionToken(token: string): string | null {
   return userId;
 }
 
-export const SESSION_COOKIE = COOKIE_NAME;
+export { SESSION_COOKIE } from "./session-cookie";

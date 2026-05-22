@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Logo } from "@/components/logo";
+import { SignOutControl } from "@/components/sign-out-control";
 import {
   ForbiddenError,
+  NoOrgMembershipError,
   UnauthenticatedError,
   devLoginReturnPath,
   requireRole,
 } from "@/lib/auth/context";
-import { devLogout } from "../dev/login/actions";
+
+const SIGN_IN_PATH = "/sign-in";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +24,9 @@ export default async function SuperAdminLayout({
   } catch (err) {
     if (err instanceof UnauthenticatedError) {
       const to = await devLoginReturnPath("/orgs");
-      redirect(`/dev/login?to=${encodeURIComponent(to)}`);
+      redirect(`${SIGN_IN_PATH}?to=${encodeURIComponent(to)}`);
     }
+    if (err instanceof NoOrgMembershipError) redirect("/no-access");
     if (err instanceof ForbiddenError) {
       // A signed-in non-SuperAdmin lands here — bounce them to their
       // expected surface rather than rendering the console.
@@ -69,14 +73,7 @@ export default async function SuperAdminLayout({
             >
               Content
             </Link>
-            <form action={devLogout}>
-              <button
-                type="submit"
-                className="font-body font-medium text-sm text-brand-grey-200 hover:text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black rounded-sm"
-              >
-                Sign out
-              </button>
-            </form>
+            <SignOutControl />
           </nav>
         </div>
       </header>

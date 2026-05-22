@@ -11,6 +11,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.4.0",
     "@elc/ai": "workspace:*",
     "@elc/db": "workspace:*",
     "@elc/storage": "workspace:*",
@@ -18,7 +19,8 @@
     "next": "16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "recharts": "^2.15.0"
+    "recharts": "^2.15.0",
+    "svix": "^1.94.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",

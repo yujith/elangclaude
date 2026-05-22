@@ -43,6 +43,19 @@ If any of the *currently working* commands fails on a fresh clone, **fix this fi
 
 Next.js 14 App Router (TypeScript) on Vercel. Postgres via Prisma. Auth via Clerk (orgs are first-class). Object storage on Cloudflare R2 for Speaking recordings. LLM gateway via OpenRouter for cheap generation, **Claude Sonnet** for Writing/Speaking grading, OpenAI Realtime API for Speaking conversation, Whisper for transcription, ElevenLabs/OpenAI TTS for Listening audio. Sentry for errors, PostHog for product analytics. Single repo: `apps/web` + `packages/{db,ai,ui}`.
 
+## Auth: Clerk is live
+
+Clerk is the canonical auth backend (both dev and production). Org membership lives in our DB — `Organization` rows carry `clerk_org_id`, `User` rows carry `clerk_user_id`, and the Clerk webhook at `/api/clerk/webhook` is the source of truth keeping them in sync.
+
+- **Lazy-link by email:** when a Clerk user signs in and we have no `clerk_user_id` match, `requireOrgContext` looks up the DB row by email and stamps `clerk_user_id` on it. This is how seeded users (and webhook-created rows that beat the lazy-link request) get bound to a Clerk identity.
+- **SuperAdmin is DB-controlled, not Clerk-controlled.** A user becomes `SuperAdmin` only by an explicit DB write. The webhook never promotes anyone past `OrgAdmin`.
+- **`/post-signin`** is the post-Clerk trampoline — loads `OrgContext` and routes by role (`/orgs`, `/admin`, `/practice/writing`).
+- **`/no-access`** catches Clerk-authed users who aren't on any DB roster yet (no email match, or soft-deleted). Avoids the redirect loop a plain `/sign-in` would cause.
+- **`/create-org`** renders Clerk's `<CreateOrganization />`. Webhook events on submission create the matching Org row + promote the creator to `OrgAdmin`.
+- **`/dev/login`** stays as a dev-only escape hatch for switching between seeded users. Hidden in production.
+
+DB-touching sync functions live in `packages/db/src/clerk-sync.ts` and are unit-tested in `clerk-sync.test.ts`. Webhook event types subscribed in the Clerk dashboard: `user.*`, `organization.*`, `organizationMembership.*`.
+
 ## Hard rules — non-negotiable
 
 <important if="touching any database query or API route">

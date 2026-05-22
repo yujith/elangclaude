@@ -21,7 +21,7 @@ export function TopNav() {
           aria-label="eLanguage Center home"
           className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black"
         >
-          <Logo variant="on-dark" height={32} priority />
+          <Logo variant="on-dark" height={40} priority />
         </Link>
         <ul className="hidden lg:flex items-center gap-1 font-heading font-bold text-sm">
           {items.map((item) => (

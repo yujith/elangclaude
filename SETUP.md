@@ -93,7 +93,7 @@ In a new Claude Code session (`/clear` first):
 ```
 > /plan-feature
 
-Set up packages/db with Prisma, the schema from docs/ARCHITECTURE.md, and the withOrg() proxy from .claude/skills/multi-tenant-prisma/SKILL.md. Also write the tenancy fuzzer test. Use Neon dev branch for local Postgres.
+Set up packages/db with Prisma, the schema from docs/ARCHITECTURE.md, and the withOrg() proxy from .claude/skills/multi-tenant-prisma/SKILL.md. Also write the tenancy fuzzer test. Use Neon dev branch for local Postgres; add a separate Neon test branch and (optionally) a Neon child branch — see `packages/db/README.md` and `DATABASE_URL_NEON_CHILD` in `packages/db/.env.example`.
 ```
 
 Plan first. Then run.
@@ -119,6 +119,58 @@ From here, every feature follows the loop:
 4. `/audit-tenancy` if you touched the DB
 5. `/ship-feature` before merge
 6. Commit at least once per hour
+
+## 9. Wire Clerk auth (10 min, once per fresh clone)
+
+Clerk is the canonical auth backend in both dev and production. The dev-only `/dev/login` seeded-user switcher still works locally; it's just a fallback for the e2e suite and quick role-swapping.
+
+### Keys
+
+In **dashboard.clerk.com** → your app → **API keys**, copy the publishable + secret keys into `packages/db/.env` (the shared local secret store — `apps/web/next.config.ts` loads it into `process.env`):
+
+```
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_..."
+CLERK_SECRET_KEY="sk_test_..."
+NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in"
+NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up"
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL="/post-signin"
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL="/post-signin"
+```
+
+`/post-signin` is a server-side trampoline that loads the user's role from our DB and forwards them to the right home (`/orgs` for SuperAdmin, `/admin` for OrgAdmin, `/practice/writing` for Learner). The Clerk components also hard-code this fallback as a prop, so the env var is just a safety net.
+
+### Webhook (local dev via ngrok)
+
+The webhook at `/api/clerk/webhook` syncs Clerk orgs / users / memberships into our `Organization` and `User` tables. For local dev:
+
+```bash
+# In a separate terminal:
+ngrok http 3000
+```
+
+Then in **dashboard.clerk.com** → **Webhooks** → **Add endpoint**:
+
+- URL: `https://<your-ngrok-subdomain>.ngrok-free.app/api/clerk/webhook`
+- Subscribe to: `user.*`, `organization.*`, `organizationMembership.*`
+- Copy the **Signing Secret** (`whsec_...`) into `packages/db/.env`:
+
+```
+CLERK_WEBHOOK_SIGNING_SECRET="whsec_..."
+```
+
+### Linking a seeded user to your Clerk account
+
+The seed script creates `super@elanguage.test` plus org admins + learners. To sign in as one of them via Clerk:
+
+1. Visit `/sign-up`, register with the **same email** as the seeded user (e.g. `super@elanguage.test` → owned by SuperAdmin).
+2. Verify the email through Clerk's flow.
+3. First authenticated request lazy-links your Clerk user ID onto the seeded DB row (matched by email); subsequent requests hit the fast path.
+
+If you prefer not to use a Clerk account at all locally, hit `/dev/login` — it still sets the dev-session cookie for any seeded user and bypasses Clerk entirely. `/dev/login` is hidden in production.
+
+### Production note
+
+In production every consumer (`requireOrgContext`, the webhook, the dev-login server action) refuses to fall back to the dev-session cookie. Clerk is the only allowed auth path.
 
 ## Common questions
 

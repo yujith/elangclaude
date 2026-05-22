@@ -79,6 +79,11 @@ enum MockStatus {
 
 model Organization {
   id            String    @id @default(cuid())
+  // Clerk organization id (`org_*`). Nullable so seeded orgs and the
+  // singleton "system" org can exist without a Clerk counterpart. Set
+  // by the Clerk webhook on organization.created and read by
+  // requireOrgContext to map Clerk's active org to our row.
+  clerk_org_id  String?   @unique
   name          String
   seat_limit    Int       @default(0)
   quota_daily   Int       @default(0)
@@ -147,6 +152,10 @@ model User {
   id           String   @id @default(cuid())
   org_id       String
   org          Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  // Clerk user id (`user_*`). Nullable so seeded users exist before they
+  // first sign in via Clerk. requireOrgContext lazy-links on first sign-in
+  // by matching email; the webhook keeps it in sync afterwards.
+  clerk_user_id String?  @unique
   email        String   @unique
   name         String?
   role         Role     @default(Learner)

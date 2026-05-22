@@ -10,6 +10,25 @@ export type { OrgContext } from "./tenancy";
 export { SYSTEM_ORG_ID, SYSTEM_ORG_NAME } from "./system-org";
 
 export {
+  CLERK_NEW_ORG_DEFAULTS,
+  applyClerkUserUpsert,
+  applyClerkUserDeleted,
+  applyClerkOrgUpsert,
+  applyClerkOrgDeleted,
+  applyClerkMembershipUpsert,
+  applyClerkMembershipDeleted,
+  mapClerkRole,
+  pickPrimaryEmail,
+  joinName,
+} from "./clerk-sync";
+export type {
+  ClerkUserPayload,
+  ClerkOrgPayload,
+  ClerkMembershipPayload,
+  ClerkEmailAddress,
+} from "./clerk-sync";
+
+export {
   Prisma,
   type Role,
   type Track,
