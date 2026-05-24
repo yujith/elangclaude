@@ -356,7 +356,10 @@ export async function seedClerkIdentities(
       await clerk.organizations.createOrganizationMembership({
         organizationId: clerkOrgId,
         userId: clerkUserId,
-        role: "admin", // OrgAdmin → admin; SuperAdmin → admin in home org
+        // Clerk system roles use the `org:` prefix. The unprefixed legacy
+        // names ("admin" / "basic_member") return 404 "Organization role
+        // not found" on instances created after the role-key change.
+        role: "org:admin",
       });
       result.membershipsCreated += 1;
     } catch (err) {

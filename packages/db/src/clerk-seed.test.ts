@@ -379,7 +379,7 @@ describe("seedClerkIdentities happy path", () => {
 
     expect(result.membershipsCreated).toBe(3); // super + 2 OrgAdmins
     expect(result.learnerMembershipsSkipped).toBe(2);
-    expect(calls.createMembership.every((c) => c.role === "admin")).toBe(true);
+    expect(calls.createMembership.every((c) => c.role === "org:admin")).toBe(true);
 
     // Cross-check by Clerk-user-id: no Learner email's id appears in any
     // membership call.
