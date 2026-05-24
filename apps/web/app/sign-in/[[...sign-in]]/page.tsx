@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { SignIn } from "@clerk/nextjs";
-import { TopNav } from "@/components/top-nav";
-import { SiteFooter } from "@/components/site-footer";
+import { AuthShell } from "@/components/auth-shell";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -13,19 +12,16 @@ export const metadata: Metadata = {
 // (forgot password, MFA, factor selection) so every step keeps a stable URL.
 export default function SignInPage() {
   return (
-    <>
-      <TopNav />
-      <main className="flex-1 bg-brand-grey-50">
-        <div className="mx-auto max-w-md px-6 py-16 md:py-24 flex items-center justify-center">
-          <SignIn
-            path="/sign-in"
-            routing="path"
-            signUpUrl="/sign-up"
-            fallbackRedirectUrl="/post-signin"
-          />
-        </div>
-      </main>
-      <SiteFooter />
-    </>
+    <AuthShell
+      headline="Skills That Open Doorways."
+      subcopy="IELTS practice across Reading, Listening, Writing, and Speaking. AI-generated. AI-graded. Built for the score you actually need."
+    >
+      <SignIn
+        path="/sign-in"
+        routing="path"
+        signUpUrl="/sign-up"
+        fallbackRedirectUrl="/post-signin"
+      />
+    </AuthShell>
   );
 }
