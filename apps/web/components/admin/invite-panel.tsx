@@ -29,6 +29,8 @@ function failReasonCopy(reason: InviteFailureReason): string {
       return "Could not invite that email.";
     case "invalid_email":
       return "That doesn't look like a valid email.";
+    case "clerk_rate_limited":
+      return "Too many invites just now — wait a moment and try again.";
   }
 }
 
