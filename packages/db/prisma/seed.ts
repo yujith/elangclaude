@@ -8,8 +8,18 @@
 // SAFETY: this runs against whatever DATABASE_URL is set. Seed is wired into
 // `prisma db seed` and `prisma migrate dev` — never run it against prod.
 
+import { config as loadEnv } from "dotenv";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Prisma, PrismaClient, type Track } from "@prisma/client";
 import { SYSTEM_ORG_ID, SYSTEM_ORG_NAME } from "../src/system-org";
+import { seedClerkIdentities } from "../src/clerk-seed";
+
+// Prisma's CLI loads .env for its own ORM operations, but `process.env`
+// access for non-Prisma vars (CLERK_SECRET_KEY, SEED_DEFAULT_PASSWORD,
+// SEED_SKIP_CLERK, NODE_ENV) needs an explicit load. Belt + braces.
+const seedDir = dirname(fileURLToPath(import.meta.url));
+loadEnv({ path: resolve(seedDir, "../.env") });
 
 const prisma = new PrismaClient();
 
@@ -1670,6 +1680,11 @@ async function main() {
       `${readingTestCount} approved Reading tests in DB ` +
       `(SuperAdmin: ${SUPER_EMAIL}).`,
   );
+
+  // Mirror the DB rows we just seeded into Clerk so every demo email can
+  // sign in with the dev password immediately. Refuses to run against a
+  // production Clerk tenant — see packages/db/src/clerk-seed.ts.
+  await seedClerkIdentities();
 }
 
 main()
