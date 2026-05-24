@@ -51,7 +51,7 @@ async function seedMinimalDbRows(): Promise<void> {
   await prisma.user.create({
     data: {
       org_id: orgA.id,
-      email: "super@elanguage.test",
+      email: "super@elanguage.dev",
       name: "Super Admin",
       role: "SuperAdmin",
     },
@@ -59,7 +59,7 @@ async function seedMinimalDbRows(): Promise<void> {
   await prisma.user.create({
     data: {
       org_id: orgA.id,
-      email: "admin-a@elanguage.test",
+      email: "admin-a@elanguage.dev",
       name: "Demo English Admin",
       role: "OrgAdmin",
     },
@@ -67,7 +67,7 @@ async function seedMinimalDbRows(): Promise<void> {
   await prisma.user.create({
     data: {
       org_id: orgA.id,
-      email: "learner-a1@elanguage.test",
+      email: "learner-a1@elanguage.dev",
       name: "Anika Demo",
       role: "Learner",
     },
@@ -75,7 +75,7 @@ async function seedMinimalDbRows(): Promise<void> {
   await prisma.user.create({
     data: {
       org_id: orgB.id,
-      email: "admin-b@elanguage.test",
+      email: "admin-b@elanguage.dev",
       name: "Migration Pathways Admin",
       role: "OrgAdmin",
     },
@@ -83,7 +83,7 @@ async function seedMinimalDbRows(): Promise<void> {
   await prisma.user.create({
     data: {
       org_id: orgB.id,
-      email: "learner-b1@elanguage.test",
+      email: "learner-b1@elanguage.dev",
       name: "Carmen Pathways",
       role: "Learner",
     },
@@ -359,7 +359,7 @@ describe("seedClerkIdentities happy path", () => {
 
     // Both creates used the same SuperAdmin Clerk id as createdBy.
     const superUserCall = calls.createUser.find((c) =>
-      c.emailAddress.includes("super@elanguage.test"),
+      c.emailAddress.includes("super@elanguage.dev"),
     );
     expect(superUserCall).toBeDefined();
     const createdBys = new Set(calls.createOrg.map((c) => c.createdBy));
@@ -389,7 +389,7 @@ describe("seedClerkIdentities happy path", () => {
     expect(learnerCall).toBeDefined();
     // Learner's createUser was the Nth invocation; mirror our own user-id
     // assignment (user_1000, user_1001, ...).
-    const learnerEmails = ["learner-a1@elanguage.test", "learner-b1@elanguage.test"];
+    const learnerEmails = ["learner-a1@elanguage.dev", "learner-b1@elanguage.dev"];
     for (const email of learnerEmails) {
       const learner = await prisma.user.findUnique({
         where: { email },
@@ -407,7 +407,7 @@ describe("seedClerkIdentities happy path", () => {
     await seedClerkIdentities({ clerkClient: client, logger: () => {} });
 
     const superRow = await prisma.user.findUnique({
-      where: { email: "super@elanguage.test" },
+      where: { email: "super@elanguage.dev" },
       select: { clerk_user_id: true, org_id: true },
     });
     const superHomeOrg = await prisma.organization.findUnique({
@@ -429,7 +429,7 @@ describe("seedClerkIdentities lazy fetch", () => {
   it("re-discovers an existing Clerk user when createUser returns form_identifier_exists", async () => {
     await seedMinimalDbRows();
     const { client, calls } = makeFakeClerk({
-      existingUsers: [{ email: "super@elanguage.test", id: "user_preexisting" }],
+      existingUsers: [{ email: "super@elanguage.dev", id: "user_preexisting" }],
     });
     const result = await seedClerkIdentities({ clerkClient: client, logger: () => {} });
 
@@ -438,7 +438,7 @@ describe("seedClerkIdentities lazy fetch", () => {
     expect(calls.getUserList).toHaveLength(1);
 
     const super_ = await prisma.user.findUnique({
-      where: { email: "super@elanguage.test" },
+      where: { email: "super@elanguage.dev" },
       select: { clerk_user_id: true },
     });
     expect(super_?.clerk_user_id).toBe("user_preexisting");
@@ -493,7 +493,7 @@ describe("seedClerkIdentities error surface", () => {
   it("rethrows non-recognised Clerk createUser failures", async () => {
     await seedMinimalDbRows();
     const errs = new Map<string, unknown>([
-      ["super@elanguage.test", makeClerkError(500, "internal_server_error")],
+      ["super@elanguage.dev", makeClerkError(500, "internal_server_error")],
     ]);
     const { client } = makeFakeClerk({ createUserError: errs });
     await expect(
@@ -504,7 +504,7 @@ describe("seedClerkIdentities error surface", () => {
   it("rethrows pwned-password rejection with a clear SeedPasswordError", async () => {
     await seedMinimalDbRows();
     const errs = new Map<string, unknown>([
-      ["super@elanguage.test", makeClerkError(422, "form_password_pwned")],
+      ["super@elanguage.dev", makeClerkError(422, "form_password_pwned")],
     ]);
     const { client } = makeFakeClerk({ createUserError: errs });
     await expect(

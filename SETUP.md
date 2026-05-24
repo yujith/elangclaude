@@ -160,11 +160,15 @@ CLERK_WEBHOOK_SIGNING_SECRET="whsec_..."
 
 ### Linking a seeded user to your Clerk account
 
-The seed script creates `super@elanguage.test` plus org admins + learners. To sign in as one of them via Clerk:
+The seed script creates `super@elanguage.dev` plus org admins + learners. With `CLERK_SECRET_KEY` set, `pnpm db:seed` also creates each as a Clerk user with the shared dev password `elanguagecenter2026!` (overridable via `SEED_DEFAULT_PASSWORD`), so you can sign in immediately at `/sign-in`. To opt out of the Clerk side of seeding for offline dev, run `SEED_SKIP_CLERK=1 pnpm db:seed`.
 
-1. Visit `/sign-up`, register with the **same email** as the seeded user (e.g. `super@elanguage.test` → owned by SuperAdmin).
+If you'd rather link your own Clerk account to a seeded row instead of using the shared password:
+
+1. Visit `/sign-up`, register with the **same email** as the seeded user (e.g. `super@elanguage.dev` → owned by SuperAdmin).
 2. Verify the email through Clerk's flow.
 3. First authenticated request lazy-links your Clerk user ID onto the seeded DB row (matched by email); subsequent requests hit the fast path.
+
+> Domain note: we use `.dev` (not `.test`) for seed fixtures because Clerk's Backend API rejects RFC 2606 reserved TLDs (`.test`, `.example`, `.invalid`, `.localhost`) with `form_param_format_invalid`. `.dev` is a real ICANN TLD; the inboxes don't exist and don't matter — the seed sets a password rather than sending an invitation.
 
 If you prefer not to use a Clerk account at all locally, hit `/dev/login` — it still sets the dev-session cookie for any seeded user and bypasses Clerk entirely. `/dev/login` is hidden in production.
 

@@ -23,7 +23,58 @@ loadEnv({ path: resolve(seedDir, "../.env") });
 
 const prisma = new PrismaClient();
 
-const SUPER_EMAIL = "super@elanguage.test";
+// `.dev` (not `.test`) — Clerk's Backend API enforces real email-address
+// validation and rejects RFC 2606 reserved TLDs (`.test`, `.example`,
+// `.invalid`, `.localhost`) with `form_param_format_invalid`. `.dev` is a
+// real ICANN TLD operated by Google, idiomatic for dev fixtures, and the
+// inbox doesn't matter — the seed sets a shared password rather than
+// sending an invitation email.
+const SUPER_EMAIL = "super@elanguage.dev";
+
+// Domain rename one-shot: previous seeds used `@elanguage.test`, which
+// Clerk now rejects. Rename any leftover rows in place so the upserts
+// below find them (and so the clerk-seed pass that follows main() sees
+// only Clerk-acceptable emails). Idempotent; soft-deletes the legacy row
+// when a `.dev` row with the same local-part already exists so the
+// clerk-seed pass skips it via its `deleted_at: null` filter.
+async function renameLegacyTestEmails() {
+  const moves: Array<[string, string]> = [
+    ["super@elanguage.test", "super@elanguage.dev"],
+    ["admin-a@elanguage.test", "admin-a@elanguage.dev"],
+    ["learner-a1@elanguage.test", "learner-a1@elanguage.dev"],
+    ["learner-a2@elanguage.test", "learner-a2@elanguage.dev"],
+    ["admin-b@elanguage.test", "admin-b@elanguage.dev"],
+    ["learner-b1@elanguage.test", "learner-b1@elanguage.dev"],
+    ["learner-b2@elanguage.test", "learner-b2@elanguage.dev"],
+  ];
+  for (const [oldEmail, newEmail] of moves) {
+    const oldRow = await prisma.user.findUnique({
+      where: { email: oldEmail },
+      select: { id: true, clerk_user_id: true },
+    });
+    if (!oldRow) continue;
+    const newRow = await prisma.user.findUnique({
+      where: { email: newEmail },
+      select: { id: true },
+    });
+    if (newRow) {
+      // Both addresses exist (someone ran the new seed before this rename
+      // landed). Soft-delete the legacy row so clerk-seed skips it.
+      await prisma.user.update({
+        where: { id: oldRow.id },
+        data: { deleted_at: new Date() },
+      });
+      console.log(`[seed] soft-deleted legacy ${oldEmail} (replaced by ${newEmail})`);
+    } else {
+      // Rename in place — preserves clerk_user_id and dependent rows.
+      await prisma.user.update({
+        where: { id: oldRow.id },
+        data: { email: newEmail },
+      });
+      console.log(`[seed] renamed legacy ${oldEmail} → ${newEmail}`);
+    }
+  }
+}
 
 async function upsertSystemOrg() {
   // Singleton parent for SuperAdmin-level ActivityLog rows (content
@@ -1608,6 +1659,9 @@ async function main() {
   // requires `User.org_id`). Park them inside Org A — `withSuperAdminContext`
   // ignores org membership anyway.
   await upsertSystemOrg();
+  // Rename / clean up any rows from the pre-`.dev` seed shape before any
+  // upserts run — see comment on renameLegacyTestEmails above.
+  await renameLegacyTestEmails();
   const orgA = await upsertOrg(ORG_A);
   const orgB = await upsertOrg(ORG_B);
 
@@ -1620,38 +1674,38 @@ async function main() {
 
   await upsertUser({
     org_id: orgA.id,
-    email: "admin-a@elanguage.test",
+    email: "admin-a@elanguage.dev",
     name: "Demo English Admin",
     role: "OrgAdmin",
   });
   await upsertUser({
     org_id: orgA.id,
-    email: "learner-a1@elanguage.test",
+    email: "learner-a1@elanguage.dev",
     name: "Anika (Demo English)",
     role: "Learner",
   });
   await upsertUser({
     org_id: orgA.id,
-    email: "learner-a2@elanguage.test",
+    email: "learner-a2@elanguage.dev",
     name: "Bilal (Demo English)",
     role: "Learner",
   });
 
   await upsertUser({
     org_id: orgB.id,
-    email: "admin-b@elanguage.test",
+    email: "admin-b@elanguage.dev",
     name: "Migration Pathways Admin",
     role: "OrgAdmin",
   });
   await upsertUser({
     org_id: orgB.id,
-    email: "learner-b1@elanguage.test",
+    email: "learner-b1@elanguage.dev",
     name: "Carmen (Migration Pathways)",
     role: "Learner",
   });
   await upsertUser({
     org_id: orgB.id,
-    email: "learner-b2@elanguage.test",
+    email: "learner-b2@elanguage.dev",
     name: "Devraj (Migration Pathways)",
     role: "Learner",
   });
