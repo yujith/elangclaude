@@ -23,6 +23,7 @@
     "svix": "^1.94.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.48.0",
     "@prisma/client": "^5.22.0",
     "@tailwindcss/postcss": "^4",
