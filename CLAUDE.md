@@ -45,16 +45,35 @@ Next.js 14 App Router (TypeScript) on Vercel. Postgres via Prisma. Auth via Cler
 
 ## Auth: Clerk is live
 
-Clerk is the canonical auth backend (both dev and production). Org membership lives in our DB — `Organization` rows carry `clerk_org_id`, `User` rows carry `clerk_user_id`, and the Clerk webhook at `/api/clerk/webhook` is the source of truth keeping them in sync.
+Clerk is the canonical auth backend (both dev and production). Org membership lives in our DB — `Organization` rows carry `clerk_org_id`, `User` rows carry `clerk_user_id`, and the Clerk webhook at `/api/clerk/webhook` is the source of truth keeping them in sync. Full rationale + the operational gotchas are in `docs/adr/0014-clerk-login-experience.md`.
 
-- **Lazy-link by email:** when a Clerk user signs in and we have no `clerk_user_id` match, `requireOrgContext` looks up the DB row by email and stamps `clerk_user_id` on it. This is how seeded users (and webhook-created rows that beat the lazy-link request) get bound to a Clerk identity.
+- **Lazy-link by email:** when a Clerk user signs in and we have no `clerk_user_id` match, `requireOrgContext` looks up the DB row by email, stamps `clerk_user_id`, and **also stamps `name` from Clerk's `firstName + lastName` when present**. This is how seeded users (and webhook-created rows that beat the lazy-link request) get bound to a Clerk identity *and* pick up their real display name without waiting for a `user.updated` webhook.
 - **SuperAdmin is DB-controlled, not Clerk-controlled.** A user becomes `SuperAdmin` only by an explicit DB write. The webhook never promotes anyone past `OrgAdmin`.
-- **`/post-signin`** is the post-Clerk trampoline — loads `OrgContext` and routes by role (`/orgs`, `/admin`, `/practice/writing`).
+- **`/post-signin`** is the post-Clerk trampoline — loads `OrgContext` and routes by role (`/orgs`, `/admin`, `/practice/writing`). Uses `window.location.replace` (not `redirect()`) to escape Clerk's client-router stall on Next 16; see ADR-0014 D5.
 - **`/no-access`** catches Clerk-authed users who aren't on any DB roster yet (no email match, or soft-deleted). Avoids the redirect loop a plain `/sign-in` would cause.
 - **`/create-org`** renders Clerk's `<CreateOrganization />`. Webhook events on submission create the matching Org row + promote the creator to `OrgAdmin`.
 - **`/dev/login`** stays as a dev-only escape hatch for switching between seeded users. Hidden in production.
+- **Invitations land on `/sign-up`, not `/post-signin`.** `inviteLearnerForOrg` builds `redirectUrl: ${APP_URL}/sign-up` so Clerk's `<SignUp>` can read `__clerk_ticket` and bind the invitation to the new Clerk account. `/sign-up` then `fallbackRedirectUrl`s to `/post-signin` for role routing.
+- **Learners get NO Clerk org membership** (decision in ADR-0014 D7). OrgAdmin + SuperAdmin home-org memberships use the prefixed role key `"org:admin"` — the unprefixed legacy `"admin"` returns 404 from Clerk's API.
 
 DB-touching sync functions live in `packages/db/src/clerk-sync.ts` and are unit-tested in `clerk-sync.test.ts`. Webhook event types subscribed in the Clerk dashboard: `user.*`, `organization.*`, `organizationMembership.*`.
+
+### Clerk env vars (all in `packages/db/.env`, picked up by `apps/web/next.config.ts`)
+
+| Env | Used by | Required when |
+|---|---|---|
+| `CLERK_SECRET_KEY` | backend SDK (seed, invite, webhook) | always |
+| `CLERK_PUBLISHABLE_KEY` | `<ClerkProvider>` on the client | always |
+| `CLERK_WEBHOOK_SIGNING_SECRET` | webhook Svix signature check | when running with the webhook receiver |
+| `APP_URL` | invitation `redirectUrl` build | any code path that calls `inviteLearnerForOrg` (throws `InviteEnvError` otherwise) |
+| `SEED_DEFAULT_PASSWORD` | overrides the shared seed password | optional; defaults to `elanguagecenter2026!` |
+
+### Clerk dashboard prereqs (manual, NOT in version control)
+
+A fresh Clerk project needs these two settings flipped before the app behaves correctly. Both are recorded in ADR-0014 D7 / "Bad" so a re-init doesn't reintroduce the gates.
+
+- **Configure → Organizations Settings → Membership: Optional** (default is "Required" which forces Learners into Clerk's org-setup wizard).
+- **Configure → Sessions → Verify new device: off** (dev only — Clerk's per-email code can't be received at `@elanguage.dev` mailboxes during development). Keep it on in production.
 
 ## Hard rules — non-negotiable
 
