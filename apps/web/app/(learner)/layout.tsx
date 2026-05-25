@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { LearnerNav } from "@/components/learner-nav";
 import { Logo } from "@/components/logo";
 import { SignOutControl } from "@/components/sign-out-control";
 import {
@@ -25,7 +26,7 @@ export default async function LearnerLayout({
     ctx = await requireOrgContext();
   } catch (err) {
     if (err instanceof UnauthenticatedError) {
-      const to = await devLoginReturnPath("/practice/writing");
+      const to = await devLoginReturnPath("/home");
       redirect(`${SIGN_IN_PATH}?to=${encodeURIComponent(to)}`);
     }
     if (err instanceof NoOrgMembershipError) redirect("/no-access");
@@ -45,14 +46,15 @@ export default async function LearnerLayout({
   return (
     <div className="min-h-screen flex flex-col bg-brand-grey-50">
       <header className="bg-brand-black text-white">
-        <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-4">
+        <div className="mx-auto max-w-7xl px-6 py-3 flex items-center gap-6">
           <Link
-            href="/practice/writing"
+            href="/home"
             className="flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black rounded-sm"
           >
             <Logo variant="on-dark" height={35} />
           </Link>
-          <div className="flex items-center gap-4">
+          <LearnerNav className="hidden md:block" />
+          <div className="ml-auto flex items-center gap-4">
             <div className="text-right hidden sm:block">
               <p className="font-heading font-bold text-sm leading-tight">
                 {user?.name ?? user?.email ?? "Learner"}

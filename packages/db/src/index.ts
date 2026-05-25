@@ -10,6 +10,16 @@ export type { OrgContext } from "./tenancy";
 export { SYSTEM_ORG_ID, SYSTEM_ORG_NAME } from "./system-org";
 export { firstNameFrom } from "./display-name";
 
+export { getLearnerDashboard } from "./learner-dashboard";
+export type {
+  LearnerDashboardData,
+  SectionKey,
+  SectionStat,
+  ResumeAttempt,
+  ResumeMockSession,
+  RecentAttempt,
+} from "./learner-dashboard";
+
 export {
   CLERK_NEW_ORG_DEFAULTS,
   applyClerkUserUpsert,

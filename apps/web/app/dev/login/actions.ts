@@ -15,7 +15,7 @@ export async function devLogin(formData: FormData): Promise<void> {
     throw new Error("Dev login disabled in production.");
   }
   const userId = formData.get("userId");
-  const redirectTo = (formData.get("redirectTo") ?? "/practice/writing") as string;
+  const redirectTo = (formData.get("redirectTo") ?? "/home") as string;
   if (typeof userId !== "string" || userId.length === 0) {
     throw new Error("Missing userId.");
   }

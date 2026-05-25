@@ -49,7 +49,7 @@ Clerk is the canonical auth backend (both dev and production). Org membership li
 
 - **Lazy-link by email:** when a Clerk user signs in and we have no `clerk_user_id` match, `requireOrgContext` looks up the DB row by email, stamps `clerk_user_id`, and **also stamps `name` from Clerk's `firstName + lastName` when present**. This is how seeded users (and webhook-created rows that beat the lazy-link request) get bound to a Clerk identity *and* pick up their real display name without waiting for a `user.updated` webhook.
 - **SuperAdmin is DB-controlled, not Clerk-controlled.** A user becomes `SuperAdmin` only by an explicit DB write. The webhook never promotes anyone past `OrgAdmin`.
-- **`/post-signin`** is the post-Clerk trampoline — loads `OrgContext` and routes by role (`/orgs`, `/admin`, `/practice/writing`). Uses `window.location.replace` (not `redirect()`) to escape Clerk's client-router stall on Next 16; see ADR-0014 D5.
+- **`/post-signin`** is the post-Clerk trampoline — loads `OrgContext` and routes by role (`/orgs`, `/admin`, `/home`). The Learner home dashboard at `/home` replaced the old `/practice/writing` landing — see ADR-0015. Uses `window.location.replace` (not `redirect()`) to escape Clerk's client-router stall on Next 16; see ADR-0014 D5.
 - **`/no-access`** catches Clerk-authed users who aren't on any DB roster yet (no email match, or soft-deleted). Avoids the redirect loop a plain `/sign-in` would cause.
 - **`/create-org`** renders Clerk's `<CreateOrganization />`. Webhook events on submission create the matching Org row + promote the creator to `OrgAdmin`.
 - **`/dev/login`** stays as a dev-only escape hatch for switching between seeded users. Hidden in production.

@@ -13,7 +13,7 @@ function defaultLandingFor(role: Role): string {
       return "/admin";
     case "Learner":
     default:
-      return "/practice/writing";
+      return "/home";
   }
 }
 
@@ -34,7 +34,7 @@ export default async function DevLoginPage({
   const params = await searchParams;
   // Honor the middleware-supplied ?to= for everyone. When absent (someone
   // hit /dev/login directly), default each user to a role-appropriate
-  // landing page so OrgAdmins don't get dumped into /practice/writing.
+  // landing page so OrgAdmins don't get dumped into a learner page.
   const explicitRedirect = params.to;
 
   const users = await prisma.user.findMany({

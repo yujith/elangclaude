@@ -39,7 +39,7 @@ export default async function PostSigninPage() {
       ? "/orgs"
       : ctx.role === "OrgAdmin"
         ? "/admin"
-        : "/practice/writing";
+        : "/home";
 
   return <PostSigninRedirector to={target} />;
 }
