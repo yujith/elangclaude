@@ -167,10 +167,26 @@ test.describe("learner home dashboard", () => {
     await setSessionCookie(context, baseURL!, LEARNER_ID);
     await page.goto("/home");
 
+    await expect(
+      page.locator("header").getByText("Learner", { exact: true }),
+    ).toBeVisible();
+
     const nav = page.getByRole("navigation", { name: "Practice sections" });
     for (const label of ["Reading", "Listening", "Writing", "Speaking", "Mock"]) {
       await expect(nav.getByRole("link", { name: label })).toBeVisible();
     }
+
+    const navDelta = await page.evaluate(() => {
+      const header = document.querySelector("header");
+      const navEl = document.querySelector('nav[aria-label="Practice sections"]');
+      if (!header || !navEl) return Number.POSITIVE_INFINITY;
+      const headerBox = header.getBoundingClientRect();
+      const navBox = navEl.getBoundingClientRect();
+      return Math.abs(
+        navBox.left + navBox.width / 2 - (headerBox.left + headerBox.width / 2),
+      );
+    });
+    expect(navDelta).toBeLessThanOrEqual(1);
 
     // Clicking Mock in the nav takes us to /mock.
     await nav.getByRole("link", { name: "Mock" }).click();

@@ -122,6 +122,15 @@ header (`apps/web/components/learner-nav.tsx`, injected by
 applicable, and a quiet "Recently" list. Quota dropped to a single
 trailing line.
 
+The learner header also shows the user type (`Learner`) beside the logo
+to match the role cue used by admin chrome. The practice nav is centered
+with an absolute left-50% transform inside a relative flex header; this
+keeps the menu visually centered even when the left logo/type block and
+right account block have different widths. Avoid swapping this for a
+single CSS grid arbitrary column class unless Tailwind 4 is verified to
+emit it in this app; a previous grid attempt collapsed the header into
+a vertical stack in Chrome.
+
 Reasons:
 
 - Sections are navigation, not content. Putting them in the header

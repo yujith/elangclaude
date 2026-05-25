@@ -46,15 +46,18 @@ export default async function LearnerLayout({
   return (
     <div className="min-h-screen flex flex-col bg-brand-grey-50">
       <header className="bg-brand-black text-white">
-        <div className="mx-auto max-w-7xl px-6 py-3 flex items-center gap-6">
+        <div className="relative mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3">
           <Link
             href="/home"
             className="flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black rounded-sm"
           >
-            <Logo variant="on-dark" height={35} />
+            <Logo variant="on-dark" height={40} />
+            <span className="font-body text-xs uppercase tracking-widest text-brand-grey-200">
+              Learner
+            </span>
           </Link>
-          <LearnerNav className="hidden md:block" />
-          <div className="ml-auto flex items-center gap-4">
+          <LearnerNav className="absolute left-1/2 hidden -translate-x-1/2 lg:block" />
+          <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
               <p className="font-heading font-bold text-sm leading-tight">
                 {user?.name ?? user?.email ?? "Learner"}
