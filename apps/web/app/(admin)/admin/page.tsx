@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { prisma } from "@elc/db/client";
-import { withOrg } from "@elc/db";
+import { firstNameFrom, withOrg } from "@elc/db";
 import { requireRole } from "@/lib/auth/context";
+import { RoleGreeting } from "@/components/role-greeting";
 
 export const metadata: Metadata = {
   title: "Org admin · Overview",
@@ -35,10 +36,14 @@ export default async function OrgAdminOverviewPage() {
 
   // Organization is global (not tenant-scoped); fetch by ctx.org_id only,
   // never by user input.
-  const [org, learnerCount, quotaSum, recentActivity] = await Promise.all([
+  const [org, me, learnerCount, quotaSum, recentActivity] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: ctx.org_id },
       select: { name: true, seat_limit: true, quota_daily: true, status: true },
+    }),
+    db.user.findUniqueOrThrow({
+      where: { id: ctx.user_id },
+      select: { name: true, email: true },
     }),
     db.user.count({ where: { role: "Learner" } }),
     db.quotaUsage.aggregate({
@@ -76,6 +81,10 @@ export default async function OrgAdminOverviewPage() {
   return (
     <section className="px-6 py-12 md:py-16">
       <div className="mx-auto max-w-6xl space-y-10">
+        <RoleGreeting
+          firstName={firstNameFrom(me)}
+          tagline="Your learners. Your insights."
+        />
         <header>
           <p className="font-body text-sm uppercase tracking-widest text-brand-red">
             Org admin

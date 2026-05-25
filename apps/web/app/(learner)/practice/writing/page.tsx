@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { withOrg } from "@elc/db";
+import { firstNameFrom, withOrg } from "@elc/db";
 import { requireOrgContext } from "@/lib/auth/context";
 import { startAttempt } from "@/lib/attempts/actions";
+import { RoleGreeting } from "@/components/role-greeting";
 import {
   isWritingTaskType,
   taskBlurb,
@@ -33,7 +34,7 @@ export default async function WritingPickerPage() {
 
   const me = await db.user.findUniqueOrThrow({
     where: { id: ctx.user_id },
-    select: { ielts_track: true },
+    select: { ielts_track: true, name: true, email: true },
   });
 
   // Test is a global model — withOrg passes through unscoped, which is
@@ -62,6 +63,10 @@ export default async function WritingPickerPage() {
   return (
     <section className="px-6 py-12 md:py-16">
       <div className="mx-auto max-w-5xl">
+        <RoleGreeting
+          firstName={firstNameFrom(me)}
+          tagline="Let's drill — Skills That Open Doorways."
+        />
         <header className="mb-10">
           <p className="font-body text-sm uppercase tracking-widest text-brand-red">
             {trackLabel} · Writing

@@ -18,6 +18,7 @@ import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { prisma } from "@elc/db/client";
+import { joinName } from "@elc/db";
 import type { OrgContext, OrgStatus } from "@elc/db";
 import type { Role } from "@elc/db";
 import { SESSION_COOKIE, verifySessionToken } from "./dev-session";
@@ -153,9 +154,21 @@ async function loadUserForClerkId(clerkUserId: string): Promise<MatchedUser> {
     throw new NoOrgMembershipError();
   }
 
+  // Pull Clerk's first/last name in the same step. The seeded `name`
+  // field is often a generic placeholder ("Super Admin", "Demo English
+  // Admin") that the user wouldn't want greeted by; if Clerk has a real
+  // name from OAuth or sign-up, prefer that. Skip the overwrite when
+  // Clerk has nothing so a deliberately-set DB label isn't nulled.
+  const clerkName = joinName(
+    clerkUser?.firstName ?? null,
+    clerkUser?.lastName ?? null,
+  );
   await prisma.user.update({
     where: { id: byEmail.id },
-    data: { clerk_user_id: clerkUserId },
+    data: {
+      clerk_user_id: clerkUserId,
+      ...(clerkName ? { name: clerkName } : {}),
+    },
   });
   return byEmail;
 }

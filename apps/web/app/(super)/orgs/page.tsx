@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SYSTEM_ORG_ID, withSuperAdminContext } from "@elc/db";
+import { SYSTEM_ORG_ID, firstNameFrom, withSuperAdminContext } from "@elc/db";
 import { requireRole } from "@/lib/auth/context";
+import { RoleGreeting } from "@/components/role-greeting";
 
 export const metadata: Metadata = {
   title: "Organisations · SuperAdmin",
@@ -41,6 +42,11 @@ export default async function OrgsListPage({
   const db = withSuperAdminContext(ctx);
   const sp = await searchParams;
 
+  const me = await db.user.findUniqueOrThrow({
+    where: { id: ctx.user_id },
+    select: { name: true, email: true },
+  });
+
   const orgs = await db.organization.findMany({
     where: { id: { not: SYSTEM_ORG_ID } },
     orderBy: [{ status: "asc" }, { name: "asc" }],
@@ -69,6 +75,10 @@ export default async function OrgsListPage({
   return (
     <section className="px-6 py-12 md:py-16">
       <div className="mx-auto max-w-6xl space-y-10">
+        <RoleGreeting
+          firstName={firstNameFrom(me)}
+          tagline="Skills That Open Doorways — admin view."
+        />
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="font-body text-sm uppercase tracking-widest text-brand-red">
