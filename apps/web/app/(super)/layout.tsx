@@ -56,6 +56,12 @@ export default async function SuperAdminLayout({
               Orgs
             </Link>
             <Link
+              href="/plans"
+              className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"
+            >
+              Plans
+            </Link>
+            <Link
               href="/users"
               className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"
             >
@@ -72,6 +78,12 @@ export default async function SuperAdminLayout({
               className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"
             >
               Content
+            </Link>
+            <Link
+              href="/profile"
+              className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"
+            >
+              Profile
             </Link>
             <SignOutControl />
           </nav>

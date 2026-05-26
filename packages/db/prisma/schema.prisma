@@ -75,6 +75,36 @@ enum MockStatus {
   Abandoned
 }
 
+// Billing lifecycle of the Org's subscription. Distinct from OrgStatus
+// (moderation/lifecycle). Webhook (ADR-0017 D7) flips both columns when a
+// subscription cancels; SuperAdmin can flip OrgStatus alone for T&C
+// reasons. See ADR-0017 D3.
+//
+// PendingPayment   — Org row exists, OrgAdmin has not completed Checkout.
+// Trialing         — Stripe subscription in trial; full access.
+// Active           — Stripe subscription past trial, paying.
+// PastDue          — invoice failed; Stripe smart-retry in flight.
+// Canceled         — subscription deleted; paired with OrgStatus=Suspended.
+// Incomplete       — Stripe Checkout incomplete (3DS etc.); transient.
+// Internal         — non-billed (Free plan, seeded orgs, system org).
+enum SubscriptionStatus {
+  PendingPayment
+  Trialing
+  Active
+  PastDue
+  Canceled
+  Incomplete
+  Internal
+}
+
+// Which funnel produced this Org. Analytics only — routing decisions
+// must read `subscription_status`, never this column. See ADR-0017 D2.
+enum ProvisionedVia {
+  seeded
+  invite
+  self_serve
+}
+
 // ─── Models — global (NOT tenant-scoped) ──────────────────────────────────
 
 model Organization {
@@ -92,15 +122,94 @@ model Organization {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  users         User[]
-  attempts      Attempt[]
-  answers       Answer[]
-  grades        Grade[]
-  recordings    Recording[]
-  quotaUsages   QuotaUsage[]
-  activityLogs  ActivityLog[]
-  mockSessions  MockSession[]
-  aiCallLogs    AiCallLog[]
+  // ─── Billing (ADR-0017) ───────────────────────────────────────────────
+  // Nullable initially: existing rows get backfilled to the `internal`
+  // Plan by the data migration in packages/db/prisma/seed.ts. New orgs
+  // (invite + self-serve flows) always set plan_id at creation.
+  plan_id                String?            @map("plan_id")
+  plan                   Plan?              @relation(fields: [plan_id], references: [id], onDelete: SetNull)
+  // Stripe Customer object id. Created lazily on first Checkout (ADR-0017
+  // D7). Unique so two Orgs can never accidentally share a customer.
+  stripe_customer_id     String?            @unique
+  // Stripe Subscription object id. Stamped on checkout.session.completed.
+  stripe_subscription_id String?            @unique
+  subscription_status    SubscriptionStatus @default(Internal)
+  current_period_end     DateTime?
+  trial_end              DateTime?
+  // Billing-owner OrgAdmin (ADR-0017 D9). Other OrgAdmins see
+  // /admin/billing but cannot open the Stripe portal.
+  billing_owner_user_id  String?
+  billing_owner          User?              @relation("BillingOwner", fields: [billing_owner_user_id], references: [id], onDelete: SetNull)
+  provisioned_via        ProvisionedVia     @default(seeded)
+
+  users           User[]
+  attempts        Attempt[]
+  answers         Answer[]
+  grades          Grade[]
+  recordings      Recording[]
+  quotaUsages     QuotaUsage[]
+  activityLogs    ActivityLog[]
+  mockSessions    MockSession[]
+  aiCallLogs      AiCallLog[]
+  stripeEventLogs StripeEventLog[]
+
+  @@index([plan_id])
+  @@index([subscription_status])
+}
+
+// Subscription plan catalogue. Global model (NOT tenant-scoped) — managed
+// only via withSuperAdminContext(). See ADR-0017 D5.
+//
+// `is_internal: true` plans (and Free, which has amount=0) never sync to
+// Stripe. All other rows have a Stripe Product + monthly Price created
+// by the SuperAdmin plan-actions on save.
+model Plan {
+  id                      String   @id @default(cuid())
+  slug                    String   @unique
+  name                    String
+  description             String?
+  seat_limit              Int      @default(1)
+  quota_daily             Int      @default(50)
+  quota_monthly           Int      @default(300)
+  amount_monthly_usd      Decimal  @db.Decimal(10, 2)
+  currency                String   @default("usd")
+  trial_days              Int      @default(14)
+  is_internal             Boolean  @default(false)
+  is_active               Boolean  @default(true)
+  sort_order              Int      @default(0)
+  stripe_product_id       String?  @unique
+  stripe_price_id_monthly String?  @unique
+  // Schema room for an annual price; not used in v1. See plan doc Phase
+  // 7 follow-ups.
+  stripe_price_id_yearly  String?  @unique
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  organizations Organization[]
+
+  @@index([is_active, sort_order])
+}
+
+// One row per received Stripe webhook event. Provides idempotency
+// (unique constraint on stripe_event_id) and an ordering primitive
+// (event_created_at, populated from Stripe's event.created). See
+// ADR-0017 D8.
+model StripeEventLog {
+  id               String   @id @default(cuid())
+  stripe_event_id  String   @unique
+  event_type       String
+  event_created_at DateTime
+  // Organization the event applied to, if resolvable. Null for events
+  // we couldn't map (e.g. customer.created before our app linked it).
+  // onDelete: SetNull keeps the audit trail even if the Org row is
+  // archived/hard-deleted later — Stripe events outlive customer rows.
+  org_id           String?
+  org              Organization? @relation(fields: [org_id], references: [id], onDelete: SetNull)
+  payload_summary  Json?
+  processed_at     DateTime @default(now())
+
+  @@index([event_type, event_created_at])
+  @@index([org_id])
 }
 
 model Test {
@@ -118,8 +227,8 @@ model Test {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  questions   Question[]
-  attempts    Attempt[]
+  questions Question[]
+  attempts  Attempt[]
 
   @@index([track, section, status])
   @@index([approved_by])
@@ -141,7 +250,7 @@ model Question {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  answers        Answer[]
+  answers Answer[]
 
   @@index([test_id])
 }
@@ -149,32 +258,33 @@ model Question {
 // ─── Models — tenant-scoped ───────────────────────────────────────────────
 
 model User {
-  id           String   @id @default(cuid())
-  org_id       String
-  org          Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  id            String       @id @default(cuid())
+  org_id        String
+  org           Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
   // Clerk user id (`user_*`). Nullable so seeded users exist before they
   // first sign in via Clerk. requireOrgContext lazy-links on first sign-in
   // by matching email; the webhook keeps it in sync afterwards.
-  clerk_user_id String?  @unique
-  email        String   @unique
-  name         String?
-  role         Role     @default(Learner)
-  ielts_track  Track    @default(Academic)
+  clerk_user_id String?      @unique
+  email         String       @unique
+  name          String?
+  role          Role         @default(Learner)
+  ielts_track   Track        @default(Academic)
   // Soft-delete timestamp. SuperAdmins can remove a user from an org
   // without losing the audit trail (Attempts / Grades / Recordings stay
   // intact). A non-null value blocks sign-in (loadOrgContext) and hides
   // the row from default rosters. Soft-deleted users still occupy a
   // seat against `Organization.seat_limit` until they are hard-purged.
-  deleted_at   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  deleted_at    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
-  attempts       Attempt[]
-  quotaUsages    QuotaUsage[]
-  activityLogs   ActivityLog[]
-  approved_tests Test[]    @relation("TestApprover")
-  mockSessions   MockSession[]
-  aiCallLogs     AiCallLog[]
+  attempts         Attempt[]
+  quotaUsages      QuotaUsage[]
+  activityLogs     ActivityLog[]
+  approved_tests   Test[]         @relation("TestApprover")
+  mockSessions     MockSession[]
+  aiCallLogs       AiCallLog[]
+  billing_owner_of Organization[] @relation("BillingOwner")
 
   @@index([org_id])
   @@index([org_id, createdAt])
@@ -201,9 +311,9 @@ model Attempt {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  answers         Answer[]
-  grade           Grade?
-  recording       Recording?
+  answers   Answer[]
+  grade     Grade?
+  recording Recording?
 
   @@index([org_id])
   @@index([org_id, user_id])
@@ -213,17 +323,17 @@ model Attempt {
 }
 
 model Answer {
-  id          String   @id @default(cuid())
+  id          String       @id @default(cuid())
   org_id      String
   org         Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
   attempt_id  String
-  attempt     Attempt  @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  attempt     Attempt      @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
   question_id String
-  question    Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  question    Question     @relation(fields: [question_id], references: [id], onDelete: Cascade)
   response    Json
   is_correct  Boolean?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   @@unique([attempt_id, question_id])
   @@index([org_id])
@@ -232,48 +342,48 @@ model Answer {
 }
 
 model Grade {
-  id                   String     @id @default(cuid())
+  id                   String       @id @default(cuid())
   org_id               String
   org                  Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
-  attempt_id           String     @unique
-  attempt              Attempt    @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
-  band_overall         Decimal    @db.Decimal(3, 1)
+  attempt_id           String       @unique
+  attempt              Attempt      @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  band_overall         Decimal      @db.Decimal(3, 1)
   criteria_scores_json Json
   feedback_text        String?
-  graded_by            GraderKind @default(AI)
-  graded_at            DateTime   @default(now())
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
+  graded_by            GraderKind   @default(AI)
+  graded_at            DateTime     @default(now())
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
   @@index([org_id])
   @@index([org_id, createdAt])
 }
 
 model Recording {
-  id           String   @id @default(cuid())
+  id           String       @id @default(cuid())
   org_id       String
   org          Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
-  attempt_id   String   @unique
-  attempt      Attempt  @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
+  attempt_id   String       @unique
+  attempt      Attempt      @relation(fields: [attempt_id], references: [id], onDelete: Cascade)
   storage_url  String
   duration_sec Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   @@index([org_id])
   @@index([org_id, createdAt])
 }
 
 model QuotaUsage {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   org_id         String
   org            Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
   user_id        String
-  user           User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  date           DateTime @db.Date
-  ai_calls_count Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  user           User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  date           DateTime     @db.Date
+  ai_calls_count Int          @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@unique([user_id, date])
   @@index([org_id])
@@ -281,14 +391,14 @@ model QuotaUsage {
 }
 
 model ActivityLog {
-  id        String   @id @default(cuid())
+  id        String       @id @default(cuid())
   org_id    String
   org       Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
   user_id   String?
-  user      User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  user      User?        @relation(fields: [user_id], references: [id], onDelete: SetNull)
   action    String
   metadata  Json?
-  timestamp DateTime @default(now())
+  timestamp DateTime     @default(now())
 
   @@index([org_id])
   @@index([org_id, timestamp])
@@ -301,19 +411,19 @@ model ActivityLog {
 // from the joined Attempt rows; this row holds only the lifecycle
 // metadata (timing, status, track).
 model MockSession {
-  id           String      @id @default(cuid())
+  id           String       @id @default(cuid())
   org_id       String
   org          Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
   user_id      String
-  user         User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
   track        Track
-  status       MockStatus  @default(InProgress)
-  started_at   DateTime    @default(now())
+  status       MockStatus   @default(InProgress)
+  started_at   DateTime     @default(now())
   submitted_at DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  attempts     Attempt[]
+  attempts Attempt[]
 
   @@index([org_id])
   @@index([org_id, user_id])
@@ -328,23 +438,23 @@ model MockSession {
 // from input/output tokens. Unknown models log with cost_usd = 0 and
 // surface a console.warn.
 model AiCallLog {
-  id            String   @id @default(cuid())
+  id            String       @id @default(cuid())
   org_id        String
   org           Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
   // user_id is nullable because some accounting events (e.g. retries,
   // background jobs) may not have a learner attached. Set null on
   // user deletion so the cost record survives the user row.
   user_id       String?
-  user          User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  user          User?        @relation(fields: [user_id], references: [id], onDelete: SetNull)
   purpose       String
   provider      String
   model         String
-  input_tokens  Int      @default(0)
-  output_tokens Int      @default(0)
+  input_tokens  Int          @default(0)
+  output_tokens Int          @default(0)
   // Six decimal places fits sub-cent precision for OpenRouter cheap-tier
   // calls (some <$0.0001). Total cap of 10 digits = up to $9,999.999999.
-  cost_usd      Decimal  @db.Decimal(10, 6)
-  createdAt     DateTime @default(now())
+  cost_usd      Decimal      @db.Decimal(10, 6)
+  createdAt     DateTime     @default(now())
 
   @@index([org_id])
   @@index([org_id, createdAt])

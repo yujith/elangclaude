@@ -20,6 +20,26 @@ export type {
   RecentAttempt,
 } from "./learner-dashboard";
 
+export { updateMyIeltsTrack, hasInProgressWork } from "./profile";
+export type { UpdateTrackFailureReason, UpdateTrackResult } from "./profile";
+
+export {
+  INTERNAL_PLAN_SLUG,
+  FREE_PLAN_SLUG,
+  listPlansAsSuperAdmin,
+  getPlanByIdAsSuperAdmin,
+  getPlanBySlugAsSuperAdmin,
+  createPlanAsSuperAdmin,
+  updatePlanAsSuperAdmin,
+  archivePlanAsSuperAdmin,
+} from "./plans";
+export type {
+  PlanFailureReason,
+  PlanResult,
+  PlanCreateInput,
+  PlanUpdateInput,
+} from "./plans";
+
 export {
   CLERK_NEW_ORG_DEFAULTS,
   applyClerkUserUpsert,
@@ -48,6 +68,8 @@ export {
   type TestStatus,
   type GraderKind,
   type OrgStatus,
+  type SubscriptionStatus,
+  type ProvisionedVia,
   type Organization,
   type User,
   type Test,
@@ -58,4 +80,6 @@ export {
   type Recording,
   type QuotaUsage,
   type ActivityLog,
+  type Plan,
+  type StripeEventLog,
 } from "@prisma/client";

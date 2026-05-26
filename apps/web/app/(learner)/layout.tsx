@@ -58,14 +58,18 @@ export default async function LearnerLayout({
           </Link>
           <LearnerNav className="absolute left-1/2 hidden -translate-x-1/2 lg:block" />
           <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
+            <Link
+              href="/profile"
+              aria-label="Open your profile"
+              className="text-right hidden sm:block rounded-sm px-1 py-0.5 hover:bg-brand-grey-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black transition-colors"
+            >
               <p className="font-heading font-bold text-sm leading-tight">
                 {user?.name ?? user?.email ?? "Learner"}
               </p>
               <p className="font-body text-xs text-brand-grey-200 leading-tight">
                 {user?.org.name} · {user?.ielts_track === "Academic" ? "Academic" : "General Training"}
               </p>
-            </div>
+            </Link>
             <SignOutControl />
           </div>
         </div>

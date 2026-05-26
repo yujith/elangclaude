@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>eLanguage Center — British Council Sri Lanka pitch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,400;0,500;0,600;0,700;1,500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --red: #c41e3a;
+      --red-dark: #9a1830;
+      --ink: #0f0f0f;
+      --muted: #5c5c5c;
+      --line: #e8e8e8;
+      --bg: #fafafa;
+      --card: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Rubik", system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+      color: var(--ink);
+      background: var(--bg);
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px 20px;
+      padding: 12px 20px;
+      background: var(--ink);
+      color: #fff;
+      border-bottom: 4px solid var(--red);
+    }
+
+    .toolbar h1 {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .toolbar p {
+      margin: 0;
+      font-size: 0.8rem;
+      opacity: 0.88;
+      flex: 1 1 220px;
+    }
+
+    .toolbar button {
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 0.875rem;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: var(--red);
+      color: #fff;
+    }
+
+    .toolbar button:hover {
+      background: var(--red-dark);
+    }
+
+    .toolbar a {
+      color: #fff;
+      opacity: 0.9;
+      font-size: 0.8rem;
+    }
+
+    .deck-meta {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 24px 20px 8px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .deck-meta strong {
+      color: var(--ink);
+    }
+
+    .slides {
+      max-width: 920px;
+      margin: 0 auto 48px;
+      padding: 0 20px;
+    }
+
+    section.slide {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 28px 32px 32px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      border: 1px solid var(--line);
+    }
+
+    section.slide h2 {
+      margin: 0 0 16px;
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--ink);
+      padding-bottom: 10px;
+      border-bottom: 3px solid var(--red);
+    }
+
+    section.slide h3 {
+      margin: 20px 0 8px;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    section.slide .tagline {
+      font-size: 1.1rem;
+      font-style: italic;
+      color: var(--muted);
+      margin: 8px 0 16px;
+    }
+
+    section.slide ul,
+    section.slide ol {
+      margin: 12px 0;
+      padding-left: 1.25rem;
+    }
+
+    section.slide li {
+      margin: 8px 0;
+    }
+
+    section.slide li strong {
+      color: var(--ink);
+    }
+
+    .speaker {
+      margin-top: 16px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      font-style: italic;
+      color: var(--muted);
+      background: #f3f3f3;
+      border-radius: 8px;
+      border-left: 4px solid var(--muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 0.92rem;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f5f5f5;
+      font-weight: 600;
+    }
+
+    .title-slide h2 {
+      font-size: 1.75rem;
+      border: none;
+      padding: 0;
+    }
+
+    .title-slide .brand {
+      font-size: 2rem;
+      font-weight: 800;
+      font-style: italic;
+      letter-spacing: -0.02em;
+      color: var(--red);
+      margin-bottom: 4px;
+    }
+
+    .appendix {
+      margin-top: 8px;
+    }
+
+    .appendix h2 {
+      font-size: 1.15rem;
+    }
+
+    .footnote {
+      max-width: 920px;
+      margin: 0 auto 40px;
+      padding: 0 24px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    @media print {
+      .toolbar {
+        display: none !important;
+      }
+
+      body {
+        background: #fff;
+        font-size: 11pt;
+      }
+
+      .deck-meta {
+        padding-top: 12px;
+        page-break-after: avoid;
+      }
+
+      .slides {
+        max-width: none;
+        padding: 0;
+        margin: 0;
+      }
+
+      section.slide {
+        page-break-after: always;
+        page-break-inside: avoid;
+        border-radius: 0;
+        box-shadow: none;
+        border: none;
+        padding: 14mm 16mm;
+        margin: 0;
+        min-height: 0;
+      }
+
+      section.slide:last-of-type {
+        page-break-after: auto;
+      }
+
+      .speaker {
+        background: #f9f9f9;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      th {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      @page {
+        size: A4;
+        margin: 12mm;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <h1>Pitch deck — PDF export</h1>
+    <p>
+      Click <strong>Save as PDF</strong>, then in the print dialog choose <strong>Save as PDF</strong> (Mac) or <strong>Microsoft Print to PDF</strong> / <strong>Save as PDF</strong> (Windows). Use <strong>Chrome</strong> or <strong>Edge</strong> for best layout.
+    </p>
+    <button type="button" id="btn-pdf">Save as PDF</button>
+    <a href="british-council-sri-lanka.md">Markdown source</a>
+  </div>
+
+  <div class="deck-meta">
+    <strong>Audience:</strong> British Council Sri Lanka — teaching centres, IELTS stakeholders, digital / partnerships leads.
+    <strong>Objective:</strong> Anchor pilot customer (first institutional licensee).
+    <strong>Ask:</strong> Time-bound pilot, defined cohort, success metrics, path to scale.
+  </div>
+
+  <div class="slides">
+    <section class="slide title-slide" aria-label="Slide 1">
+      <p class="brand">eLanguage Center</p>
+      <p class="tagline">Skills That Open Doorways — Free. Fun. Effective.</p>
+      <h2>Pilot partnership with British Council Sri Lanka</h2>
+      <p><strong>Prepared by:</strong> [Your name] · [Company / legal entity] · [Date]</p>
+      <p><strong>Contact:</strong> [Email] · [Phone / LinkedIn]</p>
+      <p class="speaker">Speaker note: Open with why Sri Lanka and why BC first — credibility, scale, and alignment with English and IELTS excellence.</p>
+    </section>
+
+    <section class="slide" aria-label="Slide 2">
+      <h2>Slide 2 — The opportunity</h2>
+      <ul>
+        <li>Sri Lanka has <strong>strong and sustained demand</strong> for IELTS preparation across study, migration, and career pathways.</li>
+        <li>Learners need <strong>volume of realistic practice</strong> across all four papers, especially <strong>Speaking</strong> and <strong>Writing</strong>, where feedback is slow and expensive to scale.</li>
+        <li>Centres need <strong>visibility</strong>: who practised, how often, and where cohorts struggle — without adding heavy marking load to teachers.</li>
+      </ul>
+      <p class="speaker">Speaker note: This slide is about their world, not your product yet.</p>
+    </section>
+
+    <section class="slide" aria-label="Slide 3">
+      <h2>Slide 3 — The gap</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Need</th>
+            <th>Typical reality</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Unlimited realistic mocks</td>
+            <td>Limited classroom time; generic PDFs</td>
+          </tr>
+          <tr>
+            <td>Immediate feedback on Writing / Speaking</td>
+            <td>Bottlenecked by human capacity</td>
+          </tr>
+          <tr>
+            <td>Speaking under exam conditions</td>
+            <td>Hard to schedule 1:1 mock interviews at scale</td>
+          </tr>
+          <tr>
+            <td>Admin oversight across branches / intakes</td>
+            <td>Fragmented tools and spreadsheets</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><strong>eLanguage Center is built to close this gap</strong> as a <strong>B2B platform</strong> licensed to the institution, not a consumer app bolted on ad hoc.</p>
+    </section>
+
+    <section class="slide" aria-label="Slide 4">
+      <h2>Slide 4 — What eLanguage Center is</h2>
+      <ul>
+        <li><strong>Web-based IELTS preparation SaaS</strong> for <strong>organizations</strong> (per-seat subscription + usage quotas).</li>
+        <li><strong>All four sections:</strong> Reading, Listening, Writing, Speaking — <strong>Academic</strong> and <strong>General Training</strong> (learner-selectable).</li>
+        <li><strong>Modes:</strong> section practice and <strong>full timed mock tests</strong> (exam simulation).</li>
+        <li><strong>AI-generated test content</strong> with a <strong>quality gate</strong> (content pool moderation before items go live).</li>
+        <li><strong>AI-driven grading</strong> for Writing and Speaking against IELTS criteria; <strong>Speaking</strong> as an <strong>interactive voice conversation</strong> with an AI examiner, <strong>recordings stored</strong> for audit and (on roadmap) human upgrade.</li>
+      </ul>
+      <p class="speaker">Speaker note: Clearly state this is <strong>preparation</strong>, not the official test — complements BC’s courses and resources.</p>
+    </section>
+
+    <section class="slide" aria-label="Slide 5">
+      <h2>Slide 5 — Why British Council Sri Lanka first</h2>
+      <ul>
+        <li><strong>Mission fit:</strong> English, education, and learner outcomes — aligned with how BC positions IELTS support worldwide.</li>
+        <li><strong>Trust:</strong> A pilot with BC raises the bar for <strong>quality, safeguarding, and academic integrity</strong> from day one.</li>
+        <li><strong>Scale insight:</strong> You get <strong>real classroom and centre usage</strong> to harden product, quotas, and support — BC gets <strong>early influence</strong> on roadmap (e.g. reporting, reviewer workflows).</li>
+        <li><strong>Regional signal:</strong> Success in Sri Lanka is a <strong>credible reference</strong> for other BC teaching centres and partners.</li>
+      </ul>
+    </section>
+
+    <section class="slide" aria-label="Slide 6">
+      <h2>Slide 6 — Product snapshot (learner)</h2>
+      <ol>
+        <li>Invite → onboard → choose <strong>Academic</strong> or <strong>General Training</strong>.</li>
+        <li>Dashboard: activity, suggested next step, <strong>band trend over time</strong>.</li>
+        <li>Choose <strong>section practice</strong> or <strong>full mock</strong>.</li>
+        <li>Submit → <strong>AI grades</strong> → criterion-level feedback (Writing / Speaking) + section scores.</li>
+        <li>History and weak-area hints to guide <strong>what to practise next</strong>.</li>
+      </ol>
+    </section>
+
+    <section class="slide" aria-label="Slide 7">
+      <h2>Slide 7 — Product snapshot (organization)</h2>
+      <ul>
+        <li><strong>Org admin:</strong> invite learners (single + <strong>bulk CSV</strong>), <strong>seat usage</strong>, <strong>activity log</strong> (who, what section, when, scores).</li>
+        <li><strong>Configurable quotas:</strong> per-org seats; <strong>per-user daily/monthly AI limits</strong> enforced <strong>server-side</strong> (cost control and fair use).</li>
+        <li><strong>Multi-tenant isolation:</strong> data scoped per organization — suitable for <strong>“British Council Sri Lanka”</strong> as tenant.</li>
+      </ul>
+      <p class="speaker">Speaker note: Emphasize operational control: BC stays in charge of who gets access.</p>
+    </section>
+
+    <section class="slide" aria-label="Slide 8">
+      <h2>Slide 8 — Differentiation</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Theme</th>
+            <th>eLanguage Center</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Speaking</strong></td>
+            <td>Conversational <strong>voice</strong> examiner (Parts 1–3), not only text prompts</td>
+          </tr>
+          <tr>
+            <td><strong>B2B-first</strong></td>
+            <td>Built for <strong>licensed seats</strong>, bulk onboarding, and logs — not only B2C</td>
+          </tr>
+          <tr>
+            <td><strong>Cost discipline</strong></td>
+            <td>Cached content pool, <strong>quotas</strong>, model tiering for generation vs grading</td>
+          </tr>
+          <tr>
+            <td><strong>Roadmap to human assurance</strong></td>
+            <td><strong>Phase 2:</strong> reviewer/teacher role, queue, <strong>override</strong> of AI bands on Speaking recordings</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="speaker">Speaker note: BC cares about reputation — lead with governance and path to human oversight.</p>
+    </section>
+
+    <section class="slide" aria-label="Slide 9">
+      <h2>Slide 9 — Trust, integrity, and compliance</h2>
+      <ul>
+        <li><strong>Not a substitute for the official IELTS test</strong> — practice and feedback only; marketing and UI must stay unambiguous.</li>
+        <li><strong>Data protection:</strong> architecture aims for <strong>GDPR-style</strong> deletion paths, tenancy isolation, secure recording access (signed URLs, retention policies — default retention configurable, e.g. 90-day discussion).</li>
+        <li><strong>Quality:</strong> generated tests pass a <strong>moderation</strong> step before wide rotation; room to align with BC content standards in a pilot.</li>
+        <li><strong>Accessibility:</strong> WCAG 2.1 AA as a <strong>design target</strong> for serious institutional rollout.</li>
+      </ul>
+      <p class="speaker">Speaker note: Offer to walk through DPA, retention, and Sri Lanka / UK data flow with their risk team.</p>
+    </section>
+
+    <section class="slide" aria-label="Slide 10">
+      <h2>Slide 10 — Proposed pilot</h2>
+      <p><strong>Suggested shape (edit numbers with BC):</strong></p>
+      <table>
+        <thead>
+          <tr>
+            <th>Element</th>
+            <th>Proposal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Duration</strong></td>
+            <td>e.g. 12–16 weeks</td>
+          </tr>
+          <tr>
+            <td><strong>Cohort</strong></td>
+            <td>e.g. one intake / one centre / named programme (start narrow)</td>
+          </tr>
+          <tr>
+            <td><strong>Seats</strong></td>
+            <td>e.g. 50–200 learners (align to one teaching product line first)</td>
+          </tr>
+          <tr>
+            <td><strong>Success metrics</strong></td>
+            <td>Utilization rate; repeat practice per learner; learner NPS or survey; teacher/coordinator feedback; technical reliability</td>
+          </tr>
+          <tr>
+            <td><strong>Governance</strong></td>
+            <td>Single BC owner + weekly or fortnightly check-in; shared issues log</td>
+          </tr>
+          <tr>
+            <td><strong>Commercial</strong></td>
+            <td><strong>Pilot fee</strong> or subsidized first term — transparent <strong>per-seat</strong> model post-pilot</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="speaker">Speaker note: First customer = design partner pricing is normal; avoid undervaluing forever — cap pilot discount and document post-pilot list price.</p>
+    </section>
+
+    <section class="slide" aria-label="Slide 11">
+      <h2>Slide 11 — Roadmap relevant to BC</h2>
+      <ul>
+        <li><strong>MVP v1:</strong> All four sections, AI grading, Speaking voice + recordings, org admin, quotas, super-admin operations and content pool moderation.</li>
+        <li><strong>Phase 2 (high interest for BC):</strong> <strong>Human reviewer</strong> workflow, cohort analytics, exports (CSV/PDF), optional <strong>SSO</strong>, optional <strong>per-org branding</strong>.</li>
+        <li><strong>Explicitly out of scope:</strong> Live human tutoring marketplace — you are <strong>not</strong> competing with Italki-style models.</li>
+      </ul>
+    </section>
+
+    <section class="slide" aria-label="Slide 12">
+      <h2>Slide 12 — Technology</h2>
+      <ul>
+        <li>Modern web stack (<strong>Next.js</strong>, TypeScript), <strong>PostgreSQL</strong>, multi-tenant data model, PWA-ready front end.</li>
+        <li>AI: routed stack for <strong>generation vs grading</strong> (cost and quality separation); voice via established realtime APIs; monitoring and error tracking as standard ops.</li>
+      </ul>
+      <p class="speaker">Speaker note: BC technical teams may ask where data sits — prepare hosting region and subprocessors list.</p>
+    </section>
+
+    <section class="slide" aria-label="Slide 13">
+      <h2>Slide 13 — What we need from British Council Sri Lanka</h2>
+      <ol>
+        <li><strong>Named sponsor</strong> (Teaching Centre lead, IELTS product lead, or Digital).</li>
+        <li><strong>Pilot cohort</strong> and access rules (who is in / out).</li>
+        <li><strong>4–6 weeks</strong> to align on branding disclaimers, learner comms, and any content sensitivities.</li>
+        <li><strong>Feedback loop</strong> on reporting and Phase 2 reviewer workflow priorities.</li>
+        <li><strong>Agreement in principle</strong> on pilot scope letter or MSO + pilot schedule A.</li>
+      </ol>
+    </section>
+
+    <section class="slide" aria-label="Slide 14">
+      <h2>Slide 14 — Why now</h2>
+      <ul>
+        <li>Learner expectations have shifted: they want <strong>frequent</strong>, <strong>realistic</strong> practice and <strong>fast</strong> feedback.</li>
+        <li>Institutions need <strong>scalable</strong> tools that respect <strong>budget</strong> and <strong>brand</strong>.</li>
+        <li>You are offering BC Sri Lanka <strong>first-mover influence</strong> as anchor partner while you build toward <strong>enterprise-grade</strong> IELTS prep infrastructure.</li>
+      </ul>
+    </section>
+
+    <section class="slide" aria-label="Slide 15">
+      <h2>Slide 15 — Closing / ask</h2>
+      <p><strong>Ask for this meeting:</strong></p>
+      <p>Agreement on <strong>next step</strong> — e.g. follow-up workshop with teaching + risk + digital, pilot MOU timeline, and target start date.</p>
+      <p><strong>Tagline (leave on screen):</strong></p>
+      <p class="tagline">Skills That Open Doorways — Free. Fun. Effective.</p>
+    </section>
+
+    <section class="slide appendix" aria-label="Appendix A">
+      <h2>Appendix A — Executive summary (email follow-up)</h2>
+      <p><strong>Subject:</strong> Pilot proposal — eLanguage Center for British Council Sri Lanka IELTS preparation</p>
+      <p>eLanguage Center is a B2B web platform for IELTS preparation: all four skills, Academic and General Training, section and full mock practice, AI grading, and a conversational AI Speaking examiner with stored recordings. Organizations license seats with quotas and receive admin tools for invites, usage, and activity.</p>
+      <p>We are seeking <strong>British Council Sri Lanka as our first institutional customer</strong> in a structured pilot: limited cohort, clear metrics, and joint learning. The pilot strengthens learner practice and visibility for coordinators while helping us harden security, pedagogy, and reporting to institutional standards. We welcome alignment on data protection, academic integrity messaging, and a roadmap toward optional human review of Speaking outputs.</p>
+      <p><strong>Next step:</strong> 45-minute discovery with teaching + digital + commercial stakeholders to agree pilot shape and evaluation.</p>
+    </section>
+
+    <section class="slide appendix" aria-label="Appendix B">
+      <h2>Appendix B — Objection handling</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Objection</th>
+            <th>Response direction</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>“AI grading is not official.”</td>
+            <td>Agree. Position as <strong>formative practice</strong>; Phase 2 human override where needed.</td>
+          </tr>
+          <tr>
+            <td>“We already have materials.”</td>
+            <td>Position as <strong>scalable layer</strong> — more attempts, faster loop, logs — not a replacement for your syllabus.</td>
+          </tr>
+          <tr>
+            <td>“Data residency.”</td>
+            <td>Share architecture and <strong>subprocessors</strong>; discuss <strong>hosting region</strong> and retention.</td>
+          </tr>
+          <tr>
+            <td>“You’re early-stage.”</td>
+            <td>Honest <strong>pilot</strong> with capped cohort, exit criteria, and shared risk — pair with <strong>responsive support</strong> and weekly reviews.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="slide appendix" aria-label="Appendix C">
+      <h2>Appendix C — Checklist before you send or present</h2>
+      <ul>
+        <li>Replace all bracketed placeholders (name, entity, contact, dates).</li>
+        <li>Align pilot numbers with what you can <strong>actually</strong> support operationally.</li>
+        <li>Attach <strong>one-pager PDF</strong> + link to <strong>demo</strong> (or recorded walkthrough) if available.</li>
+        <li>Prepare <strong>subprocessors / hosting</strong> one-pager for IT / data protection.</li>
+        <li>Confirm <strong>IELTS trademark</strong> usage follows <a href="https://www.ielts.org/">official IELTS branding rules</a> for any public materials — when in doubt, say “IELTS preparation” and use official partners’ guidelines.</li>
+      </ul>
+    </section>
+  </div>
+
+  <p class="footnote">
+    Content aligned with in-repo product brief (docs/Brief.md, README.md, docs/ROADMAP.md). Keep external claims aligned with what is shipped or committed for the pilot window.
+  </p>
+
+  <script>
+    document.getElementById("btn-pdf").addEventListener("click", function () {
+      window.print();
+    });
+  </script>
+</body>
+</html>

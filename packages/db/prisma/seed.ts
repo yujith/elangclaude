@@ -23,58 +23,7 @@ loadEnv({ path: resolve(seedDir, "../.env") });
 
 const prisma = new PrismaClient();
 
-// `.dev` (not `.test`) — Clerk's Backend API enforces real email-address
-// validation and rejects RFC 2606 reserved TLDs (`.test`, `.example`,
-// `.invalid`, `.localhost`) with `form_param_format_invalid`. `.dev` is a
-// real ICANN TLD operated by Google, idiomatic for dev fixtures, and the
-// inbox doesn't matter — the seed sets a shared password rather than
-// sending an invitation email.
-const SUPER_EMAIL = "super@elanguage.dev";
-
-// Domain rename one-shot: previous seeds used `@elanguage.test`, which
-// Clerk now rejects. Rename any leftover rows in place so the upserts
-// below find them (and so the clerk-seed pass that follows main() sees
-// only Clerk-acceptable emails). Idempotent; soft-deletes the legacy row
-// when a `.dev` row with the same local-part already exists so the
-// clerk-seed pass skips it via its `deleted_at: null` filter.
-async function renameLegacyTestEmails() {
-  const moves: Array<[string, string]> = [
-    ["super@elanguage.test", "super@elanguage.dev"],
-    ["admin-a@elanguage.test", "admin-a@elanguage.dev"],
-    ["learner-a1@elanguage.test", "learner-a1@elanguage.dev"],
-    ["learner-a2@elanguage.test", "learner-a2@elanguage.dev"],
-    ["admin-b@elanguage.test", "admin-b@elanguage.dev"],
-    ["learner-b1@elanguage.test", "learner-b1@elanguage.dev"],
-    ["learner-b2@elanguage.test", "learner-b2@elanguage.dev"],
-  ];
-  for (const [oldEmail, newEmail] of moves) {
-    const oldRow = await prisma.user.findUnique({
-      where: { email: oldEmail },
-      select: { id: true, clerk_user_id: true },
-    });
-    if (!oldRow) continue;
-    const newRow = await prisma.user.findUnique({
-      where: { email: newEmail },
-      select: { id: true },
-    });
-    if (newRow) {
-      // Both addresses exist (someone ran the new seed before this rename
-      // landed). Soft-delete the legacy row so clerk-seed skips it.
-      await prisma.user.update({
-        where: { id: oldRow.id },
-        data: { deleted_at: new Date() },
-      });
-      console.log(`[seed] soft-deleted legacy ${oldEmail} (replaced by ${newEmail})`);
-    } else {
-      // Rename in place — preserves clerk_user_id and dependent rows.
-      await prisma.user.update({
-        where: { id: oldRow.id },
-        data: { email: newEmail },
-      });
-      console.log(`[seed] renamed legacy ${oldEmail} → ${newEmail}`);
-    }
-  }
-}
+const SUPER_EMAIL = "super@elanguage.test";
 
 async function upsertSystemOrg() {
   // Singleton parent for SuperAdmin-level ActivityLog rows (content
@@ -150,6 +99,160 @@ async function upsertUser(input: {
       role: input.role,
     },
     create: input,
+  });
+}
+
+// ─── Subscription plans (ADR-0017 Phase 1) ─────────────────────────────
+//
+// Canonical Plan catalogue. SuperAdmin can tweak amounts / quotas from
+// /plans later, but these are the seed-time defaults. Stable IDs make
+// rows easy to spot in prisma studio.
+//
+// The `internal` plan is the parking spot for existing seeded orgs and
+// the system org. Its seat / quota numbers are permissive so backfilled
+// orgs that previously had high dev quotas (ORG_A) keep working.
+//
+// The `free` plan is NOT is_internal — it's a real, customer-facing
+// plan with amount=0 and no Stripe sync (ADR-0017 D4). It exists so the
+// "Free. Fun. Effective." tagline lands honestly.
+
+type PlanSpec = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  seat_limit: number;
+  quota_daily: number;
+  quota_monthly: number;
+  amount_monthly_usd: string;
+  trial_days: number;
+  is_internal: boolean;
+  is_active: boolean;
+  sort_order: number;
+};
+
+const PLANS: PlanSpec[] = [
+  {
+    id: "seed_plan_free",
+    slug: "free",
+    name: "Free",
+    description: "Try eLanguage Center with one learner. No card required.",
+    seat_limit: 1,
+    quota_daily: 50,
+    quota_monthly: 300,
+    amount_monthly_usd: "0.00",
+    trial_days: 0,
+    is_internal: false,
+    is_active: true,
+    sort_order: 10,
+  },
+  {
+    id: "seed_plan_starter",
+    slug: "starter",
+    name: "Starter",
+    description: "For small schools getting started with IELTS prep.",
+    seat_limit: 25,
+    quota_daily: 50,
+    quota_monthly: 1000,
+    amount_monthly_usd: "49.00",
+    trial_days: 14,
+    is_internal: false,
+    is_active: true,
+    sort_order: 20,
+  },
+  {
+    id: "seed_plan_pro",
+    slug: "pro",
+    name: "Pro",
+    description: "For growing schools and migration agencies.",
+    seat_limit: 100,
+    quota_daily: 100,
+    quota_monthly: 3000,
+    amount_monthly_usd: "199.00",
+    trial_days: 14,
+    is_internal: false,
+    is_active: true,
+    sort_order: 30,
+  },
+  {
+    id: "seed_plan_enterprise",
+    slug: "enterprise",
+    name: "Enterprise",
+    description: "For universities and national-scale providers.",
+    seat_limit: 1000,
+    quota_daily: 200,
+    quota_monthly: 6000,
+    amount_monthly_usd: "799.00",
+    trial_days: 14,
+    is_internal: false,
+    is_active: true,
+    sort_order: 40,
+  },
+  {
+    id: "seed_plan_internal",
+    slug: "internal",
+    name: "Internal",
+    description:
+      "Non-billed plan for seeded orgs and internal eLanguage Center use.",
+    seat_limit: 1000,
+    quota_daily: 5000,
+    quota_monthly: 100000,
+    amount_monthly_usd: "0.00",
+    trial_days: 0,
+    is_internal: true,
+    is_active: true,
+    sort_order: 1000,
+  },
+];
+
+async function upsertPlan(spec: PlanSpec) {
+  return prisma.plan.upsert({
+    where: { id: spec.id },
+    update: {
+      slug: spec.slug,
+      name: spec.name,
+      description: spec.description,
+      seat_limit: spec.seat_limit,
+      quota_daily: spec.quota_daily,
+      quota_monthly: spec.quota_monthly,
+      amount_monthly_usd: spec.amount_monthly_usd,
+      trial_days: spec.trial_days,
+      is_internal: spec.is_internal,
+      is_active: spec.is_active,
+      sort_order: spec.sort_order,
+    },
+    create: {
+      id: spec.id,
+      slug: spec.slug,
+      name: spec.name,
+      description: spec.description,
+      seat_limit: spec.seat_limit,
+      quota_daily: spec.quota_daily,
+      quota_monthly: spec.quota_monthly,
+      amount_monthly_usd: spec.amount_monthly_usd,
+      trial_days: spec.trial_days,
+      is_internal: spec.is_internal,
+      is_active: spec.is_active,
+      sort_order: spec.sort_order,
+    },
+  });
+}
+
+// Backfill every existing Org (including the system org) onto the
+// `internal` plan with subscription_status=Internal. We deliberately do
+// NOT touch seat_limit / quota_daily / quota_monthly on the Org rows —
+// those are LIVE values (ORG_A in particular has a tuned high dev
+// quota) and overwriting them from the Plan would regress the seed.
+// New paying orgs get those copied from the Plan at subscription
+// activation time (Phase 4 webhook).
+async function backfillOrgsToInternalPlan(internalPlanId: string) {
+  await prisma.organization.updateMany({
+    where: { plan_id: null },
+    data: {
+      plan_id: internalPlanId,
+      subscription_status: "Internal",
+      provisioned_via: "seeded",
+    },
   });
 }
 
@@ -1659,11 +1762,21 @@ async function main() {
   // requires `User.org_id`). Park them inside Org A — `withSuperAdminContext`
   // ignores org membership anyway.
   await upsertSystemOrg();
-  // Rename / clean up any rows from the pre-`.dev` seed shape before any
-  // upserts run — see comment on renameLegacyTestEmails above.
-  await renameLegacyTestEmails();
+
+  // Plans first — orgs that get backfilled need a plan_id to point at.
+  let internalPlanId: string | null = null;
+  for (const spec of PLANS) {
+    const plan = await upsertPlan(spec);
+    if (spec.slug === "internal") internalPlanId = plan.id;
+  }
+  if (!internalPlanId) {
+    throw new Error("Internal plan not found after upsert — seed bug.");
+  }
+
   const orgA = await upsertOrg(ORG_A);
   const orgB = await upsertOrg(ORG_B);
+
+  await backfillOrgsToInternalPlan(internalPlanId);
 
   const superAdmin = await upsertUser({
     org_id: orgA.id,
@@ -1674,38 +1787,38 @@ async function main() {
 
   await upsertUser({
     org_id: orgA.id,
-    email: "admin-a@elanguage.dev",
+    email: "admin-a@elanguage.test",
     name: "Demo English Admin",
     role: "OrgAdmin",
   });
   await upsertUser({
     org_id: orgA.id,
-    email: "learner-a1@elanguage.dev",
+    email: "learner-a1@elanguage.test",
     name: "Anika (Demo English)",
     role: "Learner",
   });
   await upsertUser({
     org_id: orgA.id,
-    email: "learner-a2@elanguage.dev",
+    email: "learner-a2@elanguage.test",
     name: "Bilal (Demo English)",
     role: "Learner",
   });
 
   await upsertUser({
     org_id: orgB.id,
-    email: "admin-b@elanguage.dev",
+    email: "admin-b@elanguage.test",
     name: "Migration Pathways Admin",
     role: "OrgAdmin",
   });
   await upsertUser({
     org_id: orgB.id,
-    email: "learner-b1@elanguage.dev",
+    email: "learner-b1@elanguage.test",
     name: "Carmen (Migration Pathways)",
     role: "Learner",
   });
   await upsertUser({
     org_id: orgB.id,
-    email: "learner-b2@elanguage.dev",
+    email: "learner-b2@elanguage.test",
     name: "Devraj (Migration Pathways)",
     role: "Learner",
   });
@@ -1727,9 +1840,11 @@ async function main() {
   const readingTestCount = await prisma.test.count({
     where: { section: "Reading", status: "Approved" },
   });
+  const planCount = await prisma.plan.count();
 
   console.log(
     `Seed complete: ${orgCount} demo orgs, ${userCount} users, ` +
+      `${planCount} plans, ` +
       `${writingTestCount} approved Writing tests, ` +
       `${readingTestCount} approved Reading tests in DB ` +
       `(SuperAdmin: ${SUPER_EMAIL}).`,
