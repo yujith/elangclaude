@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { ClerkAPIResponseError } from "@clerk/backend/errors";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "./client";
 import { SYSTEM_ORG_ID, SYSTEM_ORG_NAME } from "./system-org";
 import {
@@ -6,6 +7,7 @@ import {
   resetUserQuotaTodayAsSuperAdmin,
   setUserRoleAsSuperAdmin,
   softDeleteUserAsSuperAdmin,
+  type OrgAdminInviteClerkClient,
 } from "./super-user-admin";
 import { withOrg } from "./tenancy";
 import { createTestOrg, ctxFor, resetDatabase } from "./test-helpers";
@@ -42,11 +44,15 @@ describe("inviteOrgAdminForOrg", () => {
     const ctx = await superCtx();
     const orgB = await createTestOrg("B");
 
-    const result = await inviteOrgAdminForOrg(ctx, {
-      org_id: orgB.id,
-      email: "new-admin@elc.test",
-      name: "New Admin",
-    });
+    const result = await inviteOrgAdminForOrg(
+      ctx,
+      {
+        org_id: orgB.id,
+        email: "new-admin@elc.test",
+        name: "New Admin",
+      },
+      { skipClerkInvitation: true },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -77,10 +83,11 @@ describe("inviteOrgAdminForOrg", () => {
       },
     });
 
-    const result = await inviteOrgAdminForOrg(ctx, {
-      org_id: orgB.id,
-      email: "claimed@elc.test",
-    });
+    const result = await inviteOrgAdminForOrg(
+      ctx,
+      { org_id: orgB.id, email: "claimed@elc.test" },
+      { skipClerkInvitation: true },
+    );
     expect(result).toEqual({ ok: false, reason: "cannot_invite" });
   });
 
@@ -95,10 +102,11 @@ describe("inviteOrgAdminForOrg", () => {
         deleted_at: new Date(),
       },
     });
-    const result = await inviteOrgAdminForOrg(ctx, {
-      org_id: orgB.id,
-      email: "left@elc.test",
-    });
+    const result = await inviteOrgAdminForOrg(
+      ctx,
+      { org_id: orgB.id, email: "left@elc.test" },
+      { skipClerkInvitation: true },
+    );
     expect(result).toEqual({ ok: false, reason: "cannot_invite" });
   });
 
@@ -108,10 +116,11 @@ describe("inviteOrgAdminForOrg", () => {
     const learner = await prisma.user.create({
       data: { org_id: orgB.id, email: "promote@elc.test", role: "Learner" },
     });
-    const result = await inviteOrgAdminForOrg(ctx, {
-      org_id: orgB.id,
-      email: "promote@elc.test",
-    });
+    const result = await inviteOrgAdminForOrg(
+      ctx,
+      { org_id: orgB.id, email: "promote@elc.test" },
+      { skipClerkInvitation: true },
+    );
     expect(result.ok).toBe(true);
     const after = await prisma.user.findUnique({ where: { id: learner.id } });
     expect(after?.role).toBe("OrgAdmin");
@@ -119,11 +128,161 @@ describe("inviteOrgAdminForOrg", () => {
 
   it("refuses to invite under SYSTEM_ORG_ID", async () => {
     const ctx = await superCtx();
-    const result = await inviteOrgAdminForOrg(ctx, {
-      org_id: SYSTEM_ORG_ID,
-      email: "sys@elc.test",
-    });
+    const result = await inviteOrgAdminForOrg(
+      ctx,
+      { org_id: SYSTEM_ORG_ID, email: "sys@elc.test" },
+      { skipClerkInvitation: true },
+    );
     expect(result).toEqual({ ok: false, reason: "org_not_found" });
+  });
+});
+
+// ─── ADR-0017 Phase 3: Clerk invitation path ──────────────────────────
+
+function buildClerkStub() {
+  const createOrganizationInvitation = vi.fn(async () => ({
+    id: `orginv_${Math.random().toString(16).slice(2, 8)}`,
+  }));
+  const client: OrgAdminInviteClerkClient = {
+    organizations: { createOrganizationInvitation },
+  };
+  return { client, createOrganizationInvitation };
+}
+
+async function withClerkLinkedSuperAndOrg() {
+  const ctx = await superCtx();
+  // SuperAdmin needs a clerk_user_id stamped (the inviter). Lazy-link
+  // doesn't run inside the test environment so we set it explicitly.
+  await prisma.user.update({
+    where: { id: ctx.user_id },
+    data: { clerk_user_id: "user_super_test_123" },
+  });
+  const orgB = await createTestOrg("ClerkInvite");
+  // Org needs a clerk_org_id to receive an org-level invitation.
+  await prisma.organization.update({
+    where: { id: orgB.id },
+    data: { clerk_org_id: "org_test_target" },
+  });
+  return { ctx, orgB };
+}
+
+describe("inviteOrgAdminForOrg — Clerk org-invitation path", () => {
+  it("sends the Clerk invitation, stamps billing_owner_user_id, and logs", async () => {
+    const { ctx, orgB } = await withClerkLinkedSuperAndOrg();
+    const { client, createOrganizationInvitation } = buildClerkStub();
+
+    const result = await inviteOrgAdminForOrg(
+      ctx,
+      {
+        org_id: orgB.id,
+        email: "fresh-admin@elc.test",
+        name: "Fresh Admin",
+      },
+      { clerkClient: client, appUrl: "http://localhost:3000" },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(createOrganizationInvitation).toHaveBeenCalledTimes(1);
+    expect(createOrganizationInvitation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org_test_target",
+        emailAddress: "fresh-admin@elc.test",
+        inviterUserId: "user_super_test_123",
+        role: "org:admin",
+        publicMetadata: expect.objectContaining({
+          org_id: orgB.id,
+          role: "OrgAdmin",
+        }),
+      }),
+    );
+
+    const refreshedOrg = await prisma.organization.findUniqueOrThrow({
+      where: { id: orgB.id },
+    });
+    expect(refreshedOrg.billing_owner_user_id).toBe(result.user_id);
+  });
+
+  it("refuses when the target Org has no clerk_org_id (and rolls back the User row)", async () => {
+    const ctx = await superCtx();
+    await prisma.user.update({
+      where: { id: ctx.user_id },
+      data: { clerk_user_id: "user_super_test_456" },
+    });
+    const orgB = await createTestOrg("NoClerkOrg");
+    // Intentionally leave orgB.clerk_org_id null.
+    const { client, createOrganizationInvitation } = buildClerkStub();
+
+    const before = await prisma.user.count({ where: { org_id: orgB.id } });
+    const result = await inviteOrgAdminForOrg(
+      ctx,
+      { org_id: orgB.id, email: "fresh@elc.test" },
+      { clerkClient: client, appUrl: "http://localhost:3000" },
+    );
+    expect(result).toEqual({
+      ok: false,
+      reason: "org_has_no_clerk_org",
+    });
+    expect(createOrganizationInvitation).not.toHaveBeenCalled();
+
+    const after = await prisma.user.count({ where: { org_id: orgB.id } });
+    expect(after).toBe(before); // user row rolled back
+  });
+
+  it("treats Clerk's duplicate_record as idempotent success", async () => {
+    const { ctx, orgB } = await withClerkLinkedSuperAndOrg();
+    const client: OrgAdminInviteClerkClient = {
+      organizations: {
+        createOrganizationInvitation: vi.fn(async () => {
+          throw new ClerkAPIResponseError("Duplicate", {
+            data: [
+              {
+                code: "duplicate_record",
+                message: "Duplicate",
+                long_message: "Duplicate",
+                meta: {},
+              },
+            ],
+            status: 422,
+            clerkTraceId: "test-trace",
+          });
+        }),
+      },
+    };
+
+    const result = await inviteOrgAdminForOrg(
+      ctx,
+      { org_id: orgB.id, email: "dup@elc.test" },
+      { clerkClient: client, appUrl: "http://localhost:3000" },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("does NOT overwrite an existing billing_owner_user_id when a second OrgAdmin is invited", async () => {
+    const { ctx, orgB } = await withClerkLinkedSuperAndOrg();
+    const { client } = buildClerkStub();
+
+    // First OrgAdmin — becomes billing owner.
+    const first = await inviteOrgAdminForOrg(
+      ctx,
+      { org_id: orgB.id, email: "first@elc.test" },
+      { clerkClient: client, appUrl: "http://localhost:3000" },
+    );
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    // Second OrgAdmin — billing owner stays the first user.
+    const second = await inviteOrgAdminForOrg(
+      ctx,
+      { org_id: orgB.id, email: "second@elc.test" },
+      { clerkClient: client, appUrl: "http://localhost:3000" },
+    );
+    expect(second.ok).toBe(true);
+
+    const refreshedOrg = await prisma.organization.findUniqueOrThrow({
+      where: { id: orgB.id },
+    });
+    expect(refreshedOrg.billing_owner_user_id).toBe(first.user_id);
   });
 });
 

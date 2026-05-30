@@ -9,6 +9,8 @@ import {
 import { requireRole } from "@/lib/auth/context";
 import {
   archivePlanFromForm,
+  reactivatePlanFromForm,
+  resyncPlanFromForm,
   updatePlanFromForm,
 } from "@/lib/super/plan-actions";
 import { planErrorMessage } from "@/lib/super/plan-errors";
@@ -24,7 +26,16 @@ type SearchParams = {
   created?: string;
   saved?: string;
   archived?: string;
+  reactivated?: string;
   error?: string;
+  stripe_sync?: string;
+  stripe_synced?: string;
+};
+
+const STRIPE_SYNC_COPY: Record<string, string> = {
+  stripe_error:
+    "Stripe sync failed. The plan is saved locally — click “Re-sync to Stripe” below to retry.",
+  plan_not_found: "Plan not found while syncing to Stripe.",
 };
 
 export default async function PlanDetailPage({
@@ -47,7 +58,12 @@ export default async function PlanDetailPage({
   });
 
   const errorMessage = planErrorMessage(sp.error);
+  const stripeSyncMessage =
+    sp.stripe_sync && sp.stripe_sync in STRIPE_SYNC_COPY
+      ? STRIPE_SYNC_COPY[sp.stripe_sync]
+      : sp.stripe_sync ?? null;
   const locked = plan.slug === INTERNAL_PLAN_SLUG;
+  const freeOrInternal = locked || Number(plan.amount_monthly_usd.toString()) === 0;
 
   return (
     <section className="px-6 py-12 md:py-16">
@@ -99,6 +115,15 @@ export default async function PlanDetailPage({
         ) : null}
         {sp.saved ? <Banner tone="success">Plan saved.</Banner> : null}
         {sp.archived ? <Banner tone="success">Plan archived.</Banner> : null}
+        {sp.reactivated ? (
+          <Banner tone="success">Plan reactivated.</Banner>
+        ) : null}
+        {sp.stripe_synced ? (
+          <Banner tone="success">Stripe sync complete.</Banner>
+        ) : null}
+        {stripeSyncMessage ? (
+          <Banner tone="error">{stripeSyncMessage}</Banner>
+        ) : null}
         {errorMessage ? <Banner tone="error">{errorMessage}</Banner> : null}
 
         {locked ? (
@@ -247,6 +272,38 @@ export default async function PlanDetailPage({
           </form>
         )}
 
+        {!freeOrInternal ? (
+          <section className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6">
+            <h2 className="font-heading font-bold text-lg text-brand-black">
+              Stripe
+            </h2>
+            <p className="mt-1 font-body text-sm text-brand-grey-700">
+              We push a Stripe Product + monthly Price for every non-free, non-
+              internal plan. Sync runs automatically on save; use the button if
+              you need to reconcile after a Stripe outage.
+            </p>
+            <dl className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <IdStat
+                label="Stripe Product"
+                value={plan.stripe_product_id}
+              />
+              <IdStat
+                label="Stripe Price (monthly)"
+                value={plan.stripe_price_id_monthly}
+              />
+            </dl>
+            <form action={resyncPlanFromForm} className="mt-5">
+              <input type="hidden" name="plan_id" value={plan.id} />
+              <button
+                type="submit"
+                className="inline-flex items-center rounded-pill bg-brand-white text-brand-black px-4 py-2 font-heading font-bold text-sm border border-brand-grey-300 hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              >
+                Re-sync to Stripe
+              </button>
+            </form>
+          </section>
+        ) : null}
+
         {!locked && plan.is_active ? (
           <section className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6">
             <h2 className="font-heading font-bold text-lg text-brand-black">
@@ -255,7 +312,8 @@ export default async function PlanDetailPage({
             <p className="mt-1 font-body text-sm text-brand-grey-700">
               Archived plans stay in the catalogue for existing subscribers but
               disappear from the pricing page. Orgs already on this plan are
-              unaffected.
+              unaffected. The Stripe Product and monthly Price are deactivated
+              automatically.
             </p>
             <form action={archivePlanFromForm} className="mt-5">
               <input type="hidden" name="plan_id" value={plan.id} />
@@ -264,6 +322,28 @@ export default async function PlanDetailPage({
                 className="inline-flex items-center rounded-pill bg-brand-white text-brand-black px-4 py-2 font-heading font-bold text-sm border border-brand-grey-300 hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
               >
                 Archive plan
+              </button>
+            </form>
+          </section>
+        ) : null}
+
+        {!locked && !plan.is_active ? (
+          <section className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6">
+            <h2 className="font-heading font-bold text-lg text-brand-black">
+              Reactivate
+            </h2>
+            <p className="mt-1 font-body text-sm text-brand-grey-700">
+              Bring this plan back to the pricing page. We re-activate the
+              Stripe Product and monthly Price so new customers can subscribe
+              again — existing Orgs on this plan are unaffected either way.
+            </p>
+            <form action={reactivatePlanFromForm} className="mt-5">
+              <input type="hidden" name="plan_id" value={plan.id} />
+              <button
+                type="submit"
+                className="inline-flex items-center rounded-pill bg-brand-red text-white px-4 py-2 font-heading font-bold text-sm border border-brand-red hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              >
+                Reactivate plan
               </button>
             </form>
           </section>
@@ -306,6 +386,27 @@ function Stat({ label, value }: { label: string; value: string | number }) {
       </dt>
       <dd className="mt-1 font-display italic font-bold text-2xl text-brand-black leading-none">
         {value}
+      </dd>
+    </div>
+  );
+}
+
+function IdStat({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <dt className="font-body text-xs uppercase tracking-widest text-brand-grey-500">
+        {label}
+      </dt>
+      <dd className="mt-1">
+        {value ? (
+          <code className="font-mono text-xs text-brand-grey-900 break-all">
+            {value}
+          </code>
+        ) : (
+          <span className="font-body text-sm text-brand-grey-500">
+            Not synced yet
+          </span>
+        )}
       </dd>
     </div>
   );

@@ -12,6 +12,8 @@
 // is required (the role check inside throws if a non-SuperAdmin slips
 // through). Super-level ActivityLog rows go under SYSTEM_ORG_ID.
 
+import { createClerkClient } from "@clerk/backend";
+import { isClerkAPIResponseError } from "@clerk/backend/errors";
 import { Prisma, type Role } from "@prisma/client";
 import { prisma } from "./client";
 import { SYSTEM_ORG_ID } from "./system-org";
@@ -31,7 +33,16 @@ export type SuperUserFailureReason =
   // user.org_id. Refusing rather than acting on the mismatch defends
   // against a tampered or stale form and keeps the action semantics
   // tight: "this control on org A's page acts on org A's users".
-  | "org_mismatch";
+  | "org_mismatch"
+  // ─── ADR-0017 Phase 3 — Clerk invitation failure paths ──────────────
+  // Org has no clerk_org_id stamped; the invite path needs one because
+  // org-level Clerk invitations target a specific organisation.
+  | "org_has_no_clerk_org"
+  // SuperAdmin's User row has no clerk_user_id — they must sign in via
+  // Clerk at least once before inviting (lazy-link stamps the id).
+  | "inviter_clerk_id_missing"
+  // Two consecutive 429s from Clerk — surface so SuperAdmin can retry.
+  | "clerk_rate_limited";
 
 export type InviteOrgAdminResult =
   | { ok: true; user_id: string; alreadyExisted: boolean }
@@ -43,6 +54,43 @@ export type SuperUserResult =
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ASSIGNABLE_ROLES: ReadonlySet<Role> = new Set<Role>(["OrgAdmin", "Learner"]);
+const CLERK_RETRY_DELAY_MS = 2000;
+
+// Narrow surface of the Clerk SDK used for OrgAdmin invitations. Same
+// injection pattern as admin-invite.ts — letting tests pass a stub
+// keeps vi.mock("@clerk/backend") out of the picture.
+export interface OrgAdminInviteClerkClient {
+  organizations: {
+    createOrganizationInvitation(params: {
+      organizationId: string;
+      emailAddress: string;
+      inviterUserId: string;
+      role: string;
+      redirectUrl?: string;
+      publicMetadata?: Record<string, unknown>;
+    }): Promise<{ id: string }>;
+  };
+}
+
+export interface OrgAdminInviteOptions {
+  /** Test-only injection. Production omits and we build from env. */
+  clerkClient?: OrgAdminInviteClerkClient;
+  /** Defaults to process.env.APP_URL. Throws InviteEnvError if missing. */
+  appUrl?: string;
+  /** Test-only — replace setTimeout for the 429-retry path. */
+  sleep?: (ms: number) => Promise<void>;
+  /** Opt out of the Clerk-side invitation entirely. Defaults to false.
+   *  Used by the legacy /orgs/[orgId]/users path (which only writes the
+   *  DB row and does not send an email — covered by separate flows). */
+  skipClerkInvitation?: boolean;
+}
+
+export class OrgAdminInviteEnvError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OrgAdminInviteEnvError";
+  }
+}
 
 function normalizeEmail(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
@@ -77,6 +125,7 @@ async function countActiveOrgAdmins(
 export async function inviteOrgAdminForOrg(
   ctx: OrgContext,
   input: { org_id: string; email: string; name?: string | null },
+  options: OrgAdminInviteOptions = {},
 ): Promise<InviteOrgAdminResult> {
   const db = withSuperAdminContext(ctx);
   const email = normalizeEmail(input.email);
@@ -88,7 +137,7 @@ export async function inviteOrgAdminForOrg(
   }
   const org = await db.organization.findUnique({
     where: { id: input.org_id },
-    select: { id: true },
+    select: { id: true, clerk_org_id: true, billing_owner_user_id: true },
   });
   if (!org) return { ok: false, reason: "org_not_found" };
 
@@ -134,6 +183,7 @@ export async function inviteOrgAdminForOrg(
         } as Prisma.InputJsonValue,
       },
     });
+    await maybeStampBillingOwner(input.org_id, existing.id);
     return { ok: true, user_id: existing.id, alreadyExisted: true };
   }
 
@@ -147,6 +197,24 @@ export async function inviteOrgAdminForOrg(
     },
     select: { id: true },
   });
+
+  // ── ADR-0017 Phase 3: send Clerk Organization Invitation ───────────
+  // The DB row is in place; now hand the email to Clerk. On hard
+  // failure (5xx / second 429), undo the DB row so the next attempt
+  // starts clean and the admin UI doesn't show an orphan OrgAdmin.
+  if (!options.skipClerkInvitation) {
+    const inviteResult = await sendOrgAdminInvitation({
+      org: { id: org.id, clerk_org_id: org.clerk_org_id },
+      inviter_user_id: ctx.user_id,
+      email,
+      options,
+    });
+    if (inviteResult.kind === "fail") {
+      await prisma.user.delete({ where: { id: created.id } });
+      return { ok: false, reason: inviteResult.reason };
+    }
+  }
+
   await db.activityLog.create({
     data: {
       org_id: SYSTEM_ORG_ID,
@@ -160,7 +228,158 @@ export async function inviteOrgAdminForOrg(
       } as Prisma.InputJsonValue,
     },
   });
+  await maybeStampBillingOwner(input.org_id, created.id);
   return { ok: true, user_id: created.id, alreadyExisted: false };
+}
+
+// Stamp billing_owner_user_id on the Org if it isn't already set. The
+// first OrgAdmin invited for an Org becomes its billing owner per
+// ADR-0017 D9. Subsequent invites preserve the original owner.
+async function maybeStampBillingOwner(
+  orgId: string,
+  userId: string,
+): Promise<void> {
+  await prisma.organization.update({
+    where: { id: orgId, billing_owner_user_id: null },
+    data: { billing_owner_user_id: userId },
+  }).catch((err) => {
+    // P2025 = "Record not found" — happens when billing_owner_user_id
+    // is already set (the WHERE clause filters it out). That's the
+    // expected idempotent no-op.
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2025"
+    ) {
+      return;
+    }
+    throw err;
+  });
+}
+
+// ─── Clerk-side invitation ──────────────────────────────────────────────
+
+type SendOrgAdminInvitationResult =
+  | { kind: "ok" }
+  | {
+      kind: "fail";
+      reason: "cannot_invite" | "clerk_rate_limited" | "org_has_no_clerk_org";
+    };
+
+async function sendOrgAdminInvitation(args: {
+  org: { id: string; clerk_org_id: string | null };
+  inviter_user_id: string;
+  email: string;
+  options: OrgAdminInviteOptions;
+}): Promise<SendOrgAdminInvitationResult> {
+  const { org, inviter_user_id, email, options } = args;
+  if (!org.clerk_org_id) {
+    return { kind: "fail", reason: "org_has_no_clerk_org" };
+  }
+
+  // The inviter (SuperAdmin) must have a clerk_user_id stamped — we
+  // pass it to Clerk as the inviting user. SuperAdmin gets one the
+  // first time they sign in via Clerk (lazy-link); seeded SuperAdmins
+  // get one from clerk-seed.ts.
+  const inviter = await prisma.user.findUnique({
+    where: { id: inviter_user_id },
+    select: { clerk_user_id: true },
+  });
+  if (!inviter?.clerk_user_id) {
+    return { kind: "fail", reason: "cannot_invite" };
+  }
+
+  const appUrl = options.appUrl ?? process.env.APP_URL;
+  if (!appUrl) {
+    throw new OrgAdminInviteEnvError(
+      "APP_URL must be set to send Clerk organisation invitations. " +
+        "Add APP_URL=http://localhost:3000 to packages/db/.env for dev, " +
+        "or the public site URL for production.",
+    );
+  }
+
+  const client = options.clerkClient ?? buildOrgInviteClerkClient();
+  const sleep = options.sleep ?? defaultSleep;
+
+  // Land on /sign-up so Clerk's <SignUp> can read __clerk_ticket and
+  // bind the new account to the org invitation. After sign-up the
+  // /post-signin trampoline routes to /onboarding/plan if the Org is
+  // still PendingPayment.
+  const params = {
+    organizationId: org.clerk_org_id,
+    emailAddress: email,
+    inviterUserId: inviter.clerk_user_id,
+    role: "org:admin",
+    redirectUrl: `${appUrl}/sign-up`,
+    publicMetadata: { org_id: org.id, role: "OrgAdmin" } as Record<
+      string,
+      unknown
+    >,
+  };
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await client.organizations.createOrganizationInvitation(params);
+      return { kind: "ok" };
+    } catch (err) {
+      if (isDuplicateInvitation(err)) {
+        // Already invited / already a member — idempotent success.
+        return { kind: "ok" };
+      }
+      if (isRateLimited(err)) {
+        if (attempt === 0) {
+          await sleep(CLERK_RETRY_DELAY_MS);
+          continue;
+        }
+        return { kind: "fail", reason: "clerk_rate_limited" };
+      }
+      if (isServerError(err)) {
+        return { kind: "fail", reason: "cannot_invite" };
+      }
+      // 4xx other than duplicate / 429 is a config error — surface so
+      // the admin sees a 500 and we get a Sentry hit instead of a
+      // silent failure.
+      throw err;
+    }
+  }
+  return { kind: "fail", reason: "cannot_invite" };
+}
+
+function buildOrgInviteClerkClient(): OrgAdminInviteClerkClient {
+  if (!process.env.CLERK_SECRET_KEY) {
+    throw new OrgAdminInviteEnvError(
+      "CLERK_SECRET_KEY must be set to send Clerk organisation invitations. " +
+        "Pass options.clerkClient in tests, or set the env var in " +
+        "packages/db/.env (dev) / Vercel project settings (prod).",
+    );
+  }
+  return createClerkClient({
+    secretKey: process.env.CLERK_SECRET_KEY,
+  }) as unknown as OrgAdminInviteClerkClient;
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isDuplicateInvitation(err: unknown): boolean {
+  if (!isClerkAPIResponseError(err)) return false;
+  return err.errors.some((e: { code: string }) =>
+    [
+      "duplicate_record",
+      "already_a_member_in_organization",
+      "organization_invitation_already_pending",
+    ].includes(e.code),
+  );
+}
+
+function isRateLimited(err: unknown): boolean {
+  if (!isClerkAPIResponseError(err)) return false;
+  return err.status === 429;
+}
+
+function isServerError(err: unknown): boolean {
+  if (!isClerkAPIResponseError(err)) return false;
+  return err.status >= 500 && err.status < 600;
 }
 
 export async function setUserRoleAsSuperAdmin(

@@ -11,6 +11,7 @@
 //   - OrgSuspendedError     → /suspended (existing pattern)
 
 import { redirect } from "next/navigation";
+import { prisma } from "@elc/db/client";
 import {
   NoOrgMembershipError,
   OrgSuspendedError,
@@ -34,12 +35,26 @@ export default async function PostSigninPage() {
     throw err;
   }
 
-  const target =
-    ctx.role === "SuperAdmin"
-      ? "/orgs"
-      : ctx.role === "OrgAdmin"
-        ? "/admin"
-        : "/home";
+  // OrgAdmins whose Org hasn't completed Checkout yet (ADR-0017 Phase 5)
+  // land on the onboarding wizard instead of /admin. SuperAdmin and
+  // Learner routing is unaffected — Learners are single-org and never
+  // see PendingPayment, SuperAdmin's billing state is irrelevant to
+  // their cross-org tooling.
+  let target: string;
+  if (ctx.role === "SuperAdmin") {
+    target = "/orgs";
+  } else if (ctx.role === "OrgAdmin") {
+    const org = await prisma.organization.findUnique({
+      where: { id: ctx.org_id },
+      select: { subscription_status: true },
+    });
+    target =
+      org?.subscription_status === "PendingPayment"
+        ? "/onboarding/plan"
+        : "/admin";
+  } else {
+    target = "/home";
+  }
 
   return <PostSigninRedirector to={target} />;
 }

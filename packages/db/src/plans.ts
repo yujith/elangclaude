@@ -12,6 +12,7 @@
 // against Stripe.
 
 import { Prisma, type Plan } from "@prisma/client";
+import { prisma } from "./client";
 import { SYSTEM_ORG_ID } from "./system-org";
 import { withSuperAdminContext, type OrgContext } from "./tenancy";
 
@@ -140,6 +141,41 @@ export async function getPlanBySlugAsSuperAdmin(
   const normalized = normalizeSlug(slug);
   if (!normalized) return null;
   return db.plan.findUnique({ where: { slug: normalized } });
+}
+
+// ─── Public read paths (no role gate) ───────────────────────────────────
+//
+// Plan is a global model — reading it doesn't leak tenant data. The
+// onboarding wizard and the public /pricing page (Phase 6) need to
+// list / fetch plans without holding SuperAdmin role, so we expose
+// these as plain read helpers. Filters out internal plans by default
+// because they exist for backfill, not for customers to subscribe to.
+
+export async function listPlansForCustomer(): Promise<Plan[]> {
+  return prisma.plan.findMany({
+    where: { is_active: true, is_internal: false },
+    orderBy: [{ sort_order: "asc" }, { name: "asc" }],
+  });
+}
+
+export async function getActivePlanByIdForCustomer(
+  id: string,
+): Promise<Plan | null> {
+  const plan = await prisma.plan.findUnique({ where: { id } });
+  if (!plan) return null;
+  if (!plan.is_active) return null;
+  if (plan.is_internal) return null;
+  return plan;
+}
+
+export async function getActivePlanBySlugForCustomer(
+  slug: string,
+): Promise<Plan | null> {
+  const normalized = normalizeSlug(slug);
+  if (!normalized) return null;
+  const plan = await prisma.plan.findUnique({ where: { slug: normalized } });
+  if (!plan || !plan.is_active || plan.is_internal) return null;
+  return plan;
 }
 
 // ─── Writes ─────────────────────────────────────────────────────────────
@@ -328,6 +364,40 @@ export async function archivePlanAsSuperAdmin(
       org_id: SYSTEM_ORG_ID,
       user_id: ctx.user_id,
       action: "super.plan.archived",
+      metadata: {
+        plan_id: updated.id,
+        slug: updated.slug,
+      } as Prisma.InputJsonValue,
+    },
+  });
+  return { ok: true, value: updated };
+}
+
+// Symmetric to archive — flip is_active back to true. Triggers a Stripe
+// sync at the action layer so the Product + Price re-activate.
+export async function reactivatePlanAsSuperAdmin(
+  ctx: OrgContext,
+  id: string,
+): Promise<PlanResult<Plan>> {
+  const db = withSuperAdminContext(ctx);
+  const existing = await db.plan.findUnique({ where: { id } });
+  if (!existing) return { ok: false, reason: "plan_not_found" };
+  if (existing.slug === INTERNAL_PLAN_SLUG) {
+    return { ok: false, reason: "internal_plan_immutable" };
+  }
+  if (existing.is_active) {
+    return { ok: true, value: existing };
+  }
+
+  const updated = await db.plan.update({
+    where: { id },
+    data: { is_active: true },
+  });
+  await db.activityLog.create({
+    data: {
+      org_id: SYSTEM_ORG_ID,
+      user_id: ctx.user_id,
+      action: "super.plan.reactivated",
       metadata: {
         plan_id: updated.id,
         slug: updated.slug,

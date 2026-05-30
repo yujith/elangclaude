@@ -1,0 +1,74 @@
+// Onboarding wizard shell (ADR-0017 Phase 5).
+//
+// Lives outside the (admin) layout because the OrgAdmin hasn't picked
+// a plan yet — showing them the admin dashboard chrome before they've
+// paid (or activated Free) would be confusing. Minimal brand shell:
+// logo + sign-out, and a single content slot for the wizard pages.
+//
+// Auth contract:
+//   - Must be authenticated.
+//   - Must be OrgAdmin role (Learners and SuperAdmins have no business
+//     in this flow). SuperAdmins get bounced to /orgs, Learners to /home.
+//   - subscription_status MUST be PendingPayment. Once activation has
+//     run, /onboarding/processing handles the final redirect; any
+//     direct visit to /onboarding/plan after that point is bounced.
+
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Logo } from "@/components/logo";
+import { SignOutControl } from "@/components/sign-out-control";
+import {
+  NoOrgMembershipError,
+  OrgSuspendedError,
+  UnauthenticatedError,
+  requireOrgContext,
+} from "@/lib/auth/context";
+
+export const dynamic = "force-dynamic";
+
+// The layout only enforces authentication + role-routing. The per-page
+// subscription_status gate lives in /onboarding/plan (which bounces
+// non-PendingPayment Orgs to /admin), because /onboarding/processing
+// and /onboarding/welcome both legitimately transition the OrgAdmin
+// THROUGH a non-PendingPayment state.
+
+export default async function OnboardingLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  let ctx;
+  try {
+    ctx = await requireOrgContext();
+  } catch (err) {
+    if (err instanceof UnauthenticatedError) redirect("/sign-in");
+    if (err instanceof NoOrgMembershipError) redirect("/no-access");
+    if (err instanceof OrgSuspendedError) {
+      redirect(`/suspended?status=${err.orgStatus}`);
+    }
+    throw err;
+  }
+
+  if (ctx.role === "SuperAdmin") redirect("/orgs");
+  if (ctx.role === "Learner") redirect("/home");
+
+  return (
+    <div className="min-h-screen flex flex-col bg-brand-grey-50">
+      <header className="bg-brand-black text-white">
+        <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-4">
+          <Link
+            href="/onboarding/plan"
+            className="flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black rounded-sm"
+          >
+            <Logo variant="on-dark" height={40} />
+            <span className="font-body text-xs uppercase tracking-widest text-brand-grey-200">
+              Onboarding
+            </span>
+          </Link>
+          <SignOutControl />
+        </div>
+      </header>
+      <main className="flex-1">{children}</main>
+    </div>
+  );
+}

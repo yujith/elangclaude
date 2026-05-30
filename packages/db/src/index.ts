@@ -32,6 +32,10 @@ export {
   createPlanAsSuperAdmin,
   updatePlanAsSuperAdmin,
   archivePlanAsSuperAdmin,
+  reactivatePlanAsSuperAdmin,
+  listPlansForCustomer,
+  getActivePlanByIdForCustomer,
+  getActivePlanBySlugForCustomer,
 } from "./plans";
 export type {
   PlanFailureReason,
@@ -39,6 +43,55 @@ export type {
   PlanCreateInput,
   PlanUpdateInput,
 } from "./plans";
+
+export {
+  activateFreePlanForOrg,
+  ensureStripeCustomerIdForOrg,
+} from "./onboarding";
+export type {
+  OnboardingFailureReason,
+  ActivateFreeResult,
+  EnsureCustomerResult,
+  CreateStripeCustomerFn,
+} from "./onboarding";
+
+export { provisionSelfServeOrg } from "./self-serve";
+export type {
+  SelfServeFailureReason,
+  SelfServeProvisionResult,
+  SelfServeProvisionInput,
+  SelfServeProvisionOptions,
+  CreateClerkOrgFn,
+  CreateClerkOrgMembershipFn,
+  DeleteClerkOrgFn,
+} from "./self-serve";
+
+export { syncPlanToStripe, decimalToCents } from "./plan-sync";
+export type {
+  PlanSyncResult,
+  PlanSyncStripeClient,
+  PlanSyncProductsAPI,
+  PlanSyncPricesAPI,
+  PlanSyncProduct,
+  PlanSyncPrice,
+} from "./plan-sync";
+
+export {
+  dispatchStripeEvent,
+  applyCheckoutSessionCompleted,
+  applyCustomerSubscriptionUpserted,
+  applyCustomerSubscriptionDeleted,
+  applyInvoicePaymentFailed,
+  applyTrialWillEnd,
+  mapSubscriptionStatus,
+} from "./stripe-events";
+export type {
+  StripeEventEnvelope,
+  StripeEventOutcome,
+  StripeSubscriptionEvent,
+  StripeCheckoutSessionEvent,
+  StripeInvoiceEvent,
+} from "./stripe-events";
 
 export {
   CLERK_NEW_ORG_DEFAULTS,

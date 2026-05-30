@@ -7,6 +7,7 @@ import {
   getPlanBySlugAsSuperAdmin,
   INTERNAL_PLAN_SLUG,
   listPlansAsSuperAdmin,
+  reactivatePlanAsSuperAdmin,
   updatePlanAsSuperAdmin,
 } from "./plans";
 import { SYSTEM_ORG_ID, SYSTEM_ORG_NAME } from "./system-org";
@@ -256,6 +257,71 @@ describe("archivePlanAsSuperAdmin", () => {
     const internal = await seedInternalPlan();
 
     const result = await archivePlanAsSuperAdmin(ctx, internal.id);
+    expect(result).toEqual({
+      ok: false,
+      reason: "internal_plan_immutable",
+    });
+  });
+});
+
+describe("reactivatePlanAsSuperAdmin", () => {
+  it("flips is_active=true and logs super.plan.reactivated", async () => {
+    const ctx = await superCtx();
+    const created = await createPlanAsSuperAdmin(ctx, {
+      slug: "to-revive",
+      name: "To Revive",
+      seat_limit: 5,
+      quota_daily: 25,
+      quota_monthly: 150,
+      amount_monthly_usd: "9.00",
+      trial_days: 0,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    await archivePlanAsSuperAdmin(ctx, created.value.id);
+
+    const result = await reactivatePlanAsSuperAdmin(ctx, created.value.id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.is_active).toBe(true);
+
+    const logs = await prisma.activityLog.findMany({
+      where: { org_id: SYSTEM_ORG_ID, action: "super.plan.reactivated" },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.metadata).toMatchObject({ slug: "to-revive" });
+  });
+
+  it("is idempotent when already active", async () => {
+    const ctx = await superCtx();
+    const created = await createPlanAsSuperAdmin(ctx, {
+      slug: "already-active",
+      name: "Already Active",
+      seat_limit: 5,
+      quota_daily: 25,
+      quota_monthly: 150,
+      amount_monthly_usd: "9.00",
+      trial_days: 0,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const result = await reactivatePlanAsSuperAdmin(ctx, created.value.id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.is_active).toBe(true);
+
+    const logs = await prisma.activityLog.findMany({
+      where: { org_id: SYSTEM_ORG_ID, action: "super.plan.reactivated" },
+    });
+    expect(logs).toHaveLength(0);
+  });
+
+  it("refuses to reactivate the internal plan", async () => {
+    const ctx = await superCtx();
+    const internal = await seedInternalPlan();
+
+    const result = await reactivatePlanAsSuperAdmin(ctx, internal.id);
     expect(result).toEqual({
       ok: false,
       reason: "internal_plan_immutable",

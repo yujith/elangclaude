@@ -5,6 +5,7 @@ import {
   listPlansAsSuperAdmin,
 } from "@elc/db";
 import { requireRole } from "@/lib/auth/context";
+import { syncAllPaidPlansFromForm } from "@/lib/super/plan-actions";
 import { planErrorMessage } from "@/lib/super/plan-errors";
 
 export const metadata: Metadata = {
@@ -18,6 +19,9 @@ type SearchParams = {
   created?: string;
   archived?: string;
   error?: string;
+  bulk_synced?: string;
+  bulk_skipped?: string;
+  bulk_failed?: string;
 };
 
 function badgeClasses(plan: { is_active: boolean; is_internal: boolean }) {
@@ -70,12 +74,22 @@ export default async function PlansListPage({
               quotas are copied onto the Org on subscription activation.
             </p>
           </div>
-          <Link
-            href="/plans/new"
-            className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
-          >
-            New plan
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <form action={syncAllPaidPlansFromForm}>
+              <button
+                type="submit"
+                className="inline-flex items-center rounded-pill bg-brand-white text-brand-black px-4 py-2.5 font-heading font-bold border border-brand-grey-300 hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              >
+                Sync all to Stripe
+              </button>
+            </form>
+            <Link
+              href="/plans/new"
+              className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+            >
+              New plan
+            </Link>
+          </div>
         </header>
 
         {sp.created ? (
@@ -83,6 +97,16 @@ export default async function PlansListPage({
         ) : null}
         {sp.archived ? (
           <Banner tone="success">Plan archived.</Banner>
+        ) : null}
+        {sp.bulk_synced || sp.bulk_failed || sp.bulk_skipped ? (
+          <Banner tone={sp.bulk_failed && Number(sp.bulk_failed) > 0 ? "error" : "success"}>
+            Stripe sync: {sp.bulk_synced ?? 0} synced
+            {sp.bulk_skipped ? `, ${sp.bulk_skipped} skipped (free / internal)` : ""}
+            {sp.bulk_failed && Number(sp.bulk_failed) > 0
+              ? `, ${sp.bulk_failed} failed — click into the plan to retry`
+              : ""}
+            .
+          </Banner>
         ) : null}
         {errorCopy ? <Banner tone="error">{errorCopy}</Banner> : null}
 

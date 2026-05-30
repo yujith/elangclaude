@@ -11,16 +11,16 @@ export function PricingTeaser() {
             PRICING
           </p>
           <h2 className="mt-3 font-heading font-bold text-3xl md:text-4xl text-brand-black">
-            Per-seat for organizations. Free seats while we roll out self-serve.
+            Free to start. Paid tiers when you're ready to scale.
           </h2>
           <p className="mt-4 mx-auto max-w-2xl font-body text-base md:text-lg text-brand-grey-700">
-            Annual seats, AI quotas you control, no per-attempt billing
-            surprises. Individual learners can grab a free seat to try
-            everything end-to-end.
+            Per-seat plans for organisations. AI quotas you control, no
+            per-attempt billing surprises. Start free, upgrade any time —
+            a 14-day trial on every paid tier.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <CtaLink href="/sign-up" variant="solid">
-              Start a free seat
+            <CtaLink href="/pricing" variant="solid">
+              See plans
             </CtaLink>
             <a
               href={`mailto:${ORG_EMAIL}?subject=eLanguage%20Center%20pricing`}
