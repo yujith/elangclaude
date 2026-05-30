@@ -364,3 +364,76 @@ describe("SYSTEM_ORG_ID — super-level events stay out of OrgAdmin views", () =
     expect(systemLogs.some((r) => r.action === "super.org.created")).toBe(true);
   });
 });
+
+describe("multi-org email uniqueness", () => {
+  it("same email in two orgs does not throw a unique constraint error", async () => {
+    const orgA = await createTestOrg("A");
+    const orgB = await createTestOrg("B");
+
+    const sharedEmail = `shared-test-${cryptoRandomShort()}@elanguage.test`;
+
+    // Create user in orgA with email
+    const userA = await prisma.user.create({
+      data: {
+        org_id: orgA.id,
+        email: sharedEmail,
+        role: "Learner",
+        ielts_track: "Academic",
+        name: "User A",
+      },
+    });
+    expect(userA.id).toBeDefined();
+
+    // Create user in orgB with same email — must not throw
+    const userB = await prisma.user.create({
+      data: {
+        org_id: orgB.id,
+        email: sharedEmail,
+        role: "Learner",
+        ielts_track: "Academic",
+        name: "User B",
+      },
+    });
+    expect(userB.id).toBeDefined();
+    expect(userA.id).not.toBe(userB.id);
+  });
+
+  it("same email in the same org throws P2002", async () => {
+    const orgA = await createTestOrg("A");
+
+    const sharedEmail = `dupe-test-${cryptoRandomShort()}@elanguage.test`;
+
+    // Create first user
+    await prisma.user.create({
+      data: {
+        org_id: orgA.id,
+        email: sharedEmail,
+        role: "Learner",
+        ielts_track: "Academic",
+        name: "User 1",
+      },
+    });
+
+    // Try to create second user with same email in same org — must throw P2002
+    await expect(
+      prisma.user.create({
+        data: {
+          org_id: orgA.id,
+          email: sharedEmail,
+          role: "Learner",
+          ielts_track: "Academic",
+          name: "User 2",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "P2002",
+    });
+  });
+});
+
+function cryptoRandomShort(): string {
+  return require("crypto")
+    .getRandomValues(new Uint8Array(4))
+    .toString()
+    .slice(0, 8);
+}

@@ -135,21 +135,18 @@ export async function inviteLearnerForOrg(
   if (!email) return { ok: false, reason: "invalid_email" };
   const name = normalizeName(input.name);
 
-  // Intentional cross-org lookup. Never expose the foreign org_id upward.
-  const existing = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, org_id: true, role: true, deleted_at: true },
+  // Within-org duplicate check only. Cross-org invites are allowed (ADR-0018).
+  const existing = await prisma.user.findFirst({
+    where: { email, org_id: ctx.org_id },
+    select: { id: true, role: true, deleted_at: true },
   });
-  if (existing && existing.org_id !== ctx.org_id) {
-    return { ok: false, reason: "cannot_invite" };
-  }
   if (existing && existing.deleted_at !== null) {
-    // Same org, but soft-deleted. Refuse so "remove" stays final until
+    // Soft-deleted in this org. Refuse so "remove" stays final until
     // a deliberate restore flow exists — auto-undeleting on re-invite
     // would surprise an admin who removed someone yesterday.
     return { ok: false, reason: "cannot_invite" };
   }
-  if (existing && existing.org_id === ctx.org_id) {
+  if (existing) {
     if (existing.role !== "Learner") {
       return { ok: false, reason: "cannot_invite" };
     }

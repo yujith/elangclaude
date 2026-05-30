@@ -141,15 +141,11 @@ export async function inviteOrgAdminForOrg(
   });
   if (!org) return { ok: false, reason: "org_not_found" };
 
-  // Intentional cross-org lookup. If the email is in use by ANY other
-  // org, refuse generically — never leak which org owns it.
-  const existing = await db.user.findUnique({
-    where: { email },
-    select: { id: true, org_id: true, role: true, deleted_at: true },
+  // Within-org duplicate check only. Cross-org invites are allowed (ADR-0018).
+  const existing = await db.user.findFirst({
+    where: { email, org_id: input.org_id },
+    select: { id: true, role: true, deleted_at: true },
   });
-  if (existing && existing.org_id !== input.org_id) {
-    return { ok: false, reason: "cannot_invite" };
-  }
   if (existing && existing.deleted_at !== null) {
     // Same org, but soft-deleted. Refusing here keeps "remove" final
     // until an explicit restore flow exists; the alternative (silently

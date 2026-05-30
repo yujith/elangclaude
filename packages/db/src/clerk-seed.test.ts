@@ -391,7 +391,7 @@ describe("seedClerkIdentities happy path", () => {
     // assignment (user_1000, user_1001, ...).
     const learnerEmails = ["learner-a1@elanguage.dev", "learner-b1@elanguage.dev"];
     for (const email of learnerEmails) {
-      const learner = await prisma.user.findUnique({
+      const learner = await prisma.user.findFirst({
         where: { email },
         select: { clerk_user_id: true },
       });
@@ -406,7 +406,7 @@ describe("seedClerkIdentities happy path", () => {
     const { client, calls } = makeFakeClerk();
     await seedClerkIdentities({ clerkClient: client, logger: () => {} });
 
-    const superRow = await prisma.user.findUnique({
+    const superRow = await prisma.user.findFirst({
       where: { email: "super@elanguage.dev" },
       select: { clerk_user_id: true, org_id: true },
     });
@@ -437,7 +437,7 @@ describe("seedClerkIdentities lazy fetch", () => {
     expect(result.usersCreated).toBe(4); // remaining 4 still created
     expect(calls.getUserList).toHaveLength(1);
 
-    const super_ = await prisma.user.findUnique({
+    const super_ = await prisma.user.findFirst({
       where: { email: "super@elanguage.dev" },
       select: { clerk_user_id: true },
     });

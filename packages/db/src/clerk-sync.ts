@@ -59,27 +59,25 @@ export async function applyClerkUserUpsert(
   if (!email) return;
   const name = joinName(data.first_name, data.last_name);
 
-  // Already linked? Update mutable fields.
-  const linked = await prisma.user.findUnique({
+  // Already linked? Update all matching rows' mutable fields.
+  const linked = await prisma.user.count({
     where: { clerk_user_id: data.id },
-    select: { id: true },
   });
-  if (linked) {
-    await prisma.user.update({
-      where: { id: linked.id },
+  if (linked > 0) {
+    await prisma.user.updateMany({
+      where: { clerk_user_id: data.id },
       data: { email, name },
     });
     return;
   }
 
-  // Pre-existing seeded row with the same email? Link it.
-  const byEmail = await prisma.user.findUnique({
+  // Pre-existing seeded rows with the same email (across orgs)? Link them all.
+  const byEmail = await prisma.user.count({
     where: { email },
-    select: { id: true },
   });
-  if (byEmail) {
-    await prisma.user.update({
-      where: { id: byEmail.id },
+  if (byEmail > 0) {
+    await prisma.user.updateMany({
+      where: { email },
       data: { clerk_user_id: data.id, name },
     });
     return;
@@ -92,13 +90,9 @@ export async function applyClerkUserUpsert(
 export async function applyClerkUserDeleted(clerkUserId: string): Promise<void> {
   // Soft-delete keeps the audit trail intact (attempts/grades/recordings
   // stay attached). Matches the existing SuperAdmin "remove user" flow.
-  const user = await prisma.user.findUnique({
-    where: { clerk_user_id: clerkUserId },
-    select: { id: true, deleted_at: true },
-  });
-  if (!user || user.deleted_at !== null) return;
-  await prisma.user.update({
-    where: { id: user.id },
+  // With multi-org, soft-delete all rows for this Clerk user across all orgs.
+  await prisma.user.updateMany({
+    where: { clerk_user_id: clerkUserId, deleted_at: null },
     data: { deleted_at: new Date() },
   });
 }
@@ -185,8 +179,14 @@ export async function applyClerkMembershipUpsert(
 export async function applyClerkMembershipDeleted(
   data: ClerkMembershipPayload,
 ): Promise<void> {
-  const user = await prisma.user.findUnique({
-    where: { clerk_user_id: data.public_user_data.user_id },
+  // Soft-delete only the user row in the specific org that membership was deleted from.
+  const org = await prisma.organization.findUnique({
+    where: { clerk_org_id: data.organization.id },
+    select: { id: true },
+  });
+  if (!org) return;
+  const user = await prisma.user.findFirst({
+    where: { clerk_user_id: data.public_user_data.user_id, org_id: org.id },
     select: { id: true, deleted_at: true },
   });
   if (!user || user.deleted_at !== null) return;
@@ -221,15 +221,15 @@ async function ensureUser(input: {
   name: string | null;
   org_id: string;
 }): Promise<{ id: string }> {
-  const byClerkId = await prisma.user.findUnique({
-    where: { clerk_user_id: input.clerkUserId },
+  const byClerkId = await prisma.user.findFirst({
+    where: { clerk_user_id: input.clerkUserId, org_id: input.org_id },
     select: { id: true },
   });
   if (byClerkId) return byClerkId;
 
   const normalisedEmail = input.email.trim().toLowerCase();
-  const byEmail = await prisma.user.findUnique({
-    where: { email: normalisedEmail },
+  const byEmail = await prisma.user.findFirst({
+    where: { email: normalisedEmail, org_id: input.org_id },
     select: { id: true },
   });
   if (byEmail) {
@@ -259,8 +259,8 @@ async function ensureUser(input: {
       err instanceof Prisma.PrismaClientKnownRequestError &&
       err.code === "P2002"
     ) {
-      const winner = await prisma.user.findUnique({
-        where: { clerk_user_id: input.clerkUserId },
+      const winner = await prisma.user.findFirst({
+        where: { clerk_user_id: input.clerkUserId, org_id: input.org_id },
         select: { id: true },
       });
       if (winner) return winner;

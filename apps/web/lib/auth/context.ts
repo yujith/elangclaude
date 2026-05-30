@@ -17,6 +17,7 @@
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { auth, currentUser } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import { prisma } from "@elc/db/client";
 import { joinName } from "@elc/db";
 import type { OrgContext, OrgStatus } from "@elc/db";
@@ -90,9 +91,9 @@ type MatchedUser = {
 
 const loadOrgContext = cache(async (): Promise<OrgContext> => {
   // 1. Try Clerk first. Works in both production and dev.
-  const { userId: clerkUserId } = await auth();
+  const { userId: clerkUserId, orgId: clerkOrgId } = await auth();
   if (clerkUserId) {
-    const user = await loadUserForClerkId(clerkUserId);
+    const user = await loadUserForClerkId(clerkUserId, clerkOrgId ?? null);
     // A linked user can later be soft-deleted by an admin. Distinguish
     // that from "no Clerk session at all" so the caller can route to
     // /no-access instead of bouncing back through /sign-in.
@@ -122,55 +123,84 @@ const loadOrgContext = cache(async (): Promise<OrgContext> => {
   throw new UnauthenticatedError();
 });
 
-async function loadUserForClerkId(clerkUserId: string): Promise<MatchedUser> {
-  // Fast path: already linked.
-  const linked = await prisma.user.findUnique({
-    where: { clerk_user_id: clerkUserId },
+async function loadUserForClerkId(
+  clerkUserId: string,
+  clerkOrgId: string | null,
+): Promise<MatchedUser> {
+  // ── Org-scoped fast path (OrgAdmin with active Clerk org) ────────────
+  if (clerkOrgId) {
+    const dbOrg = await prisma.organization.findUnique({
+      where: { clerk_org_id: clerkOrgId },
+      select: { id: true },
+    });
+    if (dbOrg) {
+      const linked = await prisma.user.findFirst({
+        where: { clerk_user_id: clerkUserId, org_id: dbOrg.id },
+        select: userSelect,
+      });
+      if (linked) return linked;
+
+      // Org-scoped lazy-link for seeded OrgAdmins
+      const clerkUser = await currentUser();
+      const email = primaryEmail(clerkUser);
+      if (email) {
+        const byEmail = await prisma.user.findFirst({
+          where: { email, org_id: dbOrg.id },
+          select: userSelect,
+        });
+        if (byEmail && byEmail.deleted_at === null) {
+          const clerkName = joinName(
+            clerkUser?.firstName ?? null,
+            clerkUser?.lastName ?? null,
+          );
+          await prisma.user.update({
+            where: { id: byEmail.id },
+            data: {
+              clerk_user_id: clerkUserId,
+              ...(clerkName ? { name: clerkName } : {}),
+            },
+          });
+          return byEmail;
+        }
+      }
+      throw new NoOrgMembershipError();
+    }
+  }
+
+  // ── No active Clerk org (Learner path, or multi-org user needs to pick) ──
+  const allLinked = await prisma.user.findMany({
+    where: { clerk_user_id: clerkUserId, deleted_at: null },
     select: userSelect,
   });
-  if (linked) return linked;
+  if (allLinked.length === 1) return allLinked[0];
+  if (allLinked.length > 1) redirect("/select-org");
 
-  // Lazy-link: a seeded user (or one created out-of-band by the webhook
-  // before this server saw the event) signs in via Clerk for the first
-  // time. Match by primary email and stamp clerk_user_id so subsequent
-  // requests hit the fast path.
+  // ── Lazy-link: seeded user signing in for the first time ─────────────
   const clerkUser = await currentUser();
   const email = primaryEmail(clerkUser);
   if (!email) throw new NoOrgMembershipError();
 
-  const byEmail = await prisma.user.findUnique({
-    where: { email },
+  const allByEmail = await prisma.user.findMany({
+    where: { email, deleted_at: null },
     select: userSelect,
   });
-  if (!byEmail) {
-    // Clerk user signed up but no org admin has invited them yet. We
-    // refuse rather than auto-creating a user under some default org —
-    // org membership is an OrgAdmin decision.
-    throw new NoOrgMembershipError();
+  if (allByEmail.length === 1) {
+    const clerkName = joinName(
+      clerkUser?.firstName ?? null,
+      clerkUser?.lastName ?? null,
+    );
+    await prisma.user.update({
+      where: { id: allByEmail[0].id },
+      data: {
+        clerk_user_id: clerkUserId,
+        ...(clerkName ? { name: clerkName } : {}),
+      },
+    });
+    return allByEmail[0];
   }
-  if (byEmail.deleted_at !== null) {
-    // Soft-deleted users cannot resume access through Clerk either.
-    // Same UX as never-invited: bounce to /no-access.
-    throw new NoOrgMembershipError();
-  }
+  if (allByEmail.length > 1) redirect("/select-org");
 
-  // Pull Clerk's first/last name in the same step. The seeded `name`
-  // field is often a generic placeholder ("Super Admin", "Demo English
-  // Admin") that the user wouldn't want greeted by; if Clerk has a real
-  // name from OAuth or sign-up, prefer that. Skip the overwrite when
-  // Clerk has nothing so a deliberately-set DB label isn't nulled.
-  const clerkName = joinName(
-    clerkUser?.firstName ?? null,
-    clerkUser?.lastName ?? null,
-  );
-  await prisma.user.update({
-    where: { id: byEmail.id },
-    data: {
-      clerk_user_id: clerkUserId,
-      ...(clerkName ? { name: clerkName } : {}),
-    },
-  });
-  return byEmail;
+  throw new NoOrgMembershipError();
 }
 
 function primaryEmail(

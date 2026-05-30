@@ -92,9 +92,13 @@ async function upsertUser(input: {
   role: "SuperAdmin" | "OrgAdmin" | "Learner";
 }) {
   return prisma.user.upsert({
-    where: { email: input.email },
+    where: {
+      user_org_email: {
+        org_id: input.org_id,
+        email: input.email,
+      },
+    },
     update: {
-      org_id: input.org_id,
       name: input.name,
       role: input.role,
     },

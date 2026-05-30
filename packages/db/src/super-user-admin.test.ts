@@ -71,11 +71,11 @@ describe("inviteOrgAdminForOrg", () => {
     expect(logs).toHaveLength(1);
   });
 
-  it("refuses a cross-org email with the generic cannot_invite reason", async () => {
+  it("allows a cross-org email to create a second org membership (ADR-0018)", async () => {
     const ctx = await superCtx();
     const orgB = await createTestOrg("B");
     const orgC = await createTestOrg("C");
-    await prisma.user.create({
+    const existingUser = await prisma.user.create({
       data: {
         org_id: orgC.id,
         email: "claimed@elc.test",
@@ -88,7 +88,16 @@ describe("inviteOrgAdminForOrg", () => {
       { org_id: orgB.id, email: "claimed@elc.test" },
       { skipClerkInvitation: true },
     );
-    expect(result).toEqual({ ok: false, reason: "cannot_invite" });
+    // With multi-org, the same email can exist in multiple orgs, so this succeeds
+    expect(result.ok).toBe(true);
+
+    // The new row in orgB should be separate from the existing Learner in orgC
+    const newUserInOrgB = await prisma.user.findFirst({
+      where: { email: "claimed@elc.test", org_id: orgB.id },
+    });
+    expect(newUserInOrgB).not.toBeNull();
+    expect(newUserInOrgB?.role).toBe("OrgAdmin");
+    expect(newUserInOrgB?.id).not.toBe(existingUser.id);
   });
 
   it("refuses to re-invite a soft-deleted same-org email", async () => {

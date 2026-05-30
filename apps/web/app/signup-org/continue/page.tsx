@@ -39,14 +39,16 @@ export default async function SignupOrgContinuePage({
   const { userId: clerkUserId } = await auth();
   if (!clerkUserId) redirect("/signup-org");
 
-  // If this Clerk user already has a DB row, they aren't a fresh
-  // self-serve visitor — bounce to /post-signin so they land in their
-  // existing Org's dashboard.
-  const existing = await prisma.user.findUnique({
-    where: { clerk_user_id: clerkUserId },
-    select: { id: true },
-  });
-  if (existing) redirect("/post-signin");
+  // Multi-org guard: until MULTI_ORG_ENABLED=1, bounce existing users back
+  // to /post-signin. With multi-org enabled, users can create additional orgs.
+  const multiOrgEnabled = process.env.MULTI_ORG_ENABLED === "1";
+  if (!multiOrgEnabled) {
+    const existing = await prisma.user.findFirst({
+      where: { clerk_user_id: clerkUserId },
+      select: { id: true },
+    });
+    if (existing) redirect("/post-signin");
+  }
 
   const sp = await searchParams;
   const slugInput =

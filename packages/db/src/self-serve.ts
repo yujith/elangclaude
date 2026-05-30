@@ -124,18 +124,19 @@ export async function provisionSelfServeOrg(
     return { ok: false, reason: "plan_internal" };
   }
 
-  // Single-org constraint (pre-ADR-0018). Refuse if this email or
-  // Clerk user id is already in our DB.
-  const existingByEmail = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true },
-  });
-  if (existingByEmail) return { ok: false, reason: "email_already_in_use" };
-  const existingByClerk = await prisma.user.findUnique({
-    where: { clerk_user_id: input.clerk_user_id },
-    select: { id: true },
-  });
-  if (existingByClerk) return { ok: false, reason: "email_already_in_use" };
+  // Guard multi-org behind feature flag (pre-ADR-0018). Once MULTI_ORG_ENABLED=1,
+  // the same email can exist in multiple orgs.
+  const multiOrgEnabled = process.env.MULTI_ORG_ENABLED === "1";
+  if (!multiOrgEnabled) {
+    const existingByEmail = await prisma.user.findFirst({
+      where: { email },
+    });
+    if (existingByEmail) return { ok: false, reason: "email_already_in_use" };
+    const existingByClerk = await prisma.user.findFirst({
+      where: { clerk_user_id: input.clerk_user_id },
+    });
+    if (existingByClerk) return { ok: false, reason: "email_already_in_use" };
+  }
 
   // Derive billing-side state (see ADR-0017 D4).
   const amountStr = plan.amount_monthly_usd.toString();

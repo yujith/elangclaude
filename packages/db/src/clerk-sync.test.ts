@@ -284,7 +284,7 @@ describe("applyClerkMembershipUpsert", () => {
     expect(org?.name).toBe("Migration Pathways");
     expect(org?.status).toBe("Active");
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.findFirst({
       where: { clerk_user_id: "user_clerk_1" },
     });
     expect(user?.email).toBe("admin@example.com");
@@ -306,7 +306,7 @@ describe("applyClerkMembershipUpsert", () => {
       },
     });
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.findFirst({
       where: { clerk_user_id: "user_clerk_1" },
     });
     expect(user?.role).toBe("Learner");
@@ -344,7 +344,7 @@ describe("applyClerkMembershipUpsert", () => {
       },
     });
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.findFirst({
       where: { clerk_user_id: "user_clerk_1" },
     });
     expect(user?.deleted_at).toBeNull();
@@ -382,13 +382,13 @@ describe("applyClerkMembershipUpsert", () => {
       },
     });
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.findFirst({
       where: { clerk_user_id: "user_clerk_1" },
     });
     expect(user?.role).toBe("SuperAdmin");
   });
 
-  it("transfers a user between orgs by updating org_id when Clerk reports a new membership", async () => {
+  it("creates a second org row for a multi-org user when new membership is reported", async () => {
     const orgA = await prisma.organization.create({
       data: {
         clerk_org_id: "org_clerk_a",
@@ -407,6 +407,7 @@ describe("applyClerkMembershipUpsert", () => {
       },
     });
 
+    // Report membership in org B — should create a second row, not overwrite
     await applyClerkMembershipUpsert({
       id: "mem_1",
       role: "org:admin",
@@ -422,11 +423,19 @@ describe("applyClerkMembershipUpsert", () => {
     const orgB = await prisma.organization.findUnique({
       where: { clerk_org_id: "org_clerk_b" },
     });
-    const user = await prisma.user.findUnique({
-      where: { clerk_user_id: "user_clerk_1" },
+
+    // Org A row still has Learner role
+    const userA = await prisma.user.findFirst({
+      where: { clerk_user_id: "user_clerk_1", org_id: orgA.id },
     });
-    expect(user?.org_id).toBe(orgB?.id);
-    expect(user?.role).toBe("OrgAdmin");
+    expect(userA?.role).toBe("Learner");
+
+    // Org B row is new with OrgAdmin role
+    const userB = await prisma.user.findFirst({
+      where: { clerk_user_id: "user_clerk_1", org_id: orgB!.id },
+    });
+    expect(userB?.role).toBe("OrgAdmin");
+    expect(userB?.email).toBe("mover@example.com");
   });
 });
 

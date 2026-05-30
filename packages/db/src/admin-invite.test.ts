@@ -285,8 +285,8 @@ describe("inviteLearnerForOrg — Clerk integration", () => {
 
     // DB row + ActivityLog should both exist — the duplicate is a Clerk
     // detail, not a reason to leave the org without a roster row.
-    const user = await prisma.user.findUnique({
-      where: { email: "already@example.com" },
+    const user = await prisma.user.findFirst({
+      where: { email: "already@example.com", org_id: ctx.org_id },
     });
     expect(user).not.toBeNull();
     expect(user?.org_id).toBe(org.id);
@@ -317,8 +317,8 @@ describe("inviteLearnerForOrg — Clerk integration", () => {
     expect(calls).toHaveLength(2);
     expect(sleeps).toEqual([2000]);
 
-    const user = await prisma.user.findUnique({
-      where: { email: "slow@example.com" },
+    const user = await prisma.user.findFirst({
+      where: { email: "slow@example.com", org_id: ctx.org_id },
     });
     expect(user).not.toBeNull();
     const log = await prisma.activityLog.findFirst({
@@ -344,8 +344,8 @@ describe("inviteLearnerForOrg — Clerk integration", () => {
     expect(calls).toHaveLength(2);
 
     // Rollback: DB row must be gone and no ActivityLog written.
-    const user = await prisma.user.findUnique({
-      where: { email: "blocked@example.com" },
+    const user = await prisma.user.findFirst({
+      where: { email: "blocked@example.com", org_id: ctx.org_id },
     });
     expect(user).toBeNull();
     const log = await prisma.activityLog.findFirst({
@@ -369,8 +369,8 @@ describe("inviteLearnerForOrg — Clerk integration", () => {
     if (res.ok) throw new Error("unreachable");
     expect(res.reason).toBe("cannot_invite");
 
-    const user = await prisma.user.findUnique({
-      where: { email: "boom@example.com" },
+    const user = await prisma.user.findFirst({
+      where: { email: "boom@example.com", org_id: ctx.org_id },
     });
     expect(user).toBeNull();
     const log = await prisma.activityLog.findFirst({
