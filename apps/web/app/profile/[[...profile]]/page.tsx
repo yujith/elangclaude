@@ -16,7 +16,7 @@ import {
 
 export const metadata: Metadata = {
   title: "Profile",
-  description: "Manage your IELTS track preference and account sign-in.",
+  description: "Manage your account sign-in and (for Learners) IELTS track preference.",
 };
 
 // Top-level route (not under (learner)/(admin)/(super)) — same shell renders
@@ -95,8 +95,15 @@ export default async function ProfilePage({
 
   const homeHref = homeHrefFor(ctx.role);
   const displayName = me.name ?? me.email;
-  const trackLabel =
-    me.ielts_track === "Academic" ? "Academic" : "General Training";
+  // IELTS track only matters for Learners — they pick practice tests by
+  // it. Admins / SuperAdmins don't take tests, so hide the picker (and
+  // skip surfacing the track in the header).
+  const isLearner = ctx.role === "Learner";
+  const trackLabel = isLearner
+    ? me.ielts_track === "Academic"
+      ? "Academic"
+      : "General Training"
+    : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-brand-grey-50">
@@ -115,7 +122,7 @@ export default async function ProfilePage({
                 {displayName}
               </p>
               <p className="font-body text-xs text-brand-grey-200 leading-tight">
-                {me.org.name} · {trackLabel}
+                {trackLabel ? `${me.org.name} · ${trackLabel}` : me.org.name}
               </p>
             </div>
             <SignOutControl />
@@ -134,27 +141,29 @@ export default async function ProfilePage({
             <p className="font-body text-brand-grey-500 mt-3">{me.email}</p>
           </section>
 
-          <section
-            aria-labelledby="profile-track-heading"
-            className="bg-white rounded-lg ring-1 ring-brand-grey-200 p-6 sm:p-8"
-          >
-            <header className="mb-4">
-              <h2
-                id="profile-track-heading"
-                className="font-heading font-bold text-xl text-brand-black"
-              >
-                IELTS preference
-              </h2>
-              <p className="font-body text-brand-grey-500 mt-1">
-                Choose the track of practice tests we show you in section
-                pickers and Full Mock.
-              </p>
-            </header>
-            <ProfileTrackForm
-              initialTrack={me.ielts_track}
-              hasInProgressWork={inProgress}
-            />
-          </section>
+          {isLearner ? (
+            <section
+              aria-labelledby="profile-track-heading"
+              className="bg-white rounded-lg ring-1 ring-brand-grey-200 p-6 sm:p-8"
+            >
+              <header className="mb-4">
+                <h2
+                  id="profile-track-heading"
+                  className="font-heading font-bold text-xl text-brand-black"
+                >
+                  IELTS preference
+                </h2>
+                <p className="font-body text-brand-grey-500 mt-1">
+                  Choose the track of practice tests we show you in section
+                  pickers and Full Mock.
+                </p>
+              </header>
+              <ProfileTrackForm
+                initialTrack={me.ielts_track}
+                hasInProgressWork={inProgress}
+              />
+            </section>
+          ) : null}
 
           <section
             aria-labelledby="profile-password-heading"

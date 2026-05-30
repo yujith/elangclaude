@@ -66,6 +66,17 @@ export type {
   DeleteClerkOrgFn,
 } from "./self-serve";
 
+export {
+  getOrgBillingSnapshot,
+  subscriptionStatusLabel,
+  orgStatusLabel,
+  PORTAL_ELIGIBLE_STATUSES,
+} from "./billing";
+export type {
+  OrgBillingSnapshot,
+  OrgBillingPlan,
+} from "./billing";
+
 export { syncPlanToStripe, decimalToCents } from "./plan-sync";
 export type {
   PlanSyncResult,

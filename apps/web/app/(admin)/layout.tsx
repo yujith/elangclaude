@@ -10,7 +10,6 @@ import {
   devLoginReturnPath,
   requireRole,
 } from "@/lib/auth/context";
-import { withOrg } from "@elc/db";
 
 const SIGN_IN_PATH = "/sign-in";
 
@@ -21,9 +20,8 @@ export default async function OrgAdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  let ctx;
   try {
-    ctx = await requireRole("OrgAdmin");
+    await requireRole("OrgAdmin");
   } catch (err) {
     if (err instanceof UnauthenticatedError) {
       const to = await devLoginReturnPath("/admin");
@@ -41,11 +39,6 @@ export default async function OrgAdminLayout({
     }
     throw err;
   }
-
-  const user = await withOrg(ctx).user.findUnique({
-    where: { id: ctx.user_id },
-    select: { name: true, email: true, org: { select: { name: true } } },
-  });
 
   return (
     <div className="min-h-screen flex flex-col bg-brand-grey-50">
@@ -74,27 +67,31 @@ export default async function OrgAdminLayout({
               Learners
             </Link>
             <Link
+              href="/admin/invite"
+              className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"
+            >
+              Invite
+            </Link>
+            <Link
               href="/admin/activity"
               className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"
             >
               Activity
             </Link>
-          </nav>
-          <div className="flex items-center gap-6">
+            <Link
+              href="/admin/billing"
+              className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"
+            >
+              Billing
+            </Link>
             <Link
               href="/profile"
-              aria-label="Open your profile"
-              className="text-right hidden sm:block rounded-sm px-1 py-0.5 hover:bg-brand-grey-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black transition-colors"
+              className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"
             >
-              <p className="font-heading font-bold text-sm leading-tight">
-                {user?.name ?? user?.email ?? "Admin"}
-              </p>
-              <p className="font-body text-xs text-brand-grey-200 leading-tight">
-                {user?.org.name}
-              </p>
+              Profile
             </Link>
             <SignOutControl />
-          </div>
+          </nav>
         </div>
       </header>
       <main className="flex-1">{children}</main>

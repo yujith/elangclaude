@@ -11,7 +11,7 @@ export function PricingTeaser() {
             PRICING
           </p>
           <h2 className="mt-3 font-heading font-bold text-3xl md:text-4xl text-brand-black">
-            Free to start. Paid tiers when you're ready to scale.
+            Free to start. Paid tiers when you&rsquo;re ready to scale.
           </h2>
           <p className="mt-4 mx-auto max-w-2xl font-body text-base md:text-lg text-brand-grey-700">
             Per-seat plans for organisations. AI quotas you control, no
