@@ -324,7 +324,7 @@ describe("updateLearnerForOrg", () => {
     expect(result).toEqual({ ok: false, reason: "invalid_email" });
   });
 
-  it("refuses to use an email already claimed elsewhere", async () => {
+  it("permits using an email claimed in another org (Phase 0 multi-org)", async () => {
     const orgA = await createTestOrg("D1");
     const orgB = await createTestOrg("D2");
     const claimed = await prisma.user.findUniqueOrThrow({
@@ -332,13 +332,14 @@ describe("updateLearnerForOrg", () => {
       select: { email: true },
     });
 
+    // Cross-org email reuse is now allowed under Phase 0
     const result = await updateLearnerForOrg(ctxFor(orgA), {
       user_id: orgA.learnerIds[0]!,
       email: claimed.email,
       name: "Collision",
       ielts_track: "Academic",
     });
-    expect(result).toEqual({ ok: false, reason: "cannot_use_email" });
+    expect(result).toEqual({ ok: true, changed: true, user_id: orgA.learnerIds[0]! });
   });
 
   it("refuses to act on a same-org non-learner", async () => {

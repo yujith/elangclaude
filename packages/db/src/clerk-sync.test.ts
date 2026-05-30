@@ -198,6 +198,41 @@ describe("applyClerkUserDeleted", () => {
   it("ignores unknown Clerk user ids", async () => {
     await expect(applyClerkUserDeleted("user_unknown")).resolves.toBeUndefined();
   });
+
+  it("soft-deletes a multi-org user's rows in all orgs when clerk user is deleted", async () => {
+    const orgA = await prisma.organization.create({
+      data: { name: "Org A", seat_limit: 5, quota_daily: 10, quota_monthly: 100 },
+    });
+    const orgB = await prisma.organization.create({
+      data: { name: "Org B", seat_limit: 5, quota_daily: 10, quota_monthly: 100 },
+    });
+
+    const userA = await prisma.user.create({
+      data: {
+        org_id: orgA.id,
+        clerk_user_id: "user_multi",
+        email: "multi@example.com",
+        role: "Learner",
+      },
+    });
+    const userB = await prisma.user.create({
+      data: {
+        org_id: orgB.id,
+        clerk_user_id: "user_multi",
+        email: "multi@example.com",
+        role: "Learner",
+      },
+    });
+
+    // Delete the Clerk user — should soft-delete both rows
+    await applyClerkUserDeleted("user_multi");
+
+    const afterA = await prisma.user.findUnique({ where: { id: userA.id } });
+    expect(afterA?.deleted_at).not.toBeNull();
+
+    const afterB = await prisma.user.findUnique({ where: { id: userB.id } });
+    expect(afterB?.deleted_at).not.toBeNull();
+  });
 });
 
 // ─── Organization events ────────────────────────────────────────────────
@@ -473,5 +508,63 @@ describe("applyClerkMembershipDeleted", () => {
 
     const after = await prisma.user.findUnique({ where: { id: user.id } });
     expect(after?.deleted_at).not.toBeNull();
+  });
+
+  it("does not soft-delete the user in another org when membership is deleted from one org", async () => {
+    const orgA = await prisma.organization.create({
+      data: {
+        clerk_org_id: "org_clerk_a",
+        name: "Org A",
+        seat_limit: 5,
+        quota_daily: 10,
+        quota_monthly: 100,
+      },
+    });
+    const orgB = await prisma.organization.create({
+      data: {
+        clerk_org_id: "org_clerk_b",
+        name: "Org B",
+        seat_limit: 5,
+        quota_daily: 10,
+        quota_monthly: 100,
+      },
+    });
+    const userA = await prisma.user.create({
+      data: {
+        org_id: orgA.id,
+        clerk_user_id: "user_clerk_multi",
+        email: "multi@example.com",
+        role: "Learner",
+      },
+    });
+    const userB = await prisma.user.create({
+      data: {
+        org_id: orgB.id,
+        clerk_user_id: "user_clerk_multi",
+        email: "multi@example.com",
+        role: "Learner",
+      },
+    });
+
+    // Delete membership from org A
+    await applyClerkMembershipDeleted({
+      id: "mem_1",
+      role: "org:basic_member",
+      organization: { id: "org_clerk_a", name: "Org A" },
+      public_user_data: {
+        user_id: "user_clerk_multi",
+        identifier: "multi@example.com",
+        first_name: null,
+        last_name: null,
+      },
+    });
+
+    // User in org A should be soft-deleted
+    const afterA = await prisma.user.findUnique({ where: { id: userA.id } });
+    expect(afterA?.deleted_at).not.toBeNull();
+
+    // User in org B should NOT be soft-deleted
+    const afterB = await prisma.user.findUnique({ where: { id: userB.id } });
+    expect(afterB?.deleted_at).toBeNull();
   });
 });
