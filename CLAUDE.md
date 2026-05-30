@@ -76,6 +76,33 @@ A fresh Clerk project needs these two settings flipped before the app behaves co
 - **Configure → Organizations Settings → Membership: Optional** (default is "Required" which forces Learners into Clerk's org-setup wizard).
 - **Configure → Sessions → Verify new device: off** (dev only — Clerk's per-email code can't be received at `@elanguage.dev` mailboxes during development). Keep it on in production.
 
+## Billing & plans: Stripe is live
+
+Stripe self-serve onboarding shipped 2026-05-30 (ADR-0017). Two funnels — public self-serve at `/pricing` and SuperAdmin-driven invite at `/orgs/new` — converge on a shared Checkout + webhook activation path. Plans are SuperAdmin-managed and pushed to Stripe as Products + Prices; the DB is the source of truth.
+
+- **Plan catalogue (`Plan` model, global).** SuperAdmin CRUDs at `/plans`. Saving a plan auto-syncs to Stripe (Product + monthly Price) via `packages/db/src/plan-sync.ts`. Free + Internal plans skip Stripe entirely. Seeded plans need a one-time "Sync all to Stripe" on the `/plans` list page after `pnpm db:seed` because the seed bypasses the auto-sync path.
+- **`Organization` billing columns:** `plan_id`, `stripe_customer_id @unique`, `stripe_subscription_id @unique`, `subscription_status` (`Trialing | Active | PastDue | Canceled | Incomplete | Internal | PendingPayment`), `current_period_end`, `trial_end`, `billing_owner_user_id`, `provisioned_via` (`seeded | invite | self_serve`).
+- **Two onboarding funnels.** Self-serve: `/pricing` → `/signup-org?plan={slug}` (Clerk SignUp) → `/signup-org/continue` (org-name capture, calls `provisionSelfServeOrg`) → `/onboarding/plan?preselect={slug}`. Invite: SuperAdmin `/orgs/new` picks a Plan + admin email; `inviteOrgAdminForOrg` sends a Clerk Organization Invitation (org-level, `role: "org:admin"`, `publicMetadata: { org_id, role: "OrgAdmin" }`). Both funnels land the OrgAdmin on `/onboarding/plan` once they sign in (subscription_status=PendingPayment routes there from `/post-signin`).
+- **Wizard.** `/onboarding/plan` → Stripe Checkout (`trial_period_days` from the plan) → `/onboarding/processing?session_id=...` → `/onboarding/welcome`. `/processing` polls AND has a fallback that reconciles directly from Stripe via `session_id` when the webhook isn't reaching dev (`stripe listen` not running). Free plans skip Stripe and activate locally.
+- **Webhook.** `/api/stripe/webhook` verifies the Stripe signature against `STRIPE_WEBHOOK_SIGNING_SECRET`, uses a `StripeEventLog` table for idempotency (unique on `stripe_event_id`) and a monotonic-ordering guard so a stale `past_due` can't overwrite a newer `active`. Handles `checkout.session.completed`, `customer.subscription.created/updated/deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`. ActivityLog dual-writes: `super.subscription.*` under `SYSTEM_ORG_ID`, `subscription.*` under the customer org.
+- **`/admin/billing`.** OrgAdmin's billing surface — plan, status, trial / renewal dates, seat + AI usage, "Manage billing" button → Stripe Billing Portal. The CTA is state-aware: `Internal` plans show "Upgrade your plan" (→ `/pricing`), `PendingPayment` shows "Complete checkout" (→ `/onboarding/plan`), `Canceled` shows "Resubscribe". Only `billing_owner_user_id` can open the Stripe Portal — other OrgAdmins see read-only.
+- **Single-org constraint** (until ADR-0018 / Phase 0 multi-org ships). Self-serve refuses an email already in our DB with `email_already_in_use`. Existing Learners can't currently spin up their own school — they need a fresh email.
+
+### Stripe env vars (all in `packages/db/.env`, picked up by `apps/web/next.config.ts`)
+
+| Env | Used by | Required when |
+|---|---|---|
+| `STRIPE_SECRET_KEY` *or* `STRIPE_SECRET_KEY_SANDBOX` | `apps/web/lib/billing/stripe-client.ts` | always; the client reads the unsuffixed one first, falls back to `_SANDBOX` for dev. Outside production it asserts the key starts with `sk_test_`. |
+| `STRIPE_PUBLISHABLE_KEY_SANDBOX` | reserved for future client-side Stripe (Checkout is hosted-redirect in v1, so unused for now) | future use |
+| `STRIPE_WEBHOOK_SIGNING_SECRET` | webhook signature check | when running the webhook receiver — copied from `stripe listen` output in dev, Stripe dashboard in prod |
+| `APP_URL` | Stripe Checkout `success_url` / `cancel_url`, Portal `return_url`, Clerk invitation redirects | always |
+
+### Stripe dashboard prereqs (manual, NOT in version control)
+
+- **Dev:** run `stripe listen --forward-to localhost:3000/api/stripe/webhook` in a separate terminal so events reach the app. The first line of its output is the webhook signing secret to paste into `packages/db/.env`.
+- **Prod:** Developers → Webhooks → Add endpoint `https://<app-url>/api/stripe/webhook`, subscribe to the six events listed in the route header comment, copy the signing secret into the Vercel project env vars.
+- **Branding (both modes):** Settings → Branding → upload the logo + set primary colour to `#EE2346` so Checkout + Portal don't look off-brand.
+
 ## Hard rules — non-negotiable
 
 <important if="touching any database query or API route">
@@ -117,7 +144,10 @@ A fresh Clerk project needs these two settings flipped before the app behaves co
 ## Data model — quick map
 
 ```
-Organization (id, name, seat_limit, quota_daily, quota_monthly, status)
+Organization (id, name, seat_limit, quota_daily, quota_monthly, status,
+               plan_id, stripe_customer_id, stripe_subscription_id,
+               subscription_status, trial_end, current_period_end,
+               billing_owner_user_id, provisioned_via)
 └─ User (id, org_id, role, ielts_track, deleted_at)   -- soft-delete: deleted_at != null hides + blocks sign-in
    └─ Attempt (id, user_id, test_id, section, started_at, submitted_at)
       ├─ Answer (id, attempt_id, question_id, response, is_correct)
@@ -125,6 +155,10 @@ Organization (id, name, seat_limit, quota_daily, quota_monthly, status)
       └─ Recording (id, attempt_id, storage_url, duration_sec)  -- Speaking
 Test (id, track, section, difficulty, status, approved_by)
 └─ Question (id, test_id, type, prompt, correct_answer, points)
+Plan (id, slug, name, seat_limit, quota_daily, quota_monthly,
+      amount_monthly_usd, trial_days, is_internal, is_active,
+      stripe_product_id, stripe_price_id_monthly)  -- global model, SuperAdmin-managed
+StripeEventLog (id, stripe_event_id, event_type, event_created_at, org_id)  -- webhook idempotency
 QuotaUsage (id, user_id, date, ai_calls_count)             -- per-user-per-day quota primitive
 AiCallLog (id, org_id, user_id, purpose, model, input_tokens, output_tokens, cost_usd)  -- money primitive; gateway writes one row per call
 ActivityLog (id, org_id, user_id, action, metadata, timestamp)

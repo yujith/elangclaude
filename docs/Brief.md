@@ -221,6 +221,7 @@ ActivityLog (id, org_id, user_id, action, metadata, timestamp)
 ✅ Super Admin: org management + content pool moderation
 ✅ Per-user quota enforcement
 ✅ Web responsive + PWA
+✅ **Stripe self-serve onboarding** — public `/pricing` + SuperAdmin invite funnels, 14-day trial, Stripe Billing Portal at `/admin/billing` (shipped 2026-05-30 — see ADR-0017)
 
 ---
 
@@ -233,7 +234,7 @@ ActivityLog (id, org_id, user_id, action, metadata, timestamp)
 ❌ Custom org branding/white-label → **Phase 2**
 ❌ Cohort analytics, exportable reports → **Phase 2**
 ❌ Live tutor/classroom features → not on roadmap
-❌ Payment processing UI (handled offline / via invoice initially)
+❌ Multi-org membership (one Clerk user → multiple Orgs) → **Phase 2** — see ADR-0018; v1 enforces one email, one Org
 
 ---
 
@@ -243,7 +244,9 @@ ActivityLog (id, org_id, user_id, action, metadata, timestamp)
 - Advanced org admin analytics (cohort charts, exportable CSV/PDF reports)
 - SSO for enterprise
 - Custom org branding (logo, colors)
-- Self-service billing portal (Stripe)
+- Multi-org user membership (ADR-0018) — drop the "email already in use" wall on `/signup-org`
+- Annual billing toggle, plan-change UI from `/admin/billing` (today: Stripe portal only)
+- Stripe Tax for non-US customers (needs legal sign-off)
 - Adaptive difficulty (test recommendations based on weak areas)
 - Mobile apps (React Native shell over web)
 

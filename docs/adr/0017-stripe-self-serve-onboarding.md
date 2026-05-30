@@ -1,7 +1,9 @@
 # ADR 0017 — Stripe self-serve onboarding + tiered subscriptions
 
 - Date: 2026-05-26
-- Status: Proposed (Phase 1 in progress)
+- Status: Accepted (Phases 1–7 shipped 2026-05-30; Phase 0 multi-org and
+  Phase 8 operational hardening remain as follow-ups — see ADR-0018 and
+  the plan doc)
 
 ## Context
 

@@ -1,7 +1,10 @@
 # ADR 0018 — Multi-org user membership
 
 - Date: 2026-05-26
-- Status: Proposed (Phase 0 not yet started)
+- Status: Accepted (decision recorded); not yet implemented — Phase 0 of
+  the Stripe self-serve plan remains the follow-up. Self-serve currently
+  refuses existing-email signups with `email_already_in_use` until this
+  schema work lands.
 
 ## Context
 
