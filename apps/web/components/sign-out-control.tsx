@@ -14,14 +14,20 @@ import { devLogout } from "@/app/dev/login/actions";
 const BUTTON_CLASS =
   "font-body font-medium text-sm text-brand-grey-200 hover:text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black rounded-sm";
 
-export async function SignOutControl(): Promise<React.ReactElement> {
+type Props = {
+  className?: string;
+};
+
+export async function SignOutControl({
+  className = BUTTON_CLASS,
+}: Props = {}): Promise<React.ReactElement> {
   const isDev = process.env.NODE_ENV !== "production";
 
   return (
     <>
       <Show when="signed-in">
         <SignOutButton redirectUrl="/">
-          <button type="button" className={BUTTON_CLASS}>
+          <button type="button" className={className}>
             Sign out
           </button>
         </SignOutButton>
@@ -29,7 +35,7 @@ export async function SignOutControl(): Promise<React.ReactElement> {
       {isDev && (
         <Show when="signed-out">
           <form action={devLogout}>
-            <button type="submit" className={BUTTON_CLASS}>
+            <button type="submit" className={className}>
               Sign out
             </button>
           </form>
