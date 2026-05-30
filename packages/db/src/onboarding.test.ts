@@ -239,4 +239,69 @@ describe("ensureStripeCustomerIdForOrg", () => {
     );
     expect(result).toEqual({ ok: false, reason: "not_billing_owner" });
   });
+
+  // ── Tenancy defence-in-depth (audit follow-up — F1) ─────────────────
+  // The caller's User row is read via withOrg(ctx) so the proxy injects
+  // org_id=ctx.org_id. A crafted ctx that pairs orgA's id with a User
+  // row from orgB must miss the lookup and NOT leak orgB's email into
+  // the Stripe Customer payload.
+  it("does not leak another org's user email even with a crafted ctx", async () => {
+    const orgA = await prisma.organization.create({
+      data: {
+        name: "Org A",
+        seat_limit: 10,
+        quota_daily: 50,
+        quota_monthly: 300,
+        status: "Active",
+        subscription_status: "PendingPayment",
+      },
+    });
+    // No User row in orgA — only an OrgAdmin in orgB.
+    const orgB = await prisma.organization.create({
+      data: {
+        name: "Org B",
+        seat_limit: 10,
+        quota_daily: 50,
+        quota_monthly: 300,
+        status: "Active",
+        subscription_status: "Active",
+      },
+    });
+    const orgBAdmin = await prisma.user.create({
+      data: {
+        org_id: orgB.id,
+        email: "elsewhere@orgb.test",
+        name: "Org B Admin",
+        role: "OrgAdmin",
+      },
+    });
+
+    const create = vi.fn();
+    const crafted: OrgContext = {
+      org_id: orgA.id,
+      user_id: orgBAdmin.id, // foreign user id smuggled into ctx
+      role: "OrgAdmin",
+    };
+
+    const result = await ensureStripeCustomerIdForOrg(crafted, create);
+    // Lookup misses because withOrg(ctx) injects org_id=orgA on the
+    // User read, and orgBAdmin lives in orgB. We surface the same
+    // "org_not_found" reason the missing-User path uses.
+    expect(result).toEqual({ ok: false, reason: "org_not_found" });
+    expect(create).not.toHaveBeenCalled();
+
+    // OrgB's user row must be untouched.
+    const orgBAdminAfter = await prisma.user.findUniqueOrThrow({
+      where: { id: orgBAdmin.id },
+    });
+    expect(orgBAdminAfter.email).toBe("elsewhere@orgb.test");
+    expect(orgBAdminAfter.org_id).toBe(orgB.id);
+
+    // OrgA must not have inherited a Stripe customer.
+    const orgAAfter = await prisma.organization.findUniqueOrThrow({
+      where: { id: orgA.id },
+    });
+    expect(orgAAfter.stripe_customer_id).toBeNull();
+    expect(orgAAfter.billing_owner_user_id).toBeNull();
+  });
 });

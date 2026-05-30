@@ -16,7 +16,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "./client";
-import type { OrgContext } from "./tenancy";
+import { withOrg, type OrgContext } from "./tenancy";
 import { FREE_PLAN_SLUG, INTERNAL_PLAN_SLUG } from "./plans";
 
 export type OnboardingFailureReason =
@@ -160,7 +160,11 @@ export async function ensureStripeCustomerIdForOrg(
     };
   }
 
-  const user = await prisma.user.findUnique({
+  // Read the caller's User row via withOrg(ctx) so the tenancy proxy
+  // injects org_id=ctx.org_id. Defends against a crafted ctx that pairs
+  // ctx.org_id with a User row from a different org — we want the
+  // lookup to miss in that case rather than leak the other org's email.
+  const user = await withOrg(ctx).user.findUnique({
     where: { id: ctx.user_id },
     select: { id: true, email: true, name: true },
   });
