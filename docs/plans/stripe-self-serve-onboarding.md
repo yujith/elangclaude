@@ -1,8 +1,31 @@
 # Plan: Self-Serve Org Onboarding + SuperAdmin Invite + Tiered Subscriptions via Stripe
 
-> Status: agreed 2026-05-26. P0 resolutions captured below; ADR-0017 and
-> ADR-0018 will mirror the locked-in decisions once each lands. Authoritative
-> across multiple Claude sessions — keep this file updated as phases ship.
+> Status: **Phases 1–8 shipped; tenancy audit F1 fixed.** Last updated 2026-05-30.
+> Three local commits queued for push (068b7d9, f66fdab, 22cf179) — push is
+> currently blocked by an iCloud mmap issue (see
+> `memory/icloud-node-modules-corruption.md`). Run `git push origin main` from a
+> fresh terminal post-restart, or move the project out of `~/Documents/`. Phase 0
+> (multi-org schema) and operational hardening remain as follow-ups.
+
+## Resumption checklist (post-Mac-restart)
+
+1. `git log --oneline -5` — confirm the three local commits are still there:
+   - `22cf179` — fix(tenancy): route onboarding User read through withOrg(ctx) — audit F1
+   - `f66fdab` — docs: Phase 8 cleanup — sync CLAUDE.md, BRIEF.md, ADR-0017/0018 to shipped state
+   - `068b7d9` — fix(billing,profile): /admin/billing routing + actionable CTAs + hide IELTS for non-Learners
+2. `git push origin main` — if it works, great. If `fatal: mmap failed`, see
+   `memory/icloud-node-modules-corruption.md` for the workarounds (toggle
+   iCloud Drive off, or move the project out of `~/Documents/`).
+3. Once pushed, decide on next phase:
+   - **Phase 0 — Multi-org schema** (drops `User.email @unique`, lets existing
+     users self-serve a second Org; see ADR-0018).
+   - **Operational hardening** — Stripe Checkout/Portal branding upload, prod
+     webhook config, disposable-email blocklist on `/signup-org`, soft rate
+     limit on `provisionSelfServeOrg`.
+   - **Tenancy audit P2 follow-ups** — `applyTrialWillEnd` missing
+     `metadataMatches` check, `activateFreePlanForOrg` raw-prisma ActivityLog
+     write, `trySyncPlanToStripe` fabricated ctx. See the audit report in the
+     prior session.
 
 ## Goal
 
