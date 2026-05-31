@@ -6,8 +6,8 @@
 //     all render.
 //   - Resume strip surfaces an in-progress attempt and deep-links into it.
 //   - Section stat tile clicks navigate to the relevant practice picker.
-//   - Inline learner nav on the header includes all 4 sections + Mock,
-//     and a nav-link click navigates correctly.
+//   - Learner header includes the role cue, learner menu, and Sign out.
+//     A nav-link click navigates correctly.
 //   - axe finds no WCAG 2.1 AA violations on /home.
 //
 // Like role-greeting.spec.ts, we bypass Clerk by stamping the signed
@@ -159,7 +159,7 @@ test.describe("learner home dashboard", () => {
     await expect(recent.getByText("Reading", { exact: true })).toBeVisible();
   });
 
-  test("inline learner nav exposes all sections + Mock", async ({
+  test("learner header exposes role and SuperAdmin-style menu", async ({
     context,
     page,
     baseURL,
@@ -171,22 +171,20 @@ test.describe("learner home dashboard", () => {
       page.locator("header").getByText("Learner", { exact: true }),
     ).toBeVisible();
 
-    const nav = page.getByRole("navigation", { name: "Practice sections" });
-    for (const label of ["Reading", "Listening", "Writing", "Speaking", "Mock"]) {
+    const nav = page.getByRole("navigation", { name: "Learner menu" });
+    for (const label of [
+      "Reading",
+      "Listening",
+      "Writing",
+      "Speaking",
+      "Mock",
+      "Profile",
+    ]) {
       await expect(nav.getByRole("link", { name: label })).toBeVisible();
     }
-
-    const navDelta = await page.evaluate(() => {
-      const header = document.querySelector("header");
-      const navEl = document.querySelector('nav[aria-label="Practice sections"]');
-      if (!header || !navEl) return Number.POSITIVE_INFINITY;
-      const headerBox = header.getBoundingClientRect();
-      const navBox = navEl.getBoundingClientRect();
-      return Math.abs(
-        navBox.left + navBox.width / 2 - (headerBox.left + headerBox.width / 2),
-      );
-    });
-    expect(navDelta).toBeLessThanOrEqual(1);
+    await expect(
+      page.locator("header").getByRole("button", { name: "Sign out" }),
+    ).toBeVisible();
 
     // Clicking Mock in the nav takes us to /mock.
     await nav.getByRole("link", { name: "Mock" }).click();

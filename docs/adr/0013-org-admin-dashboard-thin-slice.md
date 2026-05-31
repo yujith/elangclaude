@@ -112,6 +112,16 @@ cursor is user-controlled but only narrows `timestamp` *within* the
 caller's `withOrg`-scoped query, so it can at worst show older rows
 from the same org.
 
+### D7 — Header chrome follows SuperAdmin
+
+The OrgAdmin layout uses the same clean header rhythm as SuperAdmin:
+logo + `Org admin` role cue on the left, then a single right-aligned
+menu group (`Overview`, `Learners`, `Activity`, `Profile`, `Sign out`).
+We intentionally do not show the admin's name or org metadata in the
+header; that information belongs in the page body and profile surface.
+Keeping the role headers visually aligned prevents each dashboard from
+developing its own chrome.
+
 ## Consequences
 
 ### Good

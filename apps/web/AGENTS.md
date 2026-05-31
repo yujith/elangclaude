@@ -9,7 +9,7 @@ Project-specific notes (see also `docs/adr/0001-next16-tailwind4.md` and the roo
 - **Brand utilities** (`bg-brand-red`, `font-display`, `rounded-pill`, etc.) come from `@elc/ui/tokens.css`. New brand tokens go in `packages/ui/src/tokens.css` first, then become utilities automatically.
 - **Server Components by default.** Add `"use client"` only when you need interactivity.
 - **App Router.** All routes live in `app/`. Route groups use `(group-name)/` once we add them.
-- **Learner header chrome:** `(learner)/layout.tsx` intentionally uses a relative flex header with `LearnerNav` absolutely centered (`left-1/2 -translate-x-1/2`). This mirrors the admin role cue while keeping the practice menu visually centered despite unequal logo/account widths. See `docs/adr/0015-learner-home-dashboard.md`.
+- **Role header chrome:** `(learner)/layout.tsx`, `(admin)/layout.tsx`, and `(super)/layout.tsx` intentionally share the same rhythm: logo + role cue on the left, then a right-aligned menu ending with Profile and Sign out. Keep these plain horizontal navs aligned unless the role chrome changes everywhere. See `docs/adr/0013-org-admin-dashboard-thin-slice.md` and `docs/adr/0015-learner-home-dashboard.md`.
 
 The multi-tenancy, AI cost, and brand rules in `.claude/rules/*.md` apply here too.
 <!-- END:nextjs-agent-rules -->

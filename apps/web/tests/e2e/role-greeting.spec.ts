@@ -120,6 +120,17 @@ test.describe("role greetings", () => {
     await expect(
       page.getByText("Your learners. Your insights."),
     ).toBeVisible();
+    const appHeader = page.locator("body > div > header");
+    await expect(
+      appHeader.getByRole("link", { name: "eLanguage Center Org admin" }),
+    ).toBeVisible();
+    const headerNav = appHeader.locator("nav");
+    for (const label of ["Overview", "Learners", "Activity", "Profile"]) {
+      await expect(headerNav.getByRole("link", { name: label })).toBeVisible();
+    }
+    await expect(
+      appHeader.getByRole("button", { name: "Sign out" }),
+    ).toBeVisible();
     // OrgAdmin landing renders an H1 with the org name.
     await expect(
       page.getByRole("heading", { name: /E2E Role-Greeting/i }),

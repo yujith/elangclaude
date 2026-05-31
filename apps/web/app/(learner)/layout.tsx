@@ -10,7 +10,6 @@ import {
   devLoginReturnPath,
   requireOrgContext,
 } from "@/lib/auth/context";
-import { prisma } from "@elc/db/client";
 
 const SIGN_IN_PATH = "/sign-in";
 
@@ -21,9 +20,8 @@ export default async function LearnerLayout({
 }: {
   children: React.ReactNode;
 }) {
-  let ctx;
   try {
-    ctx = await requireOrgContext();
+    await requireOrgContext();
   } catch (err) {
     if (err instanceof UnauthenticatedError) {
       const to = await devLoginReturnPath("/home");
@@ -36,17 +34,10 @@ export default async function LearnerLayout({
     throw err;
   }
 
-  // Load name + track for the header. This is one extra query per page —
-  // acceptable for v1; cache later if it becomes hot.
-  const user = await prisma.user.findUnique({
-    where: { id: ctx.user_id },
-    select: { name: true, email: true, ielts_track: true, org: { select: { name: true } } },
-  });
-
   return (
     <div className="min-h-screen flex flex-col bg-brand-grey-50">
       <header className="bg-brand-black text-white">
-        <div className="relative mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3">
+        <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-4">
           <Link
             href="/home"
             className="flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black rounded-sm"
@@ -56,20 +47,8 @@ export default async function LearnerLayout({
               Learner
             </span>
           </Link>
-          <LearnerNav className="absolute left-1/2 hidden -translate-x-1/2 lg:block" />
-          <div className="flex items-center gap-4">
-            <Link
-              href="/profile"
-              aria-label="Open your profile"
-              className="text-right hidden sm:block rounded-sm px-1 py-0.5 hover:bg-brand-grey-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black transition-colors"
-            >
-              <p className="font-heading font-bold text-sm leading-tight">
-                {user?.name ?? user?.email ?? "Learner"}
-              </p>
-              <p className="font-body text-xs text-brand-grey-200 leading-tight">
-                {user?.org.name} · {user?.ielts_track === "Academic" ? "Academic" : "General Training"}
-              </p>
-            </Link>
+          <div className="flex items-center gap-6">
+            <LearnerNav />
             <SignOutControl />
           </div>
         </div>
