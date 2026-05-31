@@ -35,13 +35,36 @@ function readString(formData: FormData, key: string): string | null {
   return typeof raw === "string" && raw.length > 0 ? raw : null;
 }
 
+function safeLearnersReturnTo(raw: FormDataEntryValue | null): string {
+  if (typeof raw !== "string") return "/admin/learners";
+  if (raw === "/admin/learners" || raw.startsWith("/admin/learners?")) {
+    return raw;
+  }
+  return "/admin/learners";
+}
+
+function withStatusParam(
+  href: string,
+  params: Record<string, string | null | undefined>,
+): string {
+  const url = new URL(href, "http://elc.local");
+  for (const [key, value] of Object.entries(params)) {
+    if (value) url.searchParams.set(key, value);
+  }
+  return `${url.pathname}${url.search}`;
+}
+
 function failureRedirect(
   reason: OrgLearnerFailureReason,
   focusUserId?: string | null,
+  returnTo = "/admin/learners",
 ): never {
-  const params = new URLSearchParams({ error: reason });
-  if (focusUserId) params.set("focus", focusUserId);
-  redirect(`/admin/learners?${params.toString()}`);
+  redirect(
+    withStatusParam(returnTo, {
+      error: reason,
+      focus: focusUserId,
+    }),
+  );
 }
 
 export async function inviteLearner(input: {
@@ -53,6 +76,7 @@ export async function inviteLearner(input: {
   if (result.ok) {
     revalidatePath("/admin");
     revalidatePath("/admin/learners");
+    revalidatePath("/admin/invite");
     revalidatePath("/admin/activity");
   }
   return result;
@@ -60,8 +84,9 @@ export async function inviteLearner(input: {
 
 export async function updateLearnerFromForm(formData: FormData): Promise<void> {
   const ctx = await requireRole("OrgAdmin");
+  const returnTo = safeLearnersReturnTo(formData.get("return_to"));
   const userId = readString(formData, "user_id");
-  if (!userId) failureRedirect("learner_not_found");
+  if (!userId) failureRedirect("learner_not_found", null, returnTo);
 
   const result = await updateLearnerForOrg(ctx, {
     user_id: userId,
@@ -69,13 +94,16 @@ export async function updateLearnerFromForm(formData: FormData): Promise<void> {
     name: (formData.get("name") as string | null) ?? undefined,
     ielts_track: (formData.get("ielts_track") as "Academic" | "GeneralTraining") ?? "Academic",
   });
-  if (!result.ok) failureRedirect(result.reason, userId);
+  if (!result.ok) failureRedirect(result.reason, userId, returnTo);
 
   revalidatePath("/admin");
   revalidatePath("/admin/learners");
   revalidatePath("/admin/activity");
   redirect(
-    `/admin/learners?updated=${result.user_id}&focus=${result.user_id}`,
+    withStatusParam(returnTo, {
+      updated: result.user_id,
+      focus: result.user_id,
+    }),
   );
 }
 
@@ -83,16 +111,17 @@ export async function softDeleteLearnerFromForm(
   formData: FormData,
 ): Promise<void> {
   const ctx = await requireRole("OrgAdmin");
+  const returnTo = safeLearnersReturnTo(formData.get("return_to"));
   const userId = readString(formData, "user_id");
-  if (!userId) failureRedirect("learner_not_found");
+  if (!userId) failureRedirect("learner_not_found", null, returnTo);
 
   const result = await softDeleteLearnerForOrg(ctx, { user_id: userId });
-  if (!result.ok) failureRedirect(result.reason, userId);
+  if (!result.ok) failureRedirect(result.reason, userId, returnTo);
 
   revalidatePath("/admin");
   revalidatePath("/admin/learners");
   revalidatePath("/admin/activity");
-  redirect(`/admin/learners?removed=${result.user_id}`);
+  redirect(withStatusParam(returnTo, { removed: result.user_id }));
 }
 
 export async function inviteLearnersFromCsv(
@@ -103,6 +132,7 @@ export async function inviteLearnersFromCsv(
   if (result.invited > 0) {
     revalidatePath("/admin");
     revalidatePath("/admin/learners");
+    revalidatePath("/admin/invite");
     revalidatePath("/admin/activity");
   }
   return result;

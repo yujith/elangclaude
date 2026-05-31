@@ -1,6 +1,6 @@
 "use client";
 
-// Single-invite + CSV bulk-invite controls for /admin/learners. Calls
+// Single-invite + CSV bulk-invite controls for /admin/invite. Calls
 // the server actions and renders the structured result inline (no
 // redirect dance, so per-row CSV failures stay visible).
 
