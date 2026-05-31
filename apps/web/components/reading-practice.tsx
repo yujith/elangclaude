@@ -82,6 +82,7 @@ export type RunnerQuestion = {
 type Props = {
   attemptId: string;
   startedAtIso: string;
+  renderedAtIso: string;
   passage: ReadingPassage;
   completionBlocks: CompletionBlock[];
   questions: RunnerQuestion[];
@@ -215,6 +216,7 @@ function buildDisplayItems(
 export function ReadingPractice({
   attemptId,
   startedAtIso,
+  renderedAtIso,
   passage,
   completionBlocks,
   questions,
@@ -228,6 +230,10 @@ export function ReadingPractice({
     "idle",
   );
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [passagePanelHeight, setPassagePanelHeight] = useState<number | null>(
+    null,
+  );
+  const questionsPanelRef = useRef<HTMLFormElement | null>(null);
 
   // Single-flight autosave per question — the latest debounced payload for
   // each question lands in pendingByQ; when the in-flight save resolves we
@@ -284,7 +290,36 @@ export function ReadingPractice({
     };
   }, []);
 
-  const elapsedMs = useElapsed(startedAtIso);
+  useEffect(() => {
+    const questionsPanel = questionsPanelRef.current;
+    if (!questionsPanel) return;
+
+    const syncPassageHeight = () => {
+      if (window.matchMedia("(min-width: 1024px)").matches) {
+        setPassagePanelHeight(questionsPanel.offsetHeight);
+      } else {
+        setPassagePanelHeight(null);
+      }
+    };
+
+    syncPassageHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", syncPassageHeight);
+      return () => window.removeEventListener("resize", syncPassageHeight);
+    }
+
+    const observer = new ResizeObserver(syncPassageHeight);
+    observer.observe(questionsPanel);
+    window.addEventListener("resize", syncPassageHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", syncPassageHeight);
+    };
+  }, []);
+
+  const elapsedMs = useElapsed(startedAtIso, renderedAtIso);
   const remainingMs = SUGGESTED_MINUTES * 60_000 - elapsedMs;
   const overTime = remainingMs <= 0;
 
@@ -335,7 +370,12 @@ export function ReadingPractice({
       <div className="mx-auto w-full max-w-7xl px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] gap-6">
         <section
           aria-label="Passage"
-          className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6 max-h-[75vh] overflow-y-auto"
+          className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6 overflow-y-auto lg:max-h-[75vh]"
+          style={
+            passagePanelHeight
+              ? { height: passagePanelHeight, maxHeight: "none" }
+              : undefined
+          }
         >
           {passage.title ? (
             <h2 className="font-heading font-bold text-2xl text-brand-black mb-4">
@@ -360,6 +400,7 @@ export function ReadingPractice({
         </section>
 
         <form
+          ref={questionsPanelRef}
           action={submitReadingAttempt}
           className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6 flex flex-col"
         >
@@ -1205,9 +1246,12 @@ function SaveIndicator({
   return <span className="text-brand-grey-500">Draft</span>;
 }
 
-function useElapsed(startedAtIso: string): number {
+function useElapsed(startedAtIso: string, renderedAtIso: string): number {
   const [elapsed, setElapsed] = useState(() =>
-    Math.max(0, Date.now() - new Date(startedAtIso).getTime()),
+    Math.max(
+      0,
+      new Date(renderedAtIso).getTime() - new Date(startedAtIso).getTime(),
+    ),
   );
   useEffect(() => {
     const id = setInterval(() => {

@@ -23,6 +23,7 @@ type Props = {
   initialResponse: string;
   initialSavedAtIso: string | null;
   startedAtIso: string;
+  renderedAtIso: string;
 };
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
@@ -35,6 +36,7 @@ export function WritingPractice({
   initialResponse,
   initialSavedAtIso,
   startedAtIso,
+  renderedAtIso,
 }: Props) {
   // Parse once per visualJson change. Returns null for missing / malformed
   // specs — the UI silently falls back to text-only when null.
@@ -105,7 +107,7 @@ export function WritingPractice({
   const words = countWords(text);
   const target = wordTarget(taskType);
   const minutes = timeAllocationMinutes(taskType);
-  const elapsedMs = useElapsed(startedAtIso);
+  const elapsedMs = useElapsed(startedAtIso, renderedAtIso);
   const remainingMs = minutes * 60_000 - elapsedMs;
   const timerLabel = formatRemaining(remainingMs);
   const overTime = remainingMs <= 0;
@@ -251,9 +253,12 @@ function SaveIndicator({
   return <span className="text-brand-grey-500">Draft</span>;
 }
 
-function useElapsed(startedAtIso: string): number {
+function useElapsed(startedAtIso: string, renderedAtIso: string): number {
   const [elapsed, setElapsed] = useState(() =>
-    Math.max(0, Date.now() - new Date(startedAtIso).getTime()),
+    Math.max(
+      0,
+      new Date(renderedAtIso).getTime() - new Date(startedAtIso).getTime(),
+    ),
   );
   useEffect(() => {
     const id = setInterval(() => {

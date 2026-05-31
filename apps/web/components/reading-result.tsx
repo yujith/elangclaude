@@ -112,12 +112,6 @@ export function ReadingResult({ grade }: Props) {
           >
             Try another passage
           </Link>
-          <Link
-            href="/practice/writing"
-            className="inline-flex items-center gap-2 rounded-pill bg-brand-black px-5 py-2.5 font-heading font-bold text-white transition-colors hover:bg-brand-grey-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
-          >
-            Switch to Writing
-          </Link>
         </div>
       </div>
     </section>

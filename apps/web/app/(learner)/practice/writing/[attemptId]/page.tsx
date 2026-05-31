@@ -85,6 +85,7 @@ export default async function WritingPracticeAttemptPage({
       initialResponse={existing.text}
       initialSavedAtIso={existing.savedAt}
       startedAtIso={attempt.started_at.toISOString()}
+      renderedAtIso={new Date().toISOString()}
     />
   );
 }

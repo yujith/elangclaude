@@ -909,6 +909,14 @@ function GlobalAudioPanel({
   const playingPartIndex = currentPartNumber
     ? parts.findIndex((p) => p.part === currentPartNumber)
     : -1;
+  const progressPercent =
+    playlist.length === 0
+      ? 0
+      : playState === "finished"
+        ? 100
+        : playState === "playing"
+          ? Math.round(((segmentIndex + 1) / playlist.length) * 100)
+          : 0;
 
   return (
     <article className="rounded-lg bg-brand-black text-white p-6 space-y-4 mb-6">
@@ -921,7 +929,7 @@ function GlobalAudioPanel({
             {playState === "idle"
               ? "All four parts will play once, end to end."
               : playState === "playing"
-                ? `Playing Part ${currentPartNumber ?? "?"} (segment ${segmentIndex + 1} of ${playlist.length})`
+                ? `Playing Part ${currentPartNumber ?? "?"}`
                 : "Listening section finished."}
           </h2>
         </div>
@@ -974,6 +982,30 @@ function GlobalAudioPanel({
           </p>
         </div>
       ) : null}
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-body text-xs uppercase tracking-widest text-white/60">
+            Audio progress
+          </p>
+          <p className="font-heading font-bold text-sm text-white">
+            {progressPercent}%
+          </p>
+        </div>
+        <div
+          role="progressbar"
+          aria-label="Audio progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progressPercent}
+          className="h-2 w-full overflow-hidden rounded-pill bg-white/15"
+        >
+          <div
+            className="h-full rounded-pill bg-brand-red transition-[width] duration-500 ease-out"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      </div>
 
       {playState === "idle" ? (
         <button

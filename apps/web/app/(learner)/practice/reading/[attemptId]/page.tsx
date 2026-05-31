@@ -189,6 +189,7 @@ export default async function ReadingPracticeAttemptPage({
     <ReadingPractice
       attemptId={attempt.id}
       startedAtIso={attempt.started_at.toISOString()}
+      renderedAtIso={new Date().toISOString()}
       passage={passage}
       completionBlocks={passage.completion_blocks ?? []}
       questions={runnerQuestions}
