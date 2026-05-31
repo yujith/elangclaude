@@ -118,6 +118,10 @@ Stripe self-serve onboarding shipped 2026-05-30 (ADR-0017). Two funnels — publ
 **Use the brand system.** Red `#EE2346` + black `#0A0A0A` are the only primaries. Rubik is the only font (Extra Bold Italic display, Bold headlines, Medium body). Never introduce a new color or font without updating `.claude/skills/brand-system/SKILL.md` first. See `docs/BRAND.md`.
 </important>
 
+<important if="touching the PWA service worker or any client-side cache">
+**The service worker (`apps/web/public/sw.js`) must NEVER cache authenticated or tenant-scoped responses** — only public static assets (`/_next/static/`, `/fonts/`, `/brand/`, `/icons/`, the manifest). Navigations are network-first with an `/offline` fallback and are never stored; `/api/*`, non-GET requests, and cross-origin requests bypass the worker entirely. A cache is a cache key under `.claude/rules/multi-tenancy.md`. The `cacheStrategy()` function is the single source of truth and is guarded by `apps/web/tests/unit/sw-cache-policy.test.mjs`. See `docs/adr/0019-pwa-service-worker.md`.
+</important>
+
 <important if="generating IELTS content or grading prompts">
 **Read `.claude/skills/ielts-domain/SKILL.md`** before writing any test generation or grading prompt. IELTS has specific question types per section, specific band descriptors per criterion, and getting these wrong undermines the whole product.
 </important>

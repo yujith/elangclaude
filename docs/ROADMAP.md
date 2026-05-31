@@ -2,7 +2,7 @@
 
 ## MVP v1 — what ships first
 
-All four IELTS sections (Reading, Listening, Writing, Speaking). Both Academic and General Training tracks, learner-selectable. Section practice and full timed mock tests. AI grading only — no human review yet. Conversational Speaking AI with recording storage. Org Admin dashboard with bulk learner invite (single email + CSV), seat usage, and activity log. SuperAdmin console for organization CRUD, quota configuration, AI cost dashboard, and content pool moderation. Per-user quota enforcement, server-side, atomic. Web responsive, PWA-ready.
+All four IELTS sections (Reading, Listening, Writing, Speaking). Both Academic and General Training tracks, learner-selectable. Section practice and full timed mock tests. AI grading only — no human review yet. Conversational Speaking AI with recording storage. Org Admin dashboard with bulk learner invite (single email + CSV), seat usage, and activity log. SuperAdmin console for organization CRUD, quota configuration, AI cost dashboard, and content pool moderation. Per-user quota enforcement, server-side, atomic. Web responsive, PWA-ready (installable manifest + icons + offline shell shipped 2026-05-31 — see ADR-0019).
 
 ## Phase 2 — after MVP traction
 
