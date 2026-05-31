@@ -264,8 +264,8 @@ model User {
   // Clerk user id (`user_*`). Nullable so seeded users exist before they
   // first sign in via Clerk. requireOrgContext lazy-links on first sign-in
   // by matching email; the webhook keeps it in sync afterwards.
-  clerk_user_id String?      @unique
-  email         String       @unique
+  clerk_user_id String?
+  email         String
   name          String?
   role          Role         @default(Learner)
   ielts_track   Track        @default(Academic)
@@ -290,6 +290,8 @@ model User {
   @@index([org_id, createdAt])
   @@index([org_id, role])
   @@index([org_id, deleted_at])
+  @@unique([org_id, email], name: "user_org_email")
+  @@unique([org_id, clerk_user_id], name: "user_org_clerk_user_id")
 }
 
 model Attempt {

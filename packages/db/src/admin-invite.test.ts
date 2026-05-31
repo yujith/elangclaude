@@ -215,7 +215,7 @@ describe("inviteLearnerForOrg", () => {
     expect(fourth.reason).toBe("seat_limit_reached");
   });
 
-  it("refuses a cross-org email with the generic cannot_invite reason", async () => {
+  it("allows a cross-org email to create a learner in a second org (ADR-0018)", async () => {
     const a = await makeOrg(5);
     const b = await makeOrg(5);
     const inA = await inviteLearnerForOrg(
@@ -224,14 +224,22 @@ describe("inviteLearnerForOrg", () => {
       makeOptions(),
     );
     expect(inA.ok).toBe(true);
+    // With multi-org, same email can exist in different orgs
     const inB = await inviteLearnerForOrg(
       b.ctx,
       { email: "shared@example.com" },
       makeOptions(),
     );
-    expect(inB.ok).toBe(false);
-    if (inB.ok) throw new Error("unreachable");
-    expect(inB.reason).toBe("cannot_invite");
+    expect(inB.ok).toBe(true);
+    if (!inB.ok) throw new Error("unexpected failure");
+    // The two rows should be separate users in different orgs
+    const userInA = await prisma.user.findFirst({
+      where: { email: "shared@example.com", org_id: a.org.id },
+    });
+    const userInB = await prisma.user.findFirst({
+      where: { email: "shared@example.com", org_id: b.org.id },
+    });
+    expect(userInA?.id).not.toBe(userInB?.id);
   });
 
   it("rejects malformed emails before touching the database", async () => {
