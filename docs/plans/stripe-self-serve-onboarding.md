@@ -1,11 +1,53 @@
 # Plan: Self-Serve Org Onboarding + SuperAdmin Invite + Tiered Subscriptions via Stripe
 
-> Status: **Phases 1–8 shipped; tenancy audit F1 fixed.** Last updated 2026-05-30.
-> Three local commits queued for push (068b7d9, f66fdab, 22cf179) — push is
-> currently blocked by an iCloud mmap issue (see
-> `memory/icloud-node-modules-corruption.md`). Run `git push origin main` from a
-> fresh terminal post-restart, or move the project out of `~/Documents/`. Phase 0
-> (multi-org schema) and operational hardening remain as follow-ups.
+> Status: **Phases 0–8 shipped.** Last updated 2026-05-31.
+> Phase 0 (multi-org schema + sync + auth resolution + fuzzer) landed
+> 2026-05-31 (`8e2d55a`, `0533e2e`). The OrgAdmin `<OrganizationSwitcher>`
+> is now wired into `(admin)/layout.tsx` (gated on `MULTI_ORG_ENABLED`,
+> with in-switcher org-creation hidden so it can't bypass the billing
+> funnel). To turn multi-org on, set `MULTI_ORG_ENABLED=1` in
+> `packages/db/.env`. Remaining: the full two-account browser funnel test,
+> operational hardening, the tenancy audit P2 follow-ups below, and the
+> ADR-0018 UI follow-ups (SuperAdmin "view a user's orgs", in-app leave).
+> Earlier note: three local commits were once blocked by an iCloud mmap
+> issue — see `memory/icloud-node-modules-corruption.md` if `git push`
+> fails with `fatal: mmap failed`.
+
+## Enabling multi-org (operator runbook)
+
+Phase 0 shipped the schema, sync, and auth resolution, and the OrgAdmin
+`<OrganizationSwitcher>` is wired into `(admin)/layout.tsx`. All of it is
+**dormant behind one feature flag** until you flip it. To turn multi-org
+on:
+
+1. **Set the flag.** Add `MULTI_ORG_ENABLED=1` to `packages/db/.env`.
+   - This file is **git-ignored and protected from tooling** (agents get a
+     deny-rule error trying to write it) — edit it by hand.
+   - `next.config.ts` forwards it to the app; both the self-serve guard
+     (`self-serve.ts`, `signup-org/continue`) and the admin switcher read
+     `process.env.MULTI_ORG_ENABLED === "1"`.
+   - For Vercel/prod: add `MULTI_ORG_ENABLED=1` to the project env vars.
+2. **Restart the dev server** (env is read at boot, not per-request).
+3. **Run the two-account acceptance test in a browser** (ADR-0018 — the
+   automated suites cover schema/sync/auth, but the live Clerk
+   multi-membership flow can only be exercised manually):
+   1. Sign up Org A via `/signup-org`, complete onboarding.
+   2. Sign out, sign up Org B with the **same Clerk account** + a new org
+      name.
+   3. Confirm you land on `/select-org`, can pick either org, and reach the
+      correct dashboard for each.
+   4. In `/admin`, confirm the `<OrganizationSwitcher>` appears, flips the
+      active org, and that "Create organization" is **absent** from its
+      popover (org creation must stay on `/signup-org` / `/orgs/new` so it
+      lands on a Plan + billing).
+4. **Rollback** is just removing the flag (and re-adding the `@unique`
+   constraints if you need a hard schema revert — safe as long as no
+   second-org User rows were created while the flag was on; see ADR-0018
+   D5).
+
+Behaviour with the flag **off** (default): single-org enforced, self-serve
+refuses duplicate emails with `email_already_in_use`, switcher hidden.
+Learners stay single-org **regardless** of the flag, by convention.
 
 ## Resumption checklist (post-Mac-restart)
 

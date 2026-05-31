@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { OrganizationSwitcher } from "@clerk/nextjs";
 import { Logo } from "@/components/logo";
 import { SignOutControl } from "@/components/sign-out-control";
 import {
@@ -40,6 +41,13 @@ export default async function OrgAdminLayout({
     throw err;
   }
 
+  // Multi-org (ADR-0018): when enabled, one Clerk identity can hold User
+  // rows in several orgs. Surface Clerk's <OrganizationSwitcher> so an
+  // OrgAdmin can flip the active org (which drives DB-user resolution in
+  // requireOrgContext). Hidden while the flag is off — Learners and
+  // single-org admins keep the existing chrome unchanged.
+  const multiOrg = process.env.MULTI_ORG_ENABLED === "1";
+
   return (
     <div className="min-h-screen flex flex-col bg-brand-grey-50">
       <header className="bg-brand-black text-white">
@@ -54,6 +62,23 @@ export default async function OrgAdminLayout({
             </span>
           </Link>
           <nav className="flex items-center gap-6">
+            {multiOrg && (
+              <OrganizationSwitcher
+                hidePersonal
+                afterSelectOrganizationUrl="/post-signin"
+                afterLeaveOrganizationUrl="/post-signin"
+                appearance={{
+                  variables: { colorPrimary: "#EE2346" },
+                  elements: {
+                    // Org creation must run through /signup-org or /orgs/new
+                    // so it lands on a Plan + billing — hide the in-switcher
+                    // "Create organization" action to prevent a billing bypass.
+                    organizationSwitcherPopoverActionButton__createOrganization:
+                      { display: "none" },
+                  },
+                }}
+              />
+            )}
             <Link
               href="/admin"
               className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"

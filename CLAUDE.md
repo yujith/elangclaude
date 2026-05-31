@@ -68,6 +68,7 @@ DB-touching sync functions live in `packages/db/src/clerk-sync.ts` and are unit-
 | `CLERK_WEBHOOK_SIGNING_SECRET` | webhook Svix signature check | when running with the webhook receiver |
 | `APP_URL` | invitation `redirectUrl` build | any code path that calls `inviteLearnerForOrg` (throws `InviteEnvError` otherwise) |
 | `SEED_DEFAULT_PASSWORD` | overrides the shared seed password | optional; defaults to `elanguagecenter2026!` |
+| `MULTI_ORG_ENABLED` | self-serve guard (`self-serve.ts`, `signup-org/continue`) + the OrgAdmin `<OrganizationSwitcher>` in `(admin)/layout.tsx` | optional; `1` lets one Clerk identity hold `User` rows in multiple orgs (ADR-0018). Defaults off; Learners stay single-org by convention regardless of the flag. |
 
 ### Clerk dashboard prereqs (manual, NOT in version control)
 
