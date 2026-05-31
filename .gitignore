@@ -42,3 +42,4 @@ test-results/
 .turbo/
 .cache/
 .eslintcache
+.codegraph/
