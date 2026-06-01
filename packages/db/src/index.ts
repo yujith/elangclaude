@@ -26,6 +26,7 @@ export type { UpdateTrackFailureReason, UpdateTrackResult } from "./profile";
 export {
   recordConsent,
   recordConsents,
+  ensureConsentRecorded,
   getMyConsents,
   hasGrantedConsent,
 } from "./consent";

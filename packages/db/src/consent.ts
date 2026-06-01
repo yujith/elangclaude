@@ -106,6 +106,35 @@ export async function getMyConsents(
   return latest;
 }
 
+/**
+ * Idempotently record a granted consent for `type` at `policy_version` if the
+ * caller hasn't already consented at that exact version. Used to capture
+ * Terms/Privacy acceptance once per version on first authenticated load
+ * (account creation implies acceptance). Returns true if a row was written.
+ */
+export async function ensureConsentRecorded(
+  ctx: OrgContext,
+  input: { consent_type: ConsentType; policy_version: string; source: string },
+): Promise<boolean> {
+  const db = withOrg(ctx);
+  const existing = await db.consentRecord.findFirst({
+    where: {
+      user_id: ctx.user_id,
+      consent_type: input.consent_type,
+      policy_version: input.policy_version,
+    },
+    select: { id: true },
+  });
+  if (existing) return false;
+  await recordConsent(ctx, {
+    consent_type: input.consent_type,
+    granted: true,
+    policy_version: input.policy_version,
+    source: input.source,
+  });
+  return true;
+}
+
 /** True iff the caller's latest state for `type` is granted. */
 export async function hasGrantedConsent(
   ctx: OrgContext,
