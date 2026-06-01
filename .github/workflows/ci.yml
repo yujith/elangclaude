@@ -8,14 +8,12 @@
 #     It waits for `quality` so the two jobs do not race against the
 #     same shared Neon test database.
 #
+# CI runs against an ephemeral Postgres service container in each job.
+# Locally, packages/db/.env can still point DATABASE_URL_TEST at a Neon
+# test branch; the workflow overrides it with the container URL so CI
+# never touches dev/prod data and avoids slow cross-region DB calls.
+#
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   - DATABASE_URL_TEST   — Neon test-branch URL (the same one
-#                           packages/db/.env uses locally). The fuzzer
-#                           rewrites DATABASE_URL → DATABASE_URL_TEST
-#                           inside test-global-setup.ts, and the e2e
-#                           job sets DATABASE_URL=$DATABASE_URL_TEST
-#                           for the spawned dev server so the test
-#                           run never touches dev/prod data.
 #   - DEV_SESSION_SECRET  — optional; defaults to the dev fallback
 #                           string. Setting it makes the suspend-gate
 #                           cookie signature opaque to anyone reading
@@ -40,13 +38,24 @@ jobs:
   quality:
     name: typecheck · lint · build · unit
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: elc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
-      # The fuzzer reads DATABASE_URL_TEST directly; @elc/db also
-      # needs DATABASE_URL set so prisma generate can validate the
-      # schema. Point both at the same Neon test branch.
-      DATABASE_URL: ${{ secrets.DATABASE_URL_TEST }}
-      DATABASE_URL_TEST: ${{ secrets.DATABASE_URL_TEST }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/elc_test?schema=public
+      DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/elc_test?schema=public
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -74,9 +83,23 @@ jobs:
     needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: elc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL_TEST }}
-      DATABASE_URL_TEST: ${{ secrets.DATABASE_URL_TEST }}
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/elc_test?schema=public
+      DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/elc_test?schema=public
       DEV_SESSION_SECRET: ${{ secrets.DEV_SESSION_SECRET }}
       # Force CI so playwright.config.ts disables reuseExistingServer
       # and Playwright spawns a fresh `pnpm dev` for the run.
