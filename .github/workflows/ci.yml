@@ -1,10 +1,12 @@
 # CI for eLanguage Center.
 #
-# Two jobs run in parallel on every PR + push to main:
+# Two jobs run on every PR + push to main:
 #   - `quality` — typecheck, lint, build, and the @elc/db fuzzer +
 #     @elc/ai unit suite (needs the Neon test branch).
 #   - `e2e` — Playwright suspend-gate suite against a real Next dev
 #     server pointed at the same Neon test branch.
+#     It waits for `quality` so the two jobs do not race against the
+#     same shared Neon test database.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
 #   - DATABASE_URL_TEST   — Neon test-branch URL (the same one
@@ -69,6 +71,7 @@ jobs:
 
   e2e:
     name: Playwright e2e
+    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
