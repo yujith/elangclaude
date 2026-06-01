@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { hasInProgressWork, withOrg, type Role } from "@elc/db";
+import {
+  hasInProgressWork,
+  listMyDataRightsRequests,
+  withOrg,
+  type Role,
+} from "@elc/db";
 import { Logo } from "@/components/logo";
+import { DataRightsSection } from "@/components/data-rights-section";
 import { ProfilePasswordSection } from "@/components/profile-password-section";
 import { ProfileTrackForm } from "@/components/profile-track-form";
 import { SignOutControl } from "@/components/sign-out-control";
@@ -77,7 +83,7 @@ export default async function ProfilePage({
     throw err;
   }
 
-  const [me, inProgress] = await Promise.all([
+  const [me, inProgress, dataRequests] = await Promise.all([
     withOrg(ctx).user.findUnique({
       where: { id: ctx.user_id },
       select: {
@@ -85,13 +91,20 @@ export default async function ProfilePage({
         email: true,
         ielts_track: true,
         role: true,
+        age_assurance: true,
+        guardian_consent_at: true,
         org: { select: { name: true } },
       },
     }),
     hasInProgressWork(ctx),
+    listMyDataRightsRequests(ctx),
   ]);
 
   if (!me) redirect("/no-access");
+
+  const hasPendingErasure = dataRequests.some(
+    (r) => r.type === "Erasure" && r.status === "Pending",
+  );
 
   const homeHref = homeHrefFor(ctx.role);
   const displayName = me.name ?? me.email;
@@ -181,6 +194,37 @@ export default async function ProfilePage({
               </p>
             </header>
             <ProfilePasswordSection />
+          </section>
+
+          <section
+            aria-labelledby="profile-data-heading"
+            className="bg-white rounded-lg ring-1 ring-brand-grey-200 p-6 sm:p-8"
+          >
+            <header className="mb-6">
+              <h2
+                id="profile-data-heading"
+                className="font-heading font-bold text-xl text-brand-black"
+              >
+                Your data
+              </h2>
+              <p className="font-body text-brand-grey-500 mt-1">
+                Download a copy of your data, correct it, or request erasure.
+                See our{" "}
+                <Link
+                  href="/privacy"
+                  className="text-brand-red underline underline-offset-2 hover:no-underline"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </p>
+            </header>
+            <DataRightsSection
+              initialName={me.name ?? ""}
+              initialAge={me.age_assurance}
+              guardianConsentGiven={me.guardian_consent_at !== null}
+              hasPendingErasure={hasPendingErasure}
+            />
           </section>
         </div>
       </main>

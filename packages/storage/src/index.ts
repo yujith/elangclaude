@@ -22,6 +22,7 @@ export {
   signedUploadUrl,
   signedDownloadUrl,
   downloadObject,
+  deleteObject,
 } from "./r2";
 export type {
   SignedUploadArgs,
