@@ -104,6 +104,41 @@ Stripe self-serve onboarding shipped 2026-05-30 (ADR-0017). Two funnels — publ
 - **Prod:** Developers → Webhooks → Add endpoint `https://<app-url>/api/stripe/webhook`, subscribe to the six events listed in the route header comment, copy the signing secret into the Vercel project env vars.
 - **Branding (both modes):** Settings → Branding → upload the logo + set primary colour to `#EE2346` so Checkout + Portal don't look off-brand.
 
+## Compliance & data protection: live
+
+Legal/privacy compliance shipped 2026-06-01 (ADR-0019), covering GDPR/UK,
+Australia (Privacy Act/APPs), India (DPDP), Sri Lanka (PDPA), and the SEA
+PDPAs. The old `mailto:` footer links are retired.
+
+- **Published policies.** `/legal` index + `/privacy`, `/terms`, `/cookies`,
+  `/dpa`, `/sub-processors` — brand-styled React in `apps/web/components/legal/`,
+  versioned via `apps/web/lib/legal/policies.ts`. Bump a version there on any
+  material change. **Counsel review is still pending** — the copy is good-faith
+  drafting, not a lawyer's final word.
+- **Controller/processor.** `Organization.controller_model`: org-seat orgs are
+  `CustomerControlled` (org is controller, we are processor → DPA +
+  sub-processor list); self-serve is `PlatformControlled` (we are controller).
+- **Consent.** `ConsentRecord` (tenant-scoped) is an append-only ledger; latest
+  row per `(user_id, consent_type)` wins. Cookie banner
+  (`components/consent/*`) gates non-essential cookies; anonymous choices live
+  in the `elc_consent` cookie, authenticated choices snapshot to the ledger via
+  `/api/consent`. **Any analytics (PostHog/Sentry) MUST check consent before
+  initialising.** Terms/Privacy acceptance is captured on `/post-signin`.
+- **Data-subject rights.** `/profile` → "Your data": export (`/api/me/export`),
+  rectify name, age/guardian, request/cancel erasure. Logic in
+  `packages/db/src/data-rights.ts`, all scoped through `withOrg(ctx)` + caller's
+  `user_id`.
+- **Retention + erasure.** `packages/db/src/retention.ts` runs from
+  `/api/cron/retention` (Vercel Cron daily, `CRON_SECRET` bearer): 90-day
+  Speaking-audio purge (`DEFAULT_RECORDING_RETENTION_DAYS`) + erasure execution
+  after a 24h cancellation window (scrubs PII to a tombstone, deletes content).
+  These are **system jobs** — raw `prisma`, neither `withOrg` nor SuperAdmin.
+- **Minors.** `User.age_assurance` (coarse band, no DOB) + `guardian_email` +
+  `guardian_consent_at`. Follow-up: a hard practice gate for un-consented minors
+  is not yet wired into practice routes.
+- **Operational records:** `docs/compliance/` (sub-processors, ROPA, breach
+  runbook). New env: `CRON_SECRET` (cron auth), `CONSENT_IP_SALT` (IP hashing).
+
 ## Hard rules — non-negotiable
 
 <important if="touching any database query or API route">
@@ -148,12 +183,16 @@ Stripe self-serve onboarding shipped 2026-05-30 (ADR-0017). Two funnels — publ
 Organization (id, name, seat_limit, quota_daily, quota_monthly, status,
                plan_id, stripe_customer_id, stripe_subscription_id,
                subscription_status, trial_end, current_period_end,
-               billing_owner_user_id, provisioned_via)
-└─ User (id, org_id, role, ielts_track, deleted_at)   -- soft-delete: deleted_at != null hides + blocks sign-in
+               billing_owner_user_id, provisioned_via,
+               controller_model, data_region)              -- ADR-0019 compliance
+└─ User (id, org_id, role, ielts_track, deleted_at,        -- soft-delete: deleted_at != null hides + blocks sign-in
+         age_assurance, guardian_email, guardian_consent_at, erased_at)  -- ADR-0019
    └─ Attempt (id, user_id, test_id, section, started_at, submitted_at)
       ├─ Answer (id, attempt_id, question_id, response, is_correct)
       ├─ Grade (id, attempt_id, band_overall, criteria_scores_json, graded_by)
-      └─ Recording (id, attempt_id, storage_url, duration_sec)  -- Speaking
+      └─ Recording (id, attempt_id, storage_url, duration_sec)  -- Speaking; 90-day retention purge
+   ├─ ConsentRecord (id, org_id, user_id, consent_type, granted, policy_version, source, ip_hash)  -- ADR-0019 ledger
+   └─ DataRightsRequest (id, org_id, user_id, type, status, requested_at, fulfilled_at)  -- ADR-0019 DSR
 Test (id, track, section, difficulty, status, approved_by)
 └─ Question (id, test_id, type, prompt, correct_answer, points)
 Plan (id, slug, name, seat_limit, quota_daily, quota_monthly,
