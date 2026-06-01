@@ -94,6 +94,37 @@ const db = withSuperAdminContext(ctx);   // throws RoleRequiredError if not Supe
 
 `withOrg` and `withSuperAdminContext` must **never** appear in the same function.
 
+## Granting SuperAdmin
+
+`SuperAdmin` is DB-controlled — the Clerk webhook never promotes past `OrgAdmin`
+(see `CLAUDE.md`). The seed creates `super@elanguage.test` (+ `yujith@gmail.com`)
+as SuperAdmins in Org A. To grant it elsewhere, use the idempotent, DB-only
+`prisma/promote-super.ts` script. It never touches Clerk: the target signs in
+with their existing Clerk account and `requireOrgContext` lazy-links the row
+(stamping `clerk_user_id` + `name`) on first sign-in.
+
+```bash
+# Local dev — defaults to the seeded Org A as the home org:
+pnpm --filter @elc/db exec tsx prisma/promote-super.ts <email>
+
+# Production — create a dedicated internal home org and promote in one shot.
+# The Clerk account must exist in the PRODUCTION Clerk tenant, or sign-in
+# dead-ends at /no-access until it does:
+DATABASE_URL="<prod-url>" NODE_ENV=production \
+  pnpm --filter @elc/db exec tsx prisma/promote-super.ts <email> \
+    --create-internal-org="eLanguage Center (internal)"
+
+# Production — or promote into an EXISTING org (--org is REQUIRED, no default):
+DATABASE_URL="<prod-url>" NODE_ENV=production \
+  pnpm --filter @elc/db exec tsx prisma/promote-super.ts <email> --org="<existing org id or exact name>"
+```
+
+`--create-internal-org` makes an org on the `internal` Plan (`subscription_status=Internal`,
+status `Active`), idempotent via a deterministic id derived from the name.
+
+It promotes an existing row in place (even across orgs, ADR-0018) or creates one
+in the target org. Rollback: `UPDATE "User" SET role='Learner'` or delete the row.
+
 ## Adding a new model
 
 1. Decide whether it is tenant-scoped (does it carry org-private data?).

@@ -1789,6 +1789,19 @@ async function main() {
     role: "SuperAdmin",
   });
 
+  // Second SuperAdmin: the project owner's real identity. Parked in Org A
+  // alongside the canonical seed SuperAdmin (withSuperAdminContext ignores
+  // org membership). No password is set here — this is a real Clerk account,
+  // so requireOrgContext lazy-links it by email on first sign-in. The
+  // seedClerkIdentities pass below detects the existing Clerk user via
+  // `form_identifier_exists` and links rather than recreates it.
+  await upsertUser({
+    org_id: orgA.id,
+    email: "yujith@gmail.com",
+    name: "Yujith",
+    role: "SuperAdmin",
+  });
+
   await upsertUser({
     org_id: orgA.id,
     email: "admin-a@elanguage.test",
