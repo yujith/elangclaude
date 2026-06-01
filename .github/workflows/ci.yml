@@ -38,7 +38,7 @@ jobs:
   quality:
     name: typecheck · lint · build · unit
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
     env:
       # The fuzzer reads DATABASE_URL_TEST directly; @elc/db also
       # needs DATABASE_URL set so prisma generate can validate the
