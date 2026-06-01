@@ -24,6 +24,38 @@ export { updateMyIeltsTrack, hasInProgressWork } from "./profile";
 export type { UpdateTrackFailureReason, UpdateTrackResult } from "./profile";
 
 export {
+  recordConsent,
+  recordConsents,
+  getMyConsents,
+  hasGrantedConsent,
+} from "./consent";
+export type { ConsentInput, ConsentSnapshot } from "./consent";
+
+export {
+  buildUserDataExport,
+  createDataRightsRequest,
+  listMyDataRightsRequests,
+  requestErasure,
+  cancelErasure,
+  rectifyMyName,
+  setAgeAssurance,
+  recordGuardianConsent,
+} from "./data-rights";
+export type { UserDataExport } from "./data-rights";
+
+export {
+  DEFAULT_RECORDING_RETENTION_DAYS,
+  ERASURE_GRACE_PERIOD_HOURS,
+  purgeExpiredRecordings,
+  processPendingErasures,
+} from "./retention";
+export type {
+  DeleteObjectFn,
+  PurgeRecordingsResult,
+  ErasureResult,
+} from "./retention";
+
+export {
   INTERNAL_PLAN_SLUG,
   FREE_PLAN_SLUG,
   listPlansAsSuperAdmin,
@@ -134,6 +166,14 @@ export {
   type OrgStatus,
   type SubscriptionStatus,
   type ProvisionedVia,
+  type DataControllerModel,
+  type DataResidencyRegion,
+  type AgeAssurance,
+  type ConsentType,
+  type DataRightType,
+  type DataRightStatus,
+  type ConsentRecord,
+  type DataRightsRequest,
   type Organization,
   type User,
   type Test,

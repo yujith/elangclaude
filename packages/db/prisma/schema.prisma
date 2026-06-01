@@ -105,6 +105,66 @@ enum ProvisionedVia {
   self_serve
 }
 
+// ─── Compliance enums (ADR-0019) ──────────────────────────────────────────
+
+// Who is the data controller for an Org's learners (GDPR Art 4 / DPDP).
+//   CustomerControlled — the buying Organization is the controller and
+//     eLanguage Center is the *processor* (org-seat: seeded + invite funnels).
+//     These orgs are covered by the DPA + sub-processor list.
+//   PlatformControlled — eLanguage Center is the *controller* directly
+//     (self-serve individuals who sign up for themselves).
+// Set at provisioning time; the migration backfills existing rows from
+// provisioned_via. See ADR-0019 D1.
+enum DataControllerModel {
+  CustomerControlled
+  PlatformControlled
+}
+
+// Where an Org's learner data physically lives. v1 offers a single region
+// (Sydney, co-located with Neon per the region-colocation rule). The column
+// exists so the Privacy Policy can disclose residency truthfully and so
+// enterprise orgs can later be pinned to a region — adding a value here is a
+// deliberate ADR-gated change, never an implicit one. See ADR-0019 D2.
+enum DataResidencyRegion {
+  syd1
+}
+
+// Coarse age band for a learner. We deliberately do NOT store full date of
+// birth (data minimisation): we only need to know whether a guardian-consent
+// path applies (DPDP under-18, GDPR Art 8). See ADR-0019 D3.
+enum AgeAssurance {
+  Unknown
+  Adult
+  Minor
+}
+
+// Category of consent captured in a ConsentRecord. One row per (user, type)
+// state change — the latest row per type is authoritative.
+enum ConsentType {
+  terms_privacy // accepted ToS + Privacy Policy (sign-up gate)
+  cookies_functional // non-essential functional cookies
+  cookies_analytics // analytics/product telemetry (PostHog/Sentry when wired)
+  voice_recording // Speaking audio capture (sensitive data)
+  marketing_email // optional marketing communications
+  parental // guardian consent on behalf of a minor learner
+}
+
+// Data-subject right being exercised (GDPR Ch.3 / DPDP / APPs).
+enum DataRightType {
+  Access // copy of what we hold
+  Portability // machine-readable export
+  Erasure // right to be forgotten
+  Rectification // correct inaccurate data
+}
+
+enum DataRightStatus {
+  Pending
+  InProgress
+  Completed
+  Rejected
+  Cancelled
+}
+
 // ─── Models — global (NOT tenant-scoped) ──────────────────────────────────
 
 model Organization {
@@ -142,7 +202,16 @@ model Organization {
   billing_owner          User?              @relation("BillingOwner", fields: [billing_owner_user_id], references: [id], onDelete: SetNull)
   provisioned_via        ProvisionedVia     @default(seeded)
 
+  // ─── Compliance (ADR-0019) ────────────────────────────────────────────
+  // CustomerControlled by default (org-seat). provisionSelfServeOrg flips
+  // PlatformControlled. Drives which Privacy Policy posture applies + DSR
+  // routing. The migration backfills self_serve orgs → PlatformControlled.
+  controller_model DataControllerModel @default(CustomerControlled)
+  data_region      DataResidencyRegion @default(syd1)
+
   users           User[]
+  consentRecords     ConsentRecord[]
+  dataRightsRequests DataRightsRequest[]
   attempts        Attempt[]
   answers         Answer[]
   grades          Grade[]
@@ -275,6 +344,16 @@ model User {
   // the row from default rosters. Soft-deleted users still occupy a
   // seat against `Organization.seat_limit` until they are hard-purged.
   deleted_at    DateTime?
+  // ─── Compliance (ADR-0019) ────────────────────────────────────────────
+  // Coarse age band only — we do not store full DOB (data minimisation).
+  // age_assurance=Minor requires guardian_consent_at before practice access.
+  age_assurance       AgeAssurance @default(Unknown)
+  guardian_email      String?
+  guardian_consent_at DateTime?
+  // Set when an Erasure request is actioned: PII is scrubbed in place and
+  // the row is soft-deleted. Distinct from deleted_at (admin removal) so we
+  // can prove an erasure was fulfilled. See ADR-0019 D4.
+  erased_at           DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
@@ -285,6 +364,8 @@ model User {
   mockSessions     MockSession[]
   aiCallLogs       AiCallLog[]
   billing_owner_of Organization[] @relation("BillingOwner")
+  consentRecords     ConsentRecord[]
+  dataRightsRequests DataRightsRequest[]
 
   @@index([org_id])
   @@index([org_id, createdAt])
@@ -461,4 +542,60 @@ model AiCallLog {
   @@index([org_id])
   @@index([org_id, createdAt])
   @@index([org_id, purpose])
+}
+
+// ─── Compliance models — tenant-scoped (ADR-0019) ─────────────────────────
+
+// Append-only consent ledger. One row per consent state change; the most
+// recent row per (user_id, consent_type) is authoritative. Pre-auth cookie
+// choices live in a first-party cookie only (no PII server-side) and are
+// snapshotted here as rows the first time the chooser is an authenticated
+// user, so every persisted row is genuinely org-scoped. We store a salted
+// hash of the IP, never the raw address (data minimisation). See ADR-0019 D5.
+model ConsentRecord {
+  id             String       @id @default(cuid())
+  org_id         String
+  org            Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  user_id        String
+  user           User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  consent_type   ConsentType
+  granted        Boolean
+  // The policy registry version this consent was given against (e.g.
+  // "privacy@2026-06-01"). Lets us re-prompt when a policy materially
+  // changes. Free-form so it survives policy renames.
+  policy_version String
+  // Where the consent was captured: "signup" | "cookie_banner" |
+  // "speaking_gate" | "profile" | "guardian".
+  source         String
+  ip_hash        String?
+  user_agent     String?
+  createdAt      DateTime     @default(now())
+
+  @@index([org_id])
+  @@index([org_id, user_id])
+  @@index([org_id, user_id, consent_type])
+}
+
+// A data-subject rights request (access / portability / erasure /
+// rectification). Erasure is queued rather than instant so it survives a
+// short cancellation window before the purge job actions it. Export bundles
+// are generated on demand by the route, not stored on this row.
+model DataRightsRequest {
+  id           String          @id @default(cuid())
+  org_id       String
+  org          Organization    @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  user_id      String
+  user         User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  type         DataRightType
+  status       DataRightStatus @default(Pending)
+  // Optional free-text from the requester (e.g. which field to rectify).
+  detail       String?
+  requested_at DateTime        @default(now())
+  fulfilled_at DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([org_id])
+  @@index([org_id, user_id])
+  @@index([org_id, status])
 }

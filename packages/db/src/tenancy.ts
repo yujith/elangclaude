@@ -37,6 +37,8 @@ export const TENANT_SCOPED_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   "MockSession",
   "AiCallLog",
   "StripeEventLog",
+  "ConsentRecord",
+  "DataRightsRequest",
 ]);
 
 // ─── Internals ────────────────────────────────────────────────────────────
