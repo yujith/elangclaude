@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"tests/unit/**/*.test.mjs\"",
+    "test": "sh -c 'if [ -d tests/unit ]; then node --test tests/unit; else echo \"web: no unit tests\"; fi'",
     "test:e2e": "playwright test"
   },
   "dependencies": {
