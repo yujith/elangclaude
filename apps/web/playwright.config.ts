@@ -11,8 +11,8 @@
 //   pnpm exec playwright install chromium   # one-time browser fetch
 //   pnpm test:e2e
 //
-// CI is intentionally NOT wired here — flip on when the suite is
-// stable and you've added a browser-install step to the workflow.
+// In CI Playwright starts a fresh dev server; locally it reuses an
+// existing server when one is already running on the configured port.
 
 import { defineConfig, devices } from "@playwright/test";
 
@@ -39,7 +39,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev",
+    command: `pnpm exec next dev -p ${PORT}`,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
