@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/unit/",
+    "test": "node --test \"tests/unit/**/*.test.mjs\"",
     "test:e2e": "playwright test"
   },
   "dependencies": {
