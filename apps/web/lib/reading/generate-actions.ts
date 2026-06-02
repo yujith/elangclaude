@@ -16,6 +16,7 @@ import { prisma } from "@elc/db/client";
 import {
   GenerationShapeError,
   GenerationValidationError,
+  ProviderError,
   QuotaExceededError,
   persistGeneratedReading,
   readingGenerator,
@@ -27,7 +28,7 @@ export type GenerateReadingOutcome =
   | { ok: true; testId: string; attempts: number; model: string }
   | {
       ok: false;
-      error: "quota" | "schema" | "validation" | "unknown";
+      error: "quota" | "schema" | "validation" | "provider" | "unknown";
       // Populated for "validation" failures so the caller can render the
       // stable issue codes (e.g. "passage.too-short") and a re-roll hint.
       validationIssues?: GenerationValidationIssue[];
@@ -88,6 +89,10 @@ export async function generateReadingTest(input: {
       difficulty: input.difficulty,
     };
     if (err instanceof QuotaExceededError) return { ok: false, error: "quota" };
+    if (err instanceof ProviderError) {
+      console.error("[reading-generate] provider failure", { ...tag, err });
+      return { ok: false, error: "provider" };
+    }
     if (err instanceof GenerationShapeError) {
       console.error(
         "[reading-generate] schema rejection — model output did not parse",

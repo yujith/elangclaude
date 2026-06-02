@@ -98,7 +98,7 @@ blocker. Documented here so the tradeoff is not rediscovered as a bug.
 The purpose's allowlist was empty (`allowed: []`). Phase 1 needs it. Speaking
 content generation is bulk, SuperAdmin-moderated, structured-JSON output — the
 same profile as `reading-generate`. It gets the same OpenRouter model set:
-Gemini 2.0 Flash (default), Llama 3.3 70B, Mistral Large (fallbacks). Sonnet is
+Gemini 2.5 Flash (default), Llama 3.3 70B, Mistral Large (fallbacks). Sonnet is
 deliberately **not** on the allowlist — generation does not reason about a
 rubric (per `ai-cost-control.md`).
 

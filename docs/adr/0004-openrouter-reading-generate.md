@@ -41,9 +41,9 @@ Going through OpenRouter rather than provider-specific SDKs means:
 
 | Role | Model | OpenRouter id |
 |---|---|---|
-| **Default** | Gemini 2.0 Flash | `google/gemini-2.0-flash-001` |
+| **Default** | Gemini 2.5 Flash | `google/gemini-2.5-flash` |
 | Fallback | Llama 3.3 70B Instruct | `meta-llama/llama-3.3-70b-instruct` |
-| Fallback | Mistral Large (latest) | `mistralai/mistral-large-2411` |
+| Fallback | Mistral Large (latest) | `mistralai/mistral-large-2512` |
 
 Default rationale: Gemini Flash has the best JSON-mode reliability per
 public benchmarks in the price band we care about, and OpenRouter's
@@ -62,7 +62,7 @@ Each generation call is hard-capped at:
 - **Output tokens:** `max_tokens = 6000`. A full passage + 6–10 questions
   + answer key in the structured JSON fits comfortably under this, with
   enough headroom for validator repair attempts that need a longer passage.
-- **Worst-case cost per call (Gemini 2.0 Flash, May 2026 rates):** roughly
+- **Worst-case cost per call (Gemini 2.5 Flash, May 2026 rates):** roughly
   US$0.0006 input + US$0.0036 output = **~$0.004 per generation attempt**.
 - **Llama 3.3 / Mistral Large fallback ceiling:** ~$0.01 per call.
 

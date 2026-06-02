@@ -69,7 +69,7 @@ const ANTHROPIC_SONNET: ModelEntry = {
 };
 
 const OPENROUTER_GEMINI_FLASH: ModelEntry = {
-  id: "google/gemini-2.0-flash-001",
+  id: "google/gemini-2.5-flash",
   provider: "openrouter",
 };
 
@@ -79,7 +79,7 @@ const OPENROUTER_LLAMA_3_70B: ModelEntry = {
 };
 
 const OPENROUTER_MISTRAL_LARGE: ModelEntry = {
-  id: "mistralai/mistral-large-2411",
+  id: "mistralai/mistral-large-2512",
   provider: "openrouter",
 };
 
@@ -134,7 +134,7 @@ const REGISTRY: Record<
   // (bulk, SuperAdmin-moderated, JSON-output) but the OUTPUT is much
   // larger — a 4-part section with chunked transcripts runs ~10k tokens
   // of JSON. Gemini Flash caps at ~8k output tokens, so its responses
-  // get truncated mid-section and fail to parse. Mistral Large 2411
+  // get truncated mid-section and fail to parse. Mistral Large 2512
   // supports 16k+ output and costs ~$0.04 per Listening call (vs.
   // re-rolling Flash 3+ times). Sonnet is still deliberately NOT on the
   // allowlist — generation doesn't reason about a rubric, and the cost

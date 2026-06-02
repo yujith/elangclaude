@@ -182,7 +182,7 @@ describe("loadMetricsOverview", () => {
           user_id: orgB.learnerIds[0]!,
           purpose: "reading-generate",
           provider: "openrouter",
-          model: "google/gemini-2.0-flash-001",
+          model: "google/gemini-2.5-flash",
           input_tokens: 100,
           output_tokens: 50,
           cost_usd: "0.500000",

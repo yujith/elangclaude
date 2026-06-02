@@ -17,6 +17,7 @@ import { prisma } from "@elc/db/client";
 import {
   GenerationShapeError,
   GenerationValidationError,
+  ProviderError,
   QuotaExceededError,
   persistGeneratedSpeaking,
   speakingGenerator,
@@ -28,7 +29,13 @@ export type GenerateSpeakingOutcome =
   | { ok: true; testId: string; attempts: number; model: string }
   | {
       ok: false;
-      error: "quota" | "schema" | "validation" | "bad_request" | "unknown";
+      error:
+        | "quota"
+        | "schema"
+        | "validation"
+        | "provider"
+        | "bad_request"
+        | "unknown";
       validationIssues?: SpeakingValidationIssue[];
     };
 
@@ -101,6 +108,10 @@ export async function generateSpeakingTest(input: {
       difficulty: input.difficulty,
     };
     if (err instanceof QuotaExceededError) return { ok: false, error: "quota" };
+    if (err instanceof ProviderError) {
+      console.error("[speaking-cue-generate] provider failure", { ...tag, err });
+      return { ok: false, error: "provider" };
+    }
     if (err instanceof GenerationShapeError) {
       // Include a truncated `raw` so the failing field is visible without a
       // second round-trip. err.raw is the post-retry model output.

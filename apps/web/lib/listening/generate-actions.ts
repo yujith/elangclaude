@@ -15,6 +15,7 @@ import { prisma } from "@elc/db/client";
 import {
   GenerationShapeError,
   GenerationValidationError,
+  ProviderError,
   QuotaExceededError,
   listeningGenerator,
   persistGeneratedListening,
@@ -36,7 +37,7 @@ export type GenerateListeningOutcome =
     }
   | {
       ok: false;
-      error: "quota" | "schema" | "validation" | "unknown";
+      error: "quota" | "schema" | "validation" | "provider" | "unknown";
       validationIssues?: ListeningValidationIssue[];
     };
 
@@ -150,6 +151,10 @@ export async function generateListeningTest(input: {
       ),
     };
     if (err instanceof QuotaExceededError) return { ok: false, error: "quota" };
+    if (err instanceof ProviderError) {
+      console.error("[listening-generate] provider failure", { ...tag, err });
+      return { ok: false, error: "provider" };
+    }
     if (err instanceof GenerationShapeError) {
       // Log the issue paths + a truncated snapshot of the raw response so
       // the SuperAdmin can see WHERE the model deviated, not just the

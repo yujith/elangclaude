@@ -91,7 +91,7 @@ function makeAi(responses: { text: string }[]) {
     i++;
     return {
       text: next.text,
-      model: "google/gemini-2.0-flash-001",
+      model: "google/gemini-2.5-flash",
       usage: { input_tokens: 900, output_tokens: 400 },
     };
   };

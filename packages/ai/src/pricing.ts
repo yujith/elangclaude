@@ -23,17 +23,17 @@ const PRICING: Record<string, ModelPricing> = {
     output_per_million_usd: 15,
   },
   // OpenRouter — frequently-routed paid models.
-  "google/gemini-2.0-flash-001": {
-    input_per_million_usd: 0.075,
-    output_per_million_usd: 0.3,
+  "google/gemini-2.5-flash": {
+    input_per_million_usd: 0.3,
+    output_per_million_usd: 2.5,
   },
   "meta-llama/llama-3.3-70b-instruct": {
     input_per_million_usd: 0.59,
     output_per_million_usd: 0.79,
   },
-  "mistralai/mistral-large-2411": {
-    input_per_million_usd: 2,
-    output_per_million_usd: 6,
+  "mistralai/mistral-large-2512": {
+    input_per_million_usd: 0.5,
+    output_per_million_usd: 1.5,
   },
   // OpenRouter free tier — explicit zero so the dashboard shows
   // free-tier traffic without falling into the "unknown model" warn path.

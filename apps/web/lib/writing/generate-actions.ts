@@ -15,6 +15,7 @@ import { prisma } from "@elc/db/client";
 import {
   GenerationShapeError,
   GenerationValidationError,
+  ProviderError,
   QuotaExceededError,
   persistGeneratedWriting,
   writingGenerator,
@@ -27,7 +28,13 @@ export type GenerateWritingOutcome =
   | { ok: true; testId: string; attempts: number; model: string }
   | {
       ok: false;
-      error: "quota" | "schema" | "validation" | "bad_request" | "unknown";
+      error:
+        | "quota"
+        | "schema"
+        | "validation"
+        | "provider"
+        | "bad_request"
+        | "unknown";
       validationIssues?: WritingValidationIssue[];
     };
 
@@ -116,6 +123,10 @@ export async function generateWritingTest(input: {
       difficulty: input.difficulty,
     };
     if (err instanceof QuotaExceededError) return { ok: false, error: "quota" };
+    if (err instanceof ProviderError) {
+      console.error("[writing-generate] provider failure", { ...tag, err });
+      return { ok: false, error: "provider" };
+    }
     if (err instanceof GenerationShapeError) {
       console.error(
         "[writing-generate] schema rejection — model output did not parse",

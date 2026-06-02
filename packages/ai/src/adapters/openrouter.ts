@@ -52,7 +52,12 @@ function appHeaders(): Record<string, string> {
 }
 
 export const openrouterProvider: Provider = async (req) => {
-  const apiKey = requireEnv("OPENROUTER_API_KEY");
+  let apiKey: string;
+  try {
+    apiKey = requireEnv("OPENROUTER_API_KEY");
+  } catch (cause) {
+    throw new ProviderError("openrouter", cause);
+  }
 
   let res: Response;
   try {
