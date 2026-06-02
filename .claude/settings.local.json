@@ -27,7 +27,15 @@
       "Bash(/usr/bin/grep -rnE \"#[0-9A-Fa-f]{3,8}\\\\b\" --include=\"*.tsx\" --include=\"*.ts\" --include=\"*.css\" apps packages)",
       "Bash(/usr/bin/grep -rn \"ai/gateway\\\\|@elc/ai\" apps/web/components apps/web/app)",
       "Bash(/usr/bin/grep -lE \"focus-visible:ring-brand-red\" apps/web/components/*.tsx apps/web/app/sign-*/page.tsx)",
-      "Bash(yes)"
+      "Bash(yes)",
+      "Bash(git push *)",
+      "Bash(git stash *)",
+      "Bash(git fetch *)",
+      "Bash(git merge *)",
+      "Bash(git cherry-pick *)",
+      "Bash(sed -n '1,70p' packages/db/src/tenancy.test.ts)",
+      "Bash(sed -n '1,60p' packages/db/src/test-helpers.ts)",
+      "Bash(jobs -l)"
     ]
   },
   "model": "opus"

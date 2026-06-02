@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { clerkAppearance } from "@/lib/auth/clerk-appearance";
+import { ConsentBanner } from "@/components/consent/consent-banner";
+import { cookiesVersion } from "@/lib/legal/policies";
 import "./globals.css";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://elanguagecenter.com";
@@ -38,7 +40,10 @@ export default function RootLayout({
   return (
     <ClerkProvider appearance={clerkAppearance}>
       <html lang="en" className="min-h-full bg-brand-grey-50">
-        <body className="min-h-full flex flex-col bg-brand-grey-50">{children}</body>
+        <body className="min-h-full flex flex-col bg-brand-grey-50">
+          {children}
+          <ConsentBanner version={cookiesVersion()} />
+        </body>
       </html>
     </ClerkProvider>
   );

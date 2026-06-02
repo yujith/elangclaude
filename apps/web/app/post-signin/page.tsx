@@ -18,6 +18,8 @@ import {
   UnauthenticatedError,
   requireOrgContext,
 } from "@/lib/auth/context";
+import { ensureConsentRecorded } from "@elc/db";
+import { termsPrivacyVersion } from "@/lib/legal/policies";
 import { PostSigninRedirector } from "./post-signin-redirector";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +35,19 @@ export default async function PostSigninPage() {
       redirect(`/suspended?status=${err.orgStatus}`);
     }
     throw err;
+  }
+
+  // Capture Terms + Privacy acceptance once per version (account creation
+  // implies acceptance — the sign-up form states this and links both docs).
+  // Best-effort: a consent-ledger hiccup must never block sign-in.
+  try {
+    await ensureConsentRecorded(ctx, {
+      consent_type: "terms_privacy",
+      policy_version: termsPrivacyVersion(),
+      source: "signup",
+    });
+  } catch {
+    // swallow — routing continues regardless
   }
 
   // OrgAdmins whose Org hasn't completed Checkout yet (ADR-0017 Phase 5)

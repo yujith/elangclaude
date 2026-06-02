@@ -13,6 +13,7 @@
 // (.claude/rules/multi-tenancy.md).
 
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -103,6 +104,19 @@ export async function downloadObject(
     throw new Error(`R2 object ${args.key} had no body.`);
   }
   return res.Body.transformToByteArray();
+}
+
+// Delete a recording object. Used by the data-retention job (90-day purge)
+// and erasure execution — both system-level, not request-scoped. We still run
+// the structural recording-key guard so a stray non-recording key (e.g. a
+// global audio-cache object) can never be deleted through this path.
+export async function deleteObject(key: string): Promise<void> {
+  // recordingKey shape is `recordings/{org}/{user}/{attempt}.{ext}`; the org
+  // guard needs the org segment, which we can read off the key itself.
+  const orgSegment = key.split("/")[1];
+  if (!orgSegment) throw new Error(`Refusing to delete malformed key: ${key}`);
+  assertKeyBelongsToOrg(key, orgSegment);
+  await client().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
 }
 
 // ─── Global audio cache operations (Listening TTS) ──────────────────────

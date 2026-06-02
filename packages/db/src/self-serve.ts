@@ -176,6 +176,10 @@ export async function provisionSelfServeOrg(
           plan_id: plan.id,
           subscription_status: subscriptionStatus,
           provisioned_via: "self_serve",
+          // Self-serve individuals: eLanguage Center is the data controller
+          // (org-seat orgs stay CustomerControlled — we are their processor).
+          // See ADR-0019 D1.
+          controller_model: "PlatformControlled",
           status: "Active",
           seat_limit: plan.seat_limit,
           quota_daily: plan.quota_daily,

@@ -36,9 +36,11 @@ const columns: Column[] = [
   {
     heading: "Legal",
     links: [
-      { label: "Privacy (on request)", href: `mailto:${ORG_EMAIL}?subject=Privacy%20policy` },
-      { label: "Terms (on request)", href: `mailto:${ORG_EMAIL}?subject=Terms` },
-      { label: "Delete my data", href: `mailto:${ORG_EMAIL}?subject=Data%20deletion%20request` },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Service", href: "/terms" },
+      { label: "Cookie Policy", href: "/cookies" },
+      { label: "Sub-processors", href: "/sub-processors" },
+      { label: "Manage your data", href: "/profile" },
     ],
   },
 ];
