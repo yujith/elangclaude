@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ConsentChoice } from "@/lib/consent/consent";
 import {
+  getConsentSnapshot,
   onOpenPreferences,
   readConsent,
   syncConsentToServer,
@@ -29,7 +30,7 @@ function persist(choice: ConsentChoice) {
 export function ConsentBanner({ version }: { version: string }) {
   const stored = useSyncExternalStore(
     subscribeNoop,
-    () => readConsent(),
+    getConsentSnapshot,
     () => null,
   );
   const needsChoice = !stored || stored.v !== version;
