@@ -18,6 +18,7 @@
 import { withOrg, type OrgContext } from "@elc/db";
 import { anthropicProvider, type Provider, type ProviderMessage } from "./adapters/anthropic";
 import { openrouterProvider } from "./adapters/openrouter";
+import { openaiChatProvider } from "./adapters/openai-chat";
 import { openaiAdapter, type OpenAIAdapter } from "./adapters/openai";
 import {
   elevenLabsAdapter,
@@ -33,6 +34,7 @@ import {
   REALTIME_SESSION_QUOTA_WEIGHT,
   TRANSCRIBE_QUOTA_WEIGHT,
   type ChatPurpose,
+  type ProviderName,
 } from "./models";
 import {
   costFor,
@@ -124,7 +126,10 @@ export type TtsResponse = {
 };
 
 export type GatewayDeps = {
-  providers: Record<"anthropic" | "openrouter", Provider>;
+  // One Provider per chat ProviderName in the model registry. The gateway
+  // routes `ai.chat()` to providers[model.provider]; every registry provider
+  // must therefore be wired here.
+  providers: Record<ProviderName, Provider>;
   // OpenAI adapter for the non-chat calls (realtime token mint, Whisper).
   openai: OpenAIAdapter;
   // ElevenLabs adapter for Listening TTS synth.
@@ -364,6 +369,7 @@ export const ai = createAI({
   providers: {
     anthropic: anthropicProvider,
     openrouter: openrouterProvider,
+    openai: openaiChatProvider,
   },
   openai: openaiAdapter,
   elevenlabs: elevenLabsAdapter,

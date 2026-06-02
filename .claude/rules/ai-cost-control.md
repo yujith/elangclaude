@@ -34,15 +34,16 @@ The gateway:
 
 | Purpose | Model | Why |
 |---|---|---|
-| Reading/Listening question generation | OpenRouter → Llama 3 / Gemini Flash | Cheap, bulk, SuperAdmin-moderated |
-| Writing prompt generation | OpenRouter → Nemotron 3 Super (free) default, Gemini Flash / Mistral Large fallback | Cheap; free tier is rate-limited |
+| Reading/Listening question generation | OpenAI `gpt-4.1-mini` (OpenRouter Gemini Flash / Mistral / Llama as fallback) | Stable, bulk, SuperAdmin-moderated — ADR-0020 |
+| Writing prompt generation | OpenAI `gpt-4.1-mini` (OpenRouter Nemotron / Gemini Flash / Mistral as fallback) | Stable; OpenRouter free tier was rate-limited — ADR-0020 |
+| Speaking cue/topic generation | OpenAI `gpt-4.1-mini` (OpenRouter cheap tier as fallback) | Same profile as Reading — ADR-0020 |
 | TTS for Listening audio | ElevenLabs (variety of accents) | Cache aggressively |
 | Writing grading | Claude Sonnet | Rubric reasoning matters |
 | Speaking grading (transcript pass) | Claude Sonnet | Rubric reasoning matters |
 | Speaking transcription | Whisper | Standard |
 | Speaking realtime conversation | OpenAI Realtime API | Lowest viable latency |
 
-Never call the premium tier for bulk generation. Never call the cheap tier for grading. The gateway enforces this with a `purpose → allowed-models` allowlist.
+Never call the premium tier (Sonnet) for bulk generation. Never call the cheap tier for grading. The gateway enforces this with a `purpose → allowed-models` allowlist (`packages/ai/src/models.ts`). The four generation purposes default to OpenAI `gpt-4.1-mini`; OpenRouter models stay on the allowlist so a re-roll can fall back via an explicit `model` override.
 
 ## Caching strategy
 

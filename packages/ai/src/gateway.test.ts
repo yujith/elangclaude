@@ -101,6 +101,7 @@ describe("gateway: allowlist", () => {
       providers: {
         anthropic: provider,
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs: fakeElevenLabs(),
@@ -121,6 +122,7 @@ describe("gateway: allowlist", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs: fakeElevenLabs(),
@@ -144,6 +146,7 @@ describe("gateway: allowlist", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs: fakeElevenLabs(),
@@ -168,6 +171,7 @@ describe("gateway: quota integration", () => {
       providers: {
         anthropic: provider,
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs: fakeElevenLabs(),
@@ -207,6 +211,7 @@ describe("gateway: quota integration", () => {
           throw new Error("upstream 500");
         },
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs: fakeElevenLabs(),
@@ -231,6 +236,7 @@ describe("gateway: realtimeSession", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai,
       elevenlabs: fakeElevenLabs(),
@@ -251,6 +257,7 @@ describe("gateway: realtimeSession", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai,
       elevenlabs: fakeElevenLabs(),
@@ -283,6 +290,7 @@ describe("gateway: realtimeSession", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: {
         mintRealtimeSession: async () => {
@@ -308,6 +316,7 @@ describe("gateway: transcribe", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai,
       elevenlabs: fakeElevenLabs(),
@@ -329,6 +338,7 @@ describe("gateway: transcribe", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai,
       elevenlabs: fakeElevenLabs(),
@@ -365,6 +375,7 @@ describe("gateway: transcribe", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: {
         mintRealtimeSession: async () => {
@@ -396,6 +407,7 @@ describe("gateway: tts (Listening)", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs,
@@ -418,6 +430,7 @@ describe("gateway: tts (Listening)", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs,
@@ -449,6 +462,7 @@ describe("gateway: tts (Listening)", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs: {
@@ -518,6 +532,7 @@ describe("gateway: AiCallLog cost capture", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs: fakeElevenLabs(),
@@ -550,6 +565,7 @@ describe("gateway: AiCallLog cost capture", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs: fakeElevenLabs(),
@@ -588,6 +604,7 @@ describe("gateway: AiCallLog cost capture", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai,
       elevenlabs: fakeElevenLabs(),
@@ -618,6 +635,7 @@ describe("gateway: AiCallLog cost capture", () => {
       providers: {
         anthropic: fakeProvider(),
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs: fakeElevenLabs(),
@@ -646,6 +664,7 @@ describe("gateway: AiCallLog cost capture", () => {
           throw new Error("upstream 500");
         },
         openrouter: vi.fn() as unknown as Provider,
+        openai: vi.fn() as unknown as Provider,
       },
       openai: fakeOpenAI(),
       elevenlabs: fakeElevenLabs(),

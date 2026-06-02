@@ -41,7 +41,9 @@ If any of the *currently working* commands fails on a fresh clone, **fix this fi
 
 ## Architecture in one paragraph
 
-Next.js 14 App Router (TypeScript) on Vercel. Postgres via Prisma. Auth via Clerk (orgs are first-class). Object storage on Cloudflare R2 for Speaking recordings. LLM gateway via OpenRouter for cheap generation, **Claude Sonnet** for Writing/Speaking grading, OpenAI Realtime API for Speaking conversation, Whisper for transcription, ElevenLabs/OpenAI TTS for Listening audio. Sentry for errors, PostHog for product analytics. Single repo: `apps/web` + `packages/{db,ai,ui}`.
+Next.js 14 App Router (TypeScript) on Vercel. Postgres via Prisma. Auth via Clerk (orgs are first-class). Object storage on Cloudflare R2 for Speaking recordings. LLM gateway uses **OpenAI `gpt-4.1-mini`** as the default for all four content-generation purposes (OpenRouter models remain on the allowlist as fallbacks — see ADR-0020), **Claude Sonnet** for Writing/Speaking grading, OpenAI Realtime API for Speaking conversation, Whisper for transcription, ElevenLabs/OpenAI TTS for Listening audio. Sentry for errors, PostHog for product analytics. Single repo: `apps/web` + `packages/{db,ai,ui}`.
+
+> **Prompt bundling (ADR-0020):** the versioned `prompts/**` markdown is read at runtime via `readFileSync`. Next's static tracer can't follow that computed path, so `apps/web/next.config.ts` sets `outputFileTracingRoot` (monorepo root) + `outputFileTracingIncludes` to force `prompts/**/*.md` into every serverless function. Without it, generation **and** grading die in production with `ENOENT` (surfaced to the UI as `generate_error=unknown`). If you add a new prompt directory, confirm it lands in the route `*.nft.json` after `pnpm --filter web build`.
 
 ## Auth: Clerk is live
 

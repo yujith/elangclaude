@@ -33,7 +33,7 @@ export type Purpose =
   | TranscribePurpose
   | TtsPurpose;
 
-export type ProviderName = "anthropic" | "openrouter";
+export type ProviderName = "anthropic" | "openrouter" | "openai";
 
 // A Realtime Speaking session is metered as multiple quota units: a ~12-min
 // conversation costs roughly an order of magnitude more than a single chat
@@ -66,6 +66,17 @@ export type ModelEntry = {
 const ANTHROPIC_SONNET: ModelEntry = {
   id: "claude-sonnet-4-5-20250929",
   provider: "anthropic",
+};
+
+// OpenAI direct (not via OpenRouter). gpt-4.1-mini is the bulk-generation
+// default as of ADR 0020 — chosen for stability and to consolidate onto the
+// OPENAI_API_KEY the app already holds for Realtime/Whisper. It follows
+// structured-JSON instructions reliably and has headroom for Listening's
+// ~12k-token output. Generation does NOT reason about a rubric, so this is
+// still a cheap-tier choice relative to Sonnet, which stays grading-only.
+const OPENAI_GPT_41_MINI: ModelEntry = {
+  id: "gpt-4.1-mini",
+  provider: "openai",
 };
 
 const OPENROUTER_GEMINI_FLASH: ModelEntry = {
@@ -105,26 +116,27 @@ const REGISTRY: Record<
     default: ANTHROPIC_SONNET,
     allowed: [ANTHROPIC_SONNET],
   },
-  // Writing task generation is bulk, SuperAdmin-moderated content — it
-  // runs on the cheap OpenRouter tier per ai-cost-control.md. Sonnet is
+  // Writing task generation is bulk, SuperAdmin-moderated content. As of
+  // ADR 0020 the default is OpenAI gpt-4.1-mini for stability; the previous
+  // OpenRouter models stay on the allowlist as fallbacks. Sonnet is
   // deliberately NOT on this allowlist: grading reasons about a rubric,
-  // generation does not, and the cost gap is large. Default is the free
-  // Nemotron tier; Gemini Flash and Mistral Large stay on the allowlist
-  // as paid fallbacks if the free tier is rate-limited.
+  // generation does not, and the cost gap is large.
   "writing-generate": {
-    default: OPENROUTER_NEMOTRON_3_SUPER,
+    default: OPENAI_GPT_41_MINI,
     allowed: [
+      OPENAI_GPT_41_MINI,
       OPENROUTER_NEMOTRON_3_SUPER,
       OPENROUTER_GEMINI_FLASH,
       OPENROUTER_MISTRAL_LARGE,
     ],
   },
-  // Generation purposes that are not yet activated keep `allowed: []` so a
-  // stray caller gets a clear "model not allowed" error rather than a
-  // silent default. They wake up when their phase lands.
+  // Reading generation: bulk, SuperAdmin-moderated, structured-JSON output.
+  // Default migrated to OpenAI gpt-4.1-mini (ADR 0020); OpenRouter models
+  // remain on the allowlist as fallbacks.
   "reading-generate": {
-    default: OPENROUTER_GEMINI_FLASH,
+    default: OPENAI_GPT_41_MINI,
     allowed: [
+      OPENAI_GPT_41_MINI,
       OPENROUTER_GEMINI_FLASH,
       OPENROUTER_LLAMA_3_70B,
       OPENROUTER_MISTRAL_LARGE,
@@ -133,13 +145,14 @@ const REGISTRY: Record<
   // Listening generation is structurally identical to Reading generation
   // (bulk, SuperAdmin-moderated, JSON-output) but the OUTPUT is much
   // larger — a 4-part section with chunked transcripts runs ~10k tokens
-  // of JSON. Gemini 2.5 Flash has enough room for that larger output and
-  // responds faster than Mistral Large in the moderation flow. Sonnet is
-  // still deliberately NOT on the allowlist — generation doesn't reason
-  // about a rubric, and the cost gap is large.
+  // of JSON. gpt-4.1-mini (ADR 0020 default) has ample output headroom for
+  // that; Gemini Flash / Mistral / Llama stay as OpenRouter fallbacks.
+  // Sonnet is still deliberately NOT on the allowlist — generation doesn't
+  // reason about a rubric, and the cost gap is large.
   "listening-generate": {
-    default: OPENROUTER_GEMINI_FLASH,
+    default: OPENAI_GPT_41_MINI,
     allowed: [
+      OPENAI_GPT_41_MINI,
       OPENROUTER_GEMINI_FLASH,
       OPENROUTER_MISTRAL_LARGE,
       OPENROUTER_LLAMA_3_70B,
@@ -147,11 +160,13 @@ const REGISTRY: Record<
   },
   // Speaking cue/topic generation is bulk, SuperAdmin-moderated,
   // structured-JSON output — the same profile as reading-generate, so it
-  // gets the same cheap OpenRouter model set. Sonnet is deliberately NOT on
-  // the allowlist: generation does not reason about a rubric. See ADR 0005 (D5).
+  // gets the same model set: gpt-4.1-mini default (ADR 0020) with the
+  // OpenRouter cheap tier as fallbacks. Sonnet is deliberately NOT on the
+  // allowlist: generation does not reason about a rubric. See ADR 0005 (D5).
   "speaking-cue-generate": {
-    default: OPENROUTER_GEMINI_FLASH,
+    default: OPENAI_GPT_41_MINI,
     allowed: [
+      OPENAI_GPT_41_MINI,
       OPENROUTER_GEMINI_FLASH,
       OPENROUTER_LLAMA_3_70B,
       OPENROUTER_MISTRAL_LARGE,

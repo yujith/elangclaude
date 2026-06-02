@@ -22,6 +22,13 @@ const PRICING: Record<string, ModelPricing> = {
     input_per_million_usd: 3,
     output_per_million_usd: 15,
   },
+  // OpenAI direct — bulk-generation default (ADR 0020). Public list price
+  // (May 2026): $0.40 / Mtok input, $1.60 / Mtok output. Tune against a
+  // real invoice; cached-input discounts are not modelled here.
+  "gpt-4.1-mini": {
+    input_per_million_usd: 0.4,
+    output_per_million_usd: 1.6,
+  },
   // OpenRouter — frequently-routed paid models.
   "google/gemini-2.5-flash": {
     input_per_million_usd: 0.3,
