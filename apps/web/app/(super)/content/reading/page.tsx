@@ -53,6 +53,7 @@ export default async function ReadingModerationPage({
         difficulty: true,
         body_json: true,
         createdAt: true,
+        generated_model: true,
         _count: { select: { questions: true } },
       },
     }),
@@ -234,7 +235,15 @@ export default async function ReadingModerationPage({
                           Generated
                         </dt>
                         <dd className="font-heading font-bold text-brand-black">
-                          {t.createdAt.toISOString().slice(0, 10)}
+                          {t.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs uppercase tracking-wide text-brand-grey-500">
+                          Model
+                        </dt>
+                        <dd className="font-heading font-bold text-brand-black break-all">
+                          {t.generated_model ?? "—"}
                         </dd>
                       </div>
                     </dl>

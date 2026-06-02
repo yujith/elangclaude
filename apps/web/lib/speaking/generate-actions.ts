@@ -74,6 +74,7 @@ export async function generateSpeakingTest(input: {
     const persisted = await persistGeneratedSpeaking(prisma, result.value, {
       generatedById: ctx.user_id,
       difficulty: input.difficulty,
+      generatedModel: result.model,
     });
     // ActivityLog is tenant-scoped — super-level events live under the
     // singleton SYSTEM_ORG_ID so customer OrgAdmin views never see them.

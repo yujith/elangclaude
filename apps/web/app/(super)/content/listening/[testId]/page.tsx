@@ -51,6 +51,7 @@ export default async function ReviewListeningTestPage({
       status: true,
       body_json: true,
       createdAt: true,
+      generated_model: true,
       approved_by: true,
       questions: {
         select: {
@@ -94,7 +95,13 @@ export default async function ReviewListeningTestPage({
           <p className="mt-2 font-body text-sm text-brand-grey-600">
             Test id <code>{test.id}</code> · status{" "}
             <code>{test.status}</code> · created{" "}
-            {test.createdAt.toISOString().slice(0, 10)}
+            {test.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC
+            {test.generated_model ? (
+              <>
+                {" "}
+                · model <code>{test.generated_model}</code>
+              </>
+            ) : null}
           </p>
         </header>
 

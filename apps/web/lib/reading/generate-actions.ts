@@ -69,6 +69,7 @@ export async function generateReadingTest(input: {
     const persisted = await persistGeneratedReading(prisma, result.value, {
       generatedById: ctx.user_id,
       difficulty: input.difficulty,
+      generatedModel: result.model,
     });
     return {
       ok: true,

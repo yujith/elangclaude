@@ -133,6 +133,7 @@ export default async function ContentInboxPage({
         track: true,
         difficulty: true,
         createdAt: true,
+        generated_model: true,
         // body_json carries the canonical title for Reading + Listening;
         // first question prompt is the fallback for Writing + Speaking.
         body_json: true,
@@ -306,6 +307,7 @@ export default async function ContentInboxPage({
                     <Th>Difficulty</Th>
                     <Th>Questions</Th>
                     <Th>Generated</Th>
+                    <Th>Model</Th>
                     <Th>{""}</Th>
                   </tr>
                 </thead>
@@ -356,8 +358,13 @@ export default async function ContentInboxPage({
                           dateTime={t.createdAt.toISOString()}
                           className="font-body text-sm text-brand-grey-700"
                         >
-                          {t.createdAt.toISOString().slice(0, 10)}
+                          {t.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC
                         </time>
+                      </Td>
+                      <Td>
+                        <span className="font-body text-sm text-brand-grey-700 break-all">
+                          {t.generated_model ?? "—"}
+                        </span>
                       </Td>
                       <Td>
                         <Link

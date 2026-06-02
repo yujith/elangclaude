@@ -293,6 +293,11 @@ model Test {
   // Shape parsed in packages/ai/src/reading/passage.ts. Null for Writing /
   // Speaking rows. See docs/adr/0003-reading-data-shape.md.
   body_json   Json?
+  // The LLM that generated this content (e.g. "gpt-4.1-mini"). Captured at
+  // generation time from the gateway ChatResponse.model — i.e. the model that
+  // actually served the call after any fallback, not the requested default.
+  // Null for rows created before this column (and for any non-generated row).
+  generated_model String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

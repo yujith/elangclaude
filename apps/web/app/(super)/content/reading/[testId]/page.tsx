@@ -67,6 +67,7 @@ export default async function ReviewReadingTestPage({
       status: true,
       body_json: true,
       createdAt: true,
+      generated_model: true,
       approved_by: true,
       questions: {
         select: {
@@ -126,6 +127,12 @@ export default async function ReviewReadingTestPage({
             Status <code>{status}</code> · generated{" "}
             {test.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC · test
             id <code>{test.id}</code>
+            {test.generated_model ? (
+              <>
+                {" "}
+                · model <code>{test.generated_model}</code>
+              </>
+            ) : null}
           </p>
         </header>
 

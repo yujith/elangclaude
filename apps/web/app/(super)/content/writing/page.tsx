@@ -52,6 +52,7 @@ export default async function WritingModerationPage({
         track: true,
         difficulty: true,
         createdAt: true,
+        generated_model: true,
         questions: {
           select: { type: true, prompt: true },
           orderBy: { position: "asc" },
@@ -259,7 +260,15 @@ export default async function WritingModerationPage({
                           Generated
                         </dt>
                         <dd className="font-heading font-bold text-brand-black">
-                          {t.createdAt.toISOString().slice(0, 10)}
+                          {t.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs uppercase tracking-wide text-brand-grey-500">
+                          Model
+                        </dt>
+                        <dd className="font-heading font-bold text-brand-black break-all">
+                          {t.generated_model ?? "—"}
                         </dd>
                       </div>
                     </dl>

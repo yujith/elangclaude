@@ -53,6 +53,7 @@ export default async function ReviewSpeakingTestPage({
       status: true,
       body_json: true,
       createdAt: true,
+      generated_model: true,
       questions: {
         select: {
           id: true,
@@ -103,6 +104,12 @@ export default async function ReviewSpeakingTestPage({
             Status <code>{status}</code> · generated{" "}
             {test.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC ·
             test id <code>{test.id}</code>
+            {test.generated_model ? (
+              <>
+                {" "}
+                · model <code>{test.generated_model}</code>
+              </>
+            ) : null}
           </p>
         </header>
 

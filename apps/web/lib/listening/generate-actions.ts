@@ -110,6 +110,7 @@ export async function generateListeningTest(input: {
     const persisted = await persistGeneratedListening(prisma, result.value, {
       generatedById: ctx.user_id,
       difficulty: input.difficulty,
+      generatedModel: result.model,
     });
     if (result.droppedQuestions.length > 0) {
       console.warn("[listening-generate] cleaner dropped questions", {

@@ -56,6 +56,9 @@ export async function persistGeneratedReading(
     // schema also carries `difficulty`, but the caller may want to clamp
     // (the model occasionally returns the wrong number).
     difficulty?: number;
+    // The model that generated this content (gateway ChatResponse.model).
+    // Stored on Test.generated_model so moderation can see provenance.
+    generatedModel?: string;
   },
 ): Promise<PersistResult> {
   void opts.generatedById; // currently logged at the route layer, not here
@@ -67,6 +70,7 @@ export async function persistGeneratedReading(
       // PendingReview rows have no approver until Phase 6 promotes them.
       status: "PendingReview",
       body_json: passageBodyJson(value),
+      generated_model: opts.generatedModel ?? null,
     },
     select: { id: true },
   });

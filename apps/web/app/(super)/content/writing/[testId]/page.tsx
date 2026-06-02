@@ -59,6 +59,7 @@ export default async function ReviewWritingTaskPage({
       status: true,
       body_json: true,
       createdAt: true,
+      generated_model: true,
       questions: {
         select: { id: true, type: true, prompt: true, visual: true },
         orderBy: { position: "asc" },
@@ -111,6 +112,12 @@ export default async function ReviewWritingTaskPage({
             Status <code>{status}</code> · generated{" "}
             {test.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC ·
             test id <code>{test.id}</code>
+            {test.generated_model ? (
+              <>
+                {" "}
+                · model <code>{test.generated_model}</code>
+              </>
+            ) : null}
           </p>
         </header>
 
