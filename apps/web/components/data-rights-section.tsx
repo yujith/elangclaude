@@ -40,7 +40,7 @@ function Note({ tone, children }: { tone: "ok" | "warn"; children: React.ReactNo
   const cls =
     tone === "ok"
       ? "text-brand-black bg-brand-grey-50 ring-1 ring-brand-grey-200"
-      : "text-brand-red bg-brand-red-soft";
+      : "text-brand-red-dark bg-brand-red-soft";
   return (
     <p role="status" className={`mt-3 font-body text-sm rounded-md px-4 py-3 ${cls}`}>
       {children}
@@ -105,7 +105,7 @@ function RectifyNameRow({ initialName }: { initialName: string }) {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-pill bg-brand-red px-5 py-2 font-heading font-bold text-white hover:opacity-90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+          className="rounded-pill bg-brand-red-dark px-5 py-2 font-heading font-bold text-white hover:opacity-90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
         >
           {pending ? "Saving…" : "Save"}
         </button>
@@ -234,7 +234,7 @@ function ErasureRow({ hasPendingErasure }: { hasPendingErasure: boolean }) {
 
   return (
     <div className="rounded-xl border border-brand-red/30 p-5">
-      <h3 className="font-heading font-bold text-base text-brand-red">Erase my account</h3>
+      <h3 className="font-heading font-bold text-base text-brand-red-dark">Erase my account</h3>
       <p className="mt-1 font-body text-sm text-brand-grey-500">
         Permanently delete your account, recordings, and practice history (right
         to be forgotten). This cannot be undone once processed.
@@ -251,7 +251,7 @@ function ErasureRow({ hasPendingErasure }: { hasPendingErasure: boolean }) {
                 setConfirming(false);
               })
             }
-            className="rounded-pill bg-brand-red px-5 py-2 font-heading font-bold text-white hover:opacity-90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+            className="rounded-pill bg-brand-red-dark px-5 py-2 font-heading font-bold text-white hover:opacity-90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
           >
             {pending ? "Submitting…" : "Yes, erase my account"}
           </button>
@@ -267,7 +267,7 @@ function ErasureRow({ hasPendingErasure }: { hasPendingErasure: boolean }) {
         <button
           type="button"
           onClick={() => setConfirming(true)}
-          className="mt-3 rounded-pill border-2 border-brand-red px-5 py-2 font-heading font-bold text-brand-red hover:bg-brand-red-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+          className="mt-3 rounded-pill border-2 border-brand-red-dark px-5 py-2 font-heading font-bold text-brand-red-dark hover:bg-brand-red-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
         >
           Request erasure
         </button>

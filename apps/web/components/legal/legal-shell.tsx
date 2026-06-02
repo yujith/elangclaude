@@ -103,7 +103,7 @@ export function LI({ children }: { children: React.ReactNode }) {
 export function A({ href, children }: { href: string; children: React.ReactNode }) {
   const external = href.startsWith("http") || href.startsWith("mailto:");
   const className =
-    "text-brand-red underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red rounded-sm";
+    "text-brand-red-dark underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red rounded-sm";
   if (external) {
     return (
       <a href={href} className={className} rel="noreferrer" target={href.startsWith("http") ? "_blank" : undefined}>

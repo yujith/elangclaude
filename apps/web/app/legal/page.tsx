@@ -63,7 +63,7 @@ export default function LegalIndexPage() {
             </p>
             <Link
               href="/profile"
-              className="mt-4 inline-block rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black"
+              className="mt-4 inline-block rounded-pill bg-brand-red-dark px-5 py-2.5 font-heading font-bold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black"
             >
               Manage your data
             </Link>

@@ -108,7 +108,7 @@ export function ConsentBanner({ version }: { version: string }) {
           Center. Read our{" "}
           <Link
             href="/cookies"
-            className="text-brand-red underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red rounded-sm"
+            className="text-brand-red-dark underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red rounded-sm"
           >
             Cookie Policy
           </Link>
@@ -139,7 +139,7 @@ export function ConsentBanner({ version }: { version: string }) {
             <button
               type="button"
               onClick={() => choose({ functional, analytics })}
-              className="rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              className="rounded-pill bg-brand-red-dark px-5 py-2.5 font-heading font-bold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
             >
               Save choices
             </button>
@@ -147,7 +147,7 @@ export function ConsentBanner({ version }: { version: string }) {
             <button
               type="button"
               onClick={() => choose({ functional: true, analytics: true })}
-              className="rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              className="rounded-pill bg-brand-red-dark px-5 py-2.5 font-heading font-bold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
             >
               Accept all
             </button>

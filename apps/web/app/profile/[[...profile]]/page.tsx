@@ -212,7 +212,7 @@ export default async function ProfilePage({
                 See our{" "}
                 <Link
                   href="/privacy"
-                  className="text-brand-red underline underline-offset-2 hover:no-underline"
+                  className="text-brand-red-dark underline underline-offset-2 hover:no-underline"
                 >
                   Privacy Policy
                 </Link>

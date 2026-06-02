@@ -34,7 +34,8 @@
       "Bash(git merge *)",
       "Bash(git cherry-pick *)",
       "Bash(sed -n '1,70p' packages/db/src/tenancy.test.ts)",
-      "Bash(sed -n '1,60p' packages/db/src/test-helpers.ts)"
+      "Bash(sed -n '1,60p' packages/db/src/test-helpers.ts)",
+      "Bash(jobs -l)"
     ]
   },
   "model": "opus"
