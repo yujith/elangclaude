@@ -33,6 +33,21 @@ function client(): S3Client {
   clientSingleton = new S3Client({
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    // R2 addresses buckets path-style on its S3 endpoint. The SDK's default
+    // virtual-hosted style would put the bucket in the host
+    // (<bucket>.<accountId>.r2.cloudflarestorage.com) — a TWO-label subdomain
+    // that R2's `*.r2.cloudflarestorage.com` wildcard DNS does not resolve, so
+    // the browser's presigned PUT dies with ERR_NAME_NOT_RESOLVED. Path-style
+    // keeps the host single-label and moves the bucket into the path.
+    forcePathStyle: true,
+    // @aws-sdk/client-s3 >= 3.729 injects a CRC32 checksum
+    // (x-amz-sdk-checksum-algorithm) into every request, presigned URLs
+    // included. A browser PUT to a presigned URL can't compute/send the
+    // matching checksum header, so R2 rejects the upload. Restore the
+    // pre-3.729 behaviour: only checksum when the operation actually requires
+    // it (none of ours do).
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
     credentials: {
       accessKeyId: requireEnv("CLOUDFLARE_R2_ACCESS_KEY_ID"),
       secretAccessKey: requireEnv("CLOUDFLARE_R2_SECRET_ACCESS_KEY"),
