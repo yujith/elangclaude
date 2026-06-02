@@ -133,18 +133,16 @@ const REGISTRY: Record<
   // Listening generation is structurally identical to Reading generation
   // (bulk, SuperAdmin-moderated, JSON-output) but the OUTPUT is much
   // larger — a 4-part section with chunked transcripts runs ~10k tokens
-  // of JSON. Gemini Flash caps at ~8k output tokens, so its responses
-  // get truncated mid-section and fail to parse. Mistral Large 2512
-  // supports 16k+ output and costs ~$0.04 per Listening call (vs.
-  // re-rolling Flash 3+ times). Sonnet is still deliberately NOT on the
-  // allowlist — generation doesn't reason about a rubric, and the cost
-  // gap is large.
+  // of JSON. Gemini 2.5 Flash has enough room for that larger output and
+  // responds faster than Mistral Large in the moderation flow. Sonnet is
+  // still deliberately NOT on the allowlist — generation doesn't reason
+  // about a rubric, and the cost gap is large.
   "listening-generate": {
-    default: OPENROUTER_MISTRAL_LARGE,
+    default: OPENROUTER_GEMINI_FLASH,
     allowed: [
+      OPENROUTER_GEMINI_FLASH,
       OPENROUTER_MISTRAL_LARGE,
       OPENROUTER_LLAMA_3_70B,
-      OPENROUTER_GEMINI_FLASH,
     ],
   },
   // Speaking cue/topic generation is bulk, SuperAdmin-moderated,

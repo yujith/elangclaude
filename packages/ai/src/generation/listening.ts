@@ -33,14 +33,16 @@ import {
   cleanGeneratedListening,
   validateGeneratedListening,
   type CleanResult,
+  type ListeningValidationIssue,
 } from "./listening-validate";
 
 // Listening output is significantly bigger than Reading — the script
 // adds 4 parts of transcript prose plus the question array. 12000
-// tokens gives the default model (Mistral Large 2512, 200k+ context) the
-// room a chunked 4-part section actually needs. Real generations
-// observed at ~7500–9500 output tokens; 12k is a safety margin.
+// tokens gives the default model enough room for a chunked 4-part
+// section. Real generations observed at ~7500–9500 output tokens; 12k
+// is a safety margin.
 const MAX_OUTPUT_TOKENS = 12000;
+const MAX_GENERATION_ATTEMPTS = 3;
 
 const STRICTER_RETRY_NUDGE =
   "Your previous response was not valid JSON or did not match the required schema. " +
@@ -118,6 +120,59 @@ function userTurn(req: GenerateListeningRequest): string {
   return lines.join("\n");
 }
 
+function validationAdvice(issue: ListeningValidationIssue): string {
+  switch (issue.code) {
+    case "track.mismatch":
+      return "Set the top-level track exactly to the requested track.";
+    case "section.question-count-out-of-range":
+      return "Keep the full section between 20 and 32 question rows total.";
+    case "part.question-count-out-of-range":
+      return "Give every part exactly 5-8 question positions; redistribute or remove excess questions before returning JSON.";
+    case "section.accent-variety-too-low":
+      return "Use at least three distinct accent values across the full section.";
+    case "part.context-mismatch":
+    case "part.invalid-speaker-role":
+    case "part.speaker-pattern-mismatch":
+      return "Match each part's IELTS role pattern: Part 1 two social speakers, Part 2 one social speaker, Part 3 two to four academic speakers, Part 4 one academic speaker.";
+    case "preview.incomplete-coverage":
+    case "preview.position-outside-part":
+      return "Make each questions-preview segment cover only positions that belong to its own part.";
+    case "transcript.invalid-ielts-structure":
+      return 'Each transcript must open with "Part N.", include preview and listening cues, and end with the end-of-part check cue plus a reading-pause.';
+    case "positions.duplicate-on-question":
+    case "positions.in-multiple-parts":
+    case "positions.unreferenced-by-question":
+    case "positions.question-not-in-any-part":
+      return "Make question positions globally unique and ensure each position appears in exactly one part's question_positions.";
+    case "speakers.duplicate-id":
+    case "speakers.unknown-speech-reference":
+      return "Use unique speaker ids and reference only speakers declared in the same part.";
+    case "blocks.duplicate-id":
+    case "slots.duplicate-id":
+    case "completion-blank.block-not-found":
+    case "completion-blank.slot-not-found":
+    case "completion-blank.slot-already-claimed":
+      return "Keep completion block ids and slot ids unique, and ensure every completion-blank question references an existing unclaimed slot.";
+    case "answer.not-in-transcript":
+      return "For completion, sentence-completion, and short-answer questions, every accepted answer must appear literally in the parent part transcript.";
+  }
+}
+
+function validationRetryNudge(issues: ListeningValidationIssue[]): string {
+  const lines = [
+    "Your previous JSON parsed, but failed the Listening content validator.",
+    "Return a complete replacement JSON object, not a patch. Fix every issue below:",
+  ];
+  for (const issue of issues) {
+    lines.push(`- ${issue.code}: ${issue.message} ${validationAdvice(issue)}`);
+  }
+  lines.push(
+    "Before returning, recount: 4 parts, 5-8 question positions per part, 20-32 total question rows, globally unique positions, and answers grounded in the transcript.",
+    "Return ONLY the corrected JSON object. No prose, no markdown fences.",
+  );
+  return lines.join("\n");
+}
+
 export function createListeningGenerator(deps: ListeningGeneratorDeps) {
   return {
     async generate(
@@ -125,75 +180,82 @@ export function createListeningGenerator(deps: ListeningGeneratorDeps) {
     ): Promise<GenerateListeningResult> {
       const system = deps.loadPrompt("listening");
       const turn1 = userTurn(req);
+      const messages: { role: "user" | "assistant"; content: string }[] = [
+        { role: "user", content: turn1 },
+      ];
+      let last:
+        | {
+            text: string;
+            model: string;
+            usage: { input_tokens: number; output_tokens: number };
+          }
+        | null = null;
 
-      const first = await deps.ai.chat({
-        ctx: req.ctx,
-        purpose: "listening-generate",
-        system,
-        messages: [{ role: "user", content: turn1 }],
-        maxTokens: MAX_OUTPUT_TOKENS,
-      });
-
-      let parsed = parseGeneratedListening(first.text);
-      let attempts = 1;
-      let last = first;
-
-      if (!parsed.ok) {
-        // One retry. Include the model's malformed output so it can see
-        // and fix it. Mirrors the readingGenerator pattern.
-        const second = await deps.ai.chat({
+      for (let attempts = 1; attempts <= MAX_GENERATION_ATTEMPTS; attempts++) {
+        last = await deps.ai.chat({
           ctx: req.ctx,
           purpose: "listening-generate",
           system,
-          messages: [
-            { role: "user", content: turn1 },
-            { role: "assistant", content: first.text },
-            { role: "user", content: STRICTER_RETRY_NUDGE },
-          ],
+          messages,
           maxTokens: MAX_OUTPUT_TOKENS,
         });
-        attempts = 2;
-        last = second;
-        parsed = parseGeneratedListening(second.text);
+
+        const parsed = parseGeneratedListening(last.text);
         if (!parsed.ok) {
-          throw new GenerationShapeError(parsed.issues, parsed.raw);
+          if (attempts === MAX_GENERATION_ATTEMPTS) {
+            throw new GenerationShapeError(parsed.issues, parsed.raw);
+          }
+          messages.push(
+            { role: "assistant", content: last.text },
+            { role: "user", content: STRICTER_RETRY_NUDGE },
+          );
+          continue;
         }
-      }
 
-      // Clean BEFORE validating. The cleaner drops completion-style
-      // questions whose accepted answers don't appear in the transcript
-      // — that's a common 1-2 per ~18 LLM hiccup. Anything the cleaner
-      // removes won't trip the validator's answer.not-in-transcript
-      // check. Real structural issues (positions, speakers, slot
-      // references) still surface.
-      const cleanResult = cleanGeneratedListening(parsed.value);
+        // Clean BEFORE validating. The cleaner drops completion-style
+        // questions whose accepted answers don't appear in the transcript
+        // — that's a common 1-2 per ~18 LLM hiccup. Anything the cleaner
+        // removes won't trip the validator's answer.not-in-transcript
+        // check. Real structural issues (positions, speakers, slot
+        // references) still surface.
+        const cleanResult = cleanGeneratedListening(parsed.value);
 
-      const validation = validateGeneratedListening(cleanResult.cleaned);
-      if (!validation.ok) {
-        throw new GenerationValidationError(validation.issues);
-      }
+        const validation = validateGeneratedListening(cleanResult.cleaned);
+        const issues = validation.ok ? [] : [...validation.issues];
 
-      // Cross-check the requested track matches what the model produced.
-      // Listening content is track-agnostic in practice (ADR 0006-style
-      // reasoning), but the caller asked for a specific tag and a
-      // mismatch suggests the model misread the prompt — a re-roll
-      // signal, not a silent rewrite.
-      if (cleanResult.cleaned.track !== req.track) {
-        throw new GenerationValidationError([
-          {
+        // Cross-check the requested track matches what the model produced.
+        // Listening content is track-agnostic in practice (ADR 0006-style
+        // reasoning), but the caller asked for a specific tag and a
+        // mismatch suggests the model misread the prompt — a re-roll
+        // signal, not a silent rewrite.
+        if (cleanResult.cleaned.track !== req.track) {
+          issues.push({
             code: "track.mismatch",
             message: `Model returned track ${cleanResult.cleaned.track}, caller asked for ${req.track}.`,
-          },
-        ]);
+          });
+        }
+
+        if (issues.length > 0) {
+          if (attempts === MAX_GENERATION_ATTEMPTS) {
+            throw new GenerationValidationError(issues);
+          }
+          messages.push(
+            { role: "assistant", content: last.text },
+            { role: "user", content: validationRetryNudge(issues) },
+          );
+          continue;
+        }
+
+        return {
+          value: cleanResult.cleaned,
+          model: last.model,
+          usage: last.usage,
+          attempts,
+          droppedQuestions: cleanResult.droppedQuestions,
+        };
       }
 
-      return {
-        value: cleanResult.cleaned,
-        model: last.model,
-        usage: last.usage,
-        attempts,
-        droppedQuestions: cleanResult.droppedQuestions,
-      };
+      throw new GenerationShapeError([], last?.text ?? "");
     },
   };
 }

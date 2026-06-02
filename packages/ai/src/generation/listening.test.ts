@@ -3,8 +3,8 @@
 //   - Happy path: model output → schema OK → validator OK → typed result.
 //   - Retry on malformed JSON: first response is junk, second is valid.
 //   - Schema rejection: both attempts malformed → GenerationShapeError.
-//   - Validator rejection: schema OK but answer not in transcript →
-//     GenerationValidationError.
+//   - Retry on validator rejection: schema OK but content invalid, then fixed.
+//   - Validator rejection after retry budget: GenerationValidationError.
 //   - Track-mismatch: model swapped the track → validation error.
 //   - Topic hint surfaces in the user turn.
 
@@ -93,6 +93,26 @@ describe("createListeningGenerator — retry", () => {
 });
 
 describe("createListeningGenerator — validation", () => {
+  it("retries on validator rejection, then succeeds", async () => {
+    const broken = validatorCleanGeneration();
+    broken.track = "GeneralTraining";
+    const ai = makeAi([
+      { text: JSON.stringify(broken) },
+      { text: JSON.stringify(validatorCleanGeneration()) },
+    ]);
+    const gen = createListeningGenerator({ ai, loadPrompt: loader });
+    const result = await gen.generate({
+      ctx: CTX,
+      track: "Academic",
+      difficulty: 3,
+    });
+    expect(result.attempts).toBe(2);
+    expect(ai.calls()).toBe(2);
+    expect(ai.recorded[1]?.messages.at(-1)?.content).toMatch(
+      /track\.mismatch/,
+    );
+  });
+
   it("rejects when cleaning an ungrounded answer would leave a part below the 5-question floor", async () => {
     const broken = validatorCleanGeneration();
     const q = broken.questions[1]!;
