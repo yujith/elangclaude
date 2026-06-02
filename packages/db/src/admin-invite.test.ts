@@ -51,18 +51,36 @@ function makeFakeClerk(opts: {
    *  entry once exhausted (so a single-entry array always behaves the
    *  same way). */
   behaviours?: Array<"ok" | Error>;
+  pendingInvitations?: Array<{
+    id: string;
+    emailAddress: string;
+    status: string;
+  }>;
 } = {}): { client: InviteClerkClient; calls: InviteCall[] } {
   const calls: InviteCall[] = [];
+  const revoked: string[] = [];
+  const pendingInvitations = opts.pendingInvitations ?? [];
   const seq = opts.behaviours ?? ["ok"];
   let cursor = 0;
   const client: InviteClerkClient = {
     invitations: {
+      async getInvitationList() {
+        return {
+          data: pendingInvitations.filter(
+            (invite) => !revoked.includes(invite.id),
+          ),
+        };
+      },
       async createInvitation(params) {
         calls.push(params);
         const behaviour = seq[Math.min(cursor, seq.length - 1)];
         cursor += 1;
         if (behaviour === "ok") return { id: `inv_${calls.length}` };
         throw behaviour;
+      },
+      async revokeInvitation(invitationId) {
+        revoked.push(invitationId);
+        return { id: invitationId };
       },
     },
   };
@@ -298,6 +316,40 @@ describe("inviteLearnerForOrg — Clerk integration", () => {
     });
     expect(user).not.toBeNull();
     expect(user?.org_id).toBe(org.id);
+    const log = await prisma.activityLog.findFirst({
+      where: { org_id: org.id, action: "learner.invited" },
+    });
+    expect(log).not.toBeNull();
+  });
+
+  it("revokes a stale pending Clerk invitation and creates a fresh one on duplicate_record", async () => {
+    const { ctx, org } = await makeOrg(5);
+    const dup = makeClerkError({ status: 422, code: "duplicate_record" });
+    const { client, calls } = makeFakeClerk({
+      behaviours: [dup, "ok"],
+      pendingInvitations: [
+        {
+          id: "inv_stale",
+          emailAddress: "stale@example.com",
+          status: "pending",
+        },
+      ],
+    });
+
+    const res = await inviteLearnerForOrg(
+      ctx,
+      { email: "stale@example.com" },
+      makeOptions({ clerkClient: client }),
+    );
+
+    expect(res.ok).toBe(true);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.emailAddress).toBe("stale@example.com");
+
+    const user = await prisma.user.findFirst({
+      where: { email: "stale@example.com", org_id: ctx.org_id },
+    });
+    expect(user).not.toBeNull();
     const log = await prisma.activityLog.findFirst({
       where: { org_id: org.id, action: "learner.invited" },
     });

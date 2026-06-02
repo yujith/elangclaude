@@ -14,7 +14,12 @@ import {
 
 type SingleStatus =
   | { kind: "idle" }
-  | { kind: "ok"; email: string; alreadyExisted: boolean }
+  | {
+      kind: "ok";
+      email: string;
+      alreadyExisted: boolean;
+      invitationSent: boolean;
+    }
   | { kind: "fail"; email: string; reason: InviteFailureReason };
 
 type CsvStatus =
@@ -58,6 +63,7 @@ export function InvitePanel() {
           kind: "ok",
           email: submittedEmail,
           alreadyExisted: res.alreadyExisted,
+          invitationSent: res.invitationSent,
         });
         setEmail("");
         setName("");
@@ -89,8 +95,7 @@ export function InvitePanel() {
           Invite a learner
         </h3>
         <p className="mt-1 font-body text-sm text-brand-grey-700">
-          We&rsquo;ll create a seat for this email. You&rsquo;ll need to share
-          the sign-in link yourself for now.
+          We&rsquo;ll create a seat for this email and send a Clerk invitation.
         </p>
         <form onSubmit={onSingleSubmit} className="mt-4 space-y-3">
           <label className="block">
@@ -132,7 +137,9 @@ export function InvitePanel() {
             className="mt-4 font-body text-sm text-brand-black"
           >
             {singleStatus.alreadyExisted
-              ? `${singleStatus.email} was already on your roster.`
+              ? singleStatus.invitationSent
+                ? `${singleStatus.email} was already on your roster, so we sent a fresh invitation.`
+                : `${singleStatus.email} was already on your roster.`
               : `Invited ${singleStatus.email}.`}
           </p>
         ) : null}

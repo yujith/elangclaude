@@ -31,7 +31,12 @@ export type InviteFailureReason =
   | "clerk_rate_limited";
 
 export type InviteResult =
-  | { ok: true; user_id: string; alreadyExisted: boolean }
+  | {
+      ok: true;
+      user_id: string;
+      alreadyExisted: boolean;
+      invitationSent: boolean;
+    }
   | { ok: false; reason: InviteFailureReason };
 
 export type CsvRowResult = {
@@ -61,11 +66,24 @@ export type ParsedCsvRow = {
  */
 export interface InviteClerkClient {
   invitations: {
+    getInvitationList?(params?: {
+      query?: string;
+      status?: string;
+      limit?: number;
+      orderBy?: string;
+    }): Promise<{
+      data: Array<{
+        id: string;
+        emailAddress: string;
+        status: string;
+      }>;
+    }>;
     createInvitation(params: {
       emailAddress: string;
       redirectUrl?: string;
       publicMetadata?: Record<string, unknown>;
     }): Promise<{ id: string }>;
+    revokeInvitation?(invitationId: string): Promise<{ id: string }>;
   };
 }
 
@@ -138,7 +156,7 @@ export async function inviteLearnerForOrg(
   // Within-org duplicate check only. Cross-org invites are allowed (ADR-0018).
   const existing = await prisma.user.findFirst({
     where: { email, org_id: ctx.org_id },
-    select: { id: true, role: true, deleted_at: true },
+    select: { id: true, role: true, deleted_at: true, clerk_user_id: true },
   });
   if (existing && existing.deleted_at !== null) {
     // Soft-deleted in this org. Refuse so "remove" stays final until
@@ -150,7 +168,24 @@ export async function inviteLearnerForOrg(
     if (existing.role !== "Learner") {
       return { ok: false, reason: "cannot_invite" };
     }
-    return { ok: true, user_id: existing.id, alreadyExisted: true };
+    if (existing.clerk_user_id) {
+      return {
+        ok: true,
+        user_id: existing.id,
+        alreadyExisted: true,
+        invitationSent: false,
+      };
+    }
+    const inviteResult = await sendLearnerInvitation(ctx, email, options);
+    if (inviteResult.kind === "fail") {
+      return { ok: false, reason: inviteResult.reason };
+    }
+    return {
+      ok: true,
+      user_id: existing.id,
+      alreadyExisted: true,
+      invitationSent: true,
+    };
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -204,7 +239,12 @@ export async function inviteLearnerForOrg(
     },
   });
 
-  return { ok: true, user_id: result.user_id, alreadyExisted: false };
+  return {
+    ok: true,
+    user_id: result.user_id,
+    alreadyExisted: false,
+    invitationSent: true,
+  };
 }
 
 export async function inviteLearnersFromCsvForOrg(
@@ -278,9 +318,13 @@ async function sendLearnerInvitation(
       return { kind: "ok" };
     } catch (err) {
       if (isDuplicateInvitation(err)) {
-        // Clerk already has an invite (or an account) for this email.
-        // The DB row is in place; treat as success so the admin's
-        // "re-invite" UX is idempotent.
+        const cleared = await revokePendingInvitationForEmail(client, email);
+        if (cleared) {
+          continue;
+        }
+        // Clerk already has an account or a non-pending invitation for this
+        // email. The DB row is in place; treat as success so sign-in can
+        // lazy-link by email instead of leaving the admin stuck.
         return { kind: "ok" };
       }
       if (isRateLimited(err)) {
@@ -319,6 +363,30 @@ function buildClerkClient(): InviteClerkClient {
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function revokePendingInvitationForEmail(
+  client: InviteClerkClient,
+  email: string,
+): Promise<boolean> {
+  const listInvitations = client.invitations.getInvitationList;
+  const revokeInvitation = client.invitations.revokeInvitation;
+  if (!listInvitations || !revokeInvitation) return false;
+
+  const invitations = await listInvitations.call(client.invitations, {
+    query: email,
+    status: "pending",
+    limit: 10,
+    orderBy: "-created_at",
+  });
+  const pending = invitations.data.find(
+    (invite) =>
+      invite.emailAddress.toLowerCase() === email && invite.status === "pending",
+  );
+  if (!pending) return false;
+
+  await revokeInvitation.call(client.invitations, pending.id);
+  return true;
 }
 
 function isDuplicateInvitation(err: unknown): boolean {
