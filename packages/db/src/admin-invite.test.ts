@@ -4,13 +4,13 @@ import { prisma } from "./client";
 import { resetDatabase } from "./test-helpers";
 import {
   CSV_ROW_CAP,
-  InviteEnvError,
   inviteLearnerForOrg,
   inviteLearnersFromCsvForOrg,
   parseInviteCsv,
   type InviteClerkClient,
   type InviteOptions,
 } from "./admin-invite";
+import { buildClerkInvitationRedirectUrl } from "./clerk-invite-url";
 import type { OrgContext } from "./tenancy";
 
 async function makeOrg(seat_limit: number) {
@@ -153,6 +153,31 @@ describe("parseInviteCsv", () => {
     const out = parseInviteCsv(lines.join("\n"));
     expect(out.rows).toHaveLength(CSV_ROW_CAP);
     expect(out.truncatedAt).toBe(CSV_ROW_CAP + 1);
+  });
+});
+
+describe("buildClerkInvitationRedirectUrl", () => {
+  it("defaults invite accepts to the canonical public domain", () => {
+    expect(buildClerkInvitationRedirectUrl(undefined)).toBe(
+      "https://www.elanguagecenter.com/sign-up",
+    );
+    expect(buildClerkInvitationRedirectUrl("http://localhost:3000")).toBe(
+      "https://www.elanguagecenter.com/sign-up",
+    );
+  });
+
+  it("canonicalizes the bare production domain to www + https", () => {
+    expect(buildClerkInvitationRedirectUrl("http://elanguagecenter.com")).toBe(
+      "https://www.elanguagecenter.com/sign-up",
+    );
+  });
+
+  it("lets tests inject a custom base URL explicitly", () => {
+    expect(
+      buildClerkInvitationRedirectUrl("http://test.local", {
+        allowCustomBaseUrl: true,
+      }),
+    ).toBe("http://test.local/sign-up");
   });
 });
 
@@ -444,20 +469,22 @@ describe("inviteLearnerForOrg — Clerk integration", () => {
     expect(orgUsers).toBe(1); // just the admin from makeOrg
   });
 
-  it("throws InviteEnvError when APP_URL is missing and no override is supplied", async () => {
+  it("uses the canonical invite domain when APP_URL is missing", async () => {
     const { ctx } = await makeOrg(5);
-    const { client } = makeFakeClerk();
-    // Deliberately omit appUrl AND scrub env so the guard fires.
+    const { client, calls } = makeFakeClerk();
+    // Deliberately omit appUrl AND scrub env so the canonical fallback fires.
     const previous = process.env.APP_URL;
     delete process.env.APP_URL;
     try {
-      await expect(
-        inviteLearnerForOrg(
-          ctx,
-          { email: "no-url@example.com" },
-          { clerkClient: client, sleep: async () => {} },
-        ),
-      ).rejects.toBeInstanceOf(InviteEnvError);
+      const res = await inviteLearnerForOrg(
+        ctx,
+        { email: "no-url@example.com" },
+        { clerkClient: client, sleep: async () => {} },
+      );
+      expect(res.ok).toBe(true);
+      expect(calls[0]?.redirectUrl).toBe(
+        "https://www.elanguagecenter.com/sign-up",
+      );
     } finally {
       if (previous !== undefined) process.env.APP_URL = previous;
     }

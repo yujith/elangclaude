@@ -19,6 +19,7 @@
 import { createClerkClient } from "@clerk/backend";
 import { isClerkAPIResponseError } from "@clerk/backend/errors";
 import { Prisma } from "@prisma/client";
+import { buildClerkInvitationRedirectUrl } from "./clerk-invite-url";
 import { prisma } from "./client";
 import { withOrg, type OrgContext } from "./tenancy";
 
@@ -91,8 +92,8 @@ export interface InviteOptions {
   /** Inject a stub for tests. If omitted, a real client is built from
    *  CLERK_SECRET_KEY at first call (throws if the env is unset). */
   clerkClient?: InviteClerkClient;
-  /** Defaults to `process.env.APP_URL`. Throws at invite time if both
-   *  this and the env var are missing. */
+  /** Test-only override. Production invite links always use the canonical
+   *  public domain, even if APP_URL is accidentally set to localhost. */
   appUrl?: string;
   /** For tests — replace setTimeout so the 429-retry path is instant. */
   sleep?: (ms: number) => Promise<void>;
@@ -285,15 +286,6 @@ async function sendLearnerInvitation(
   email: string,
   options: InviteOptions,
 ): Promise<SendInviteResult> {
-  const appUrl = options.appUrl ?? process.env.APP_URL;
-  if (!appUrl) {
-    throw new InviteEnvError(
-      "APP_URL must be set to send Clerk invitations. " +
-        "Add APP_URL=http://localhost:3000 to apps/web/.env.local for dev, " +
-        "or the public site URL for production.",
-    );
-  }
-
   const client = options.clerkClient ?? buildClerkClient();
   const sleep = options.sleep ?? defaultSleep;
 
@@ -305,7 +297,10 @@ async function sendLearnerInvitation(
   // /post-signin for role routing — same final destination either way.
   const params = {
     emailAddress: email,
-    redirectUrl: `${appUrl}/sign-up`,
+    redirectUrl: buildClerkInvitationRedirectUrl(
+      options.appUrl ?? process.env.APP_URL,
+      { allowCustomBaseUrl: Boolean(options.appUrl) },
+    ),
     publicMetadata: { org_id: ctx.org_id, role: "Learner" },
   };
 

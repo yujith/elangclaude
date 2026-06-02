@@ -15,6 +15,7 @@
 import { createClerkClient } from "@clerk/backend";
 import { isClerkAPIResponseError } from "@clerk/backend/errors";
 import { Prisma, type Role } from "@prisma/client";
+import { buildClerkInvitationRedirectUrl } from "./clerk-invite-url";
 import { prisma } from "./client";
 import { SYSTEM_ORG_ID } from "./system-org";
 import { withSuperAdminContext, type OrgContext } from "./tenancy";
@@ -75,7 +76,8 @@ export interface OrgAdminInviteClerkClient {
 export interface OrgAdminInviteOptions {
   /** Test-only injection. Production omits and we build from env. */
   clerkClient?: OrgAdminInviteClerkClient;
-  /** Defaults to process.env.APP_URL. Throws InviteEnvError if missing. */
+  /** Test-only override. Production invite links always use the canonical
+   *  public domain, even if APP_URL is accidentally set to localhost. */
   appUrl?: string;
   /** Test-only — replace setTimeout for the 429-retry path. */
   sleep?: (ms: number) => Promise<void>;
@@ -284,15 +286,6 @@ async function sendOrgAdminInvitation(args: {
     return { kind: "fail", reason: "cannot_invite" };
   }
 
-  const appUrl = options.appUrl ?? process.env.APP_URL;
-  if (!appUrl) {
-    throw new OrgAdminInviteEnvError(
-      "APP_URL must be set to send Clerk organisation invitations. " +
-        "Add APP_URL=http://localhost:3000 to packages/db/.env for dev, " +
-        "or the public site URL for production.",
-    );
-  }
-
   const client = options.clerkClient ?? buildOrgInviteClerkClient();
   const sleep = options.sleep ?? defaultSleep;
 
@@ -305,7 +298,10 @@ async function sendOrgAdminInvitation(args: {
     emailAddress: email,
     inviterUserId: inviter.clerk_user_id,
     role: "org:admin",
-    redirectUrl: `${appUrl}/sign-up`,
+    redirectUrl: buildClerkInvitationRedirectUrl(
+      options.appUrl ?? process.env.APP_URL,
+      { allowCustomBaseUrl: Boolean(options.appUrl) },
+    ),
     publicMetadata: { org_id: org.id, role: "OrgAdmin" } as Record<
       string,
       unknown

@@ -184,7 +184,7 @@ them up alongside the Prisma URLs:
 | `CLERK_SECRET_KEY` | backend SDK (seed, invite, webhook verify) | always |
 | `CLERK_PUBLISHABLE_KEY` | `<ClerkProvider>` on the client | always |
 | `CLERK_WEBHOOK_SIGNING_SECRET` | webhook Svix signature check | when running with the webhook receiver |
-| `APP_URL` | invitation `redirectUrl` build | any code path that calls `inviteLearnerForOrg` (throws `InviteEnvError` otherwise) |
+| `APP_URL` | Stripe / billing return URLs; optional Clerk invitation base override in tests/dev | always for billing; Clerk invitations fall back to `https://www.elanguagecenter.com` and production invite code ignores localhost |
 | `SEED_DEFAULT_PASSWORD` | overrides the shared seed password | optional; defaults to `elanguagecenter2026!` in `clerk-seed.ts` |
 
 `seedClerkIdentities()` refuses to run if `NODE_ENV=production` OR

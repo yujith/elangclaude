@@ -54,7 +54,7 @@ Clerk is the canonical auth backend (both dev and production). Org membership li
 - **`/create-org`** renders Clerk's `<CreateOrganization />`. Webhook events on submission create the matching Org row + promote the creator to `OrgAdmin`.
 - **`/profile`** is the self-service surface for any role (Learner / OrgAdmin / SuperAdmin). It carries the IELTS track preference picker (Academic ↔ GT) and embeds Clerk's curated `<UserProfile />` security page for password and active-session management. Email changes, connected accounts, and account deletion are not exposed in-app. Track switching is **blocked** while the caller has any in-progress `Attempt` or `MockSession` — section pickers filter by `user.ielts_track`, so a silent flip would strand the in-progress row behind the opposite filter. Helper: `updateMyIeltsTrack` in `packages/db/src/profile.ts`. See ADR-0016.
 - **`/dev/login`** stays as a dev-only escape hatch for switching between seeded users. Hidden in production.
-- **Invitations land on `/sign-up`, not `/post-signin`.** `inviteLearnerForOrg` builds `redirectUrl: ${APP_URL}/sign-up` so Clerk's `<SignUp>` can read `__clerk_ticket` and bind the invitation to the new Clerk account. `/sign-up` then `fallbackRedirectUrl`s to `/post-signin` for role routing.
+- **Invitations land on `/sign-up`, not `/post-signin`.** Clerk invitation `redirectUrl`s are built through `buildClerkInvitationRedirectUrl`, which defaults to `https://www.elanguagecenter.com/sign-up` and canonicalises bare `elanguagecenter.com` to `www`. Clerk's `<SignUp>` reads `__clerk_ticket` and binds the invitation to the new Clerk account; `/sign-up` then `fallbackRedirectUrl`s to `/post-signin` for role routing.
 - **Learners get NO Clerk org membership** (decision in ADR-0014 D7). OrgAdmin + SuperAdmin home-org memberships use the prefixed role key `"org:admin"` — the unprefixed legacy `"admin"` returns 404 from Clerk's API.
 
 DB-touching sync functions live in `packages/db/src/clerk-sync.ts` and are unit-tested in `clerk-sync.test.ts`. Webhook event types subscribed in the Clerk dashboard: `user.*`, `organization.*`, `organizationMembership.*`.
@@ -66,7 +66,7 @@ DB-touching sync functions live in `packages/db/src/clerk-sync.ts` and are unit-
 | `CLERK_SECRET_KEY` | backend SDK (seed, invite, webhook) | always |
 | `CLERK_PUBLISHABLE_KEY` | `<ClerkProvider>` on the client | always |
 | `CLERK_WEBHOOK_SIGNING_SECRET` | webhook Svix signature check | when running with the webhook receiver |
-| `APP_URL` | invitation `redirectUrl` build | any code path that calls `inviteLearnerForOrg` (throws `InviteEnvError` otherwise) |
+| `APP_URL` | Stripe Checkout / Portal URLs; optional Clerk invitation base override for tests/dev | always for billing; Clerk invitations fall back to `https://www.elanguagecenter.com` and ignore localhost in production code paths |
 | `SEED_DEFAULT_PASSWORD` | overrides the shared seed password | optional; defaults to `elanguagecenter2026!` |
 | `MULTI_ORG_ENABLED` | self-serve guard (`self-serve.ts`, `signup-org/continue`) + the OrgAdmin `<OrganizationSwitcher>` in `(admin)/layout.tsx` | optional; `1` lets one Clerk identity hold `User` rows in multiple orgs (ADR-0018). Defaults off; Learners stay single-org by convention regardless of the flag. |
 
