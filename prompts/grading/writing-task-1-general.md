@@ -33,7 +33,7 @@ Their response (verbatim, do not correct it before reading):
 
 # Output
 
-Return **only** JSON matching the schema below. No preamble, no postamble, no markdown fences.
+Return **only** JSON matching the schema below. No preamble, no postamble, no markdown fences. Every value must be a valid JSON string: never place a raw double quote (`"`) inside a string value — if you need to quote the candidate's words, use single quotes (`'`).
 
 ```json
 {
@@ -52,7 +52,7 @@ Return **only** JSON matching the schema below. No preamble, no postamble, no ma
 
 # Evidence requirement
 
-Every criterion `justification` must quote a **specific phrase** from the candidate's response in `evidence`. Use straight quotes. No generic feedback.
+Every criterion `justification` must point to a **specific phrase** from the candidate's response, and the `evidence` field must contain that phrase. The `evidence` value is a plain JSON string holding **one** short verbatim excerpt — do **not** wrap it in quotation marks, do **not** put any double quote (`"`) inside it, and do **not** combine multiple excerpts (never write `'…' and '…'`). Use single quotes only if you must. No generic feedback.
 
 If the response is too short, off-topic, or otherwise un-scorable, set `band_overall` to the appropriate low band and use `improvements` to explain what's missing. Do not refuse to grade.
 

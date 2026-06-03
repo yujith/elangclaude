@@ -236,10 +236,32 @@ async function tryGrade(
     return "ok";
   } catch (err) {
     if (err instanceof QuotaExceededError) return "quota";
-    if (err instanceof GradeShapeError || err instanceof ProviderError) {
+    // Both of these surface to the UI as `?error=grading`. Log the actual
+    // cause so a "Grading hit a snag" report is diagnosable from the server
+    // logs — previously this branch was swallowed silently.
+    if (err instanceof GradeShapeError) {
+      console.error(
+        "[grading] attempt %s — GradeShapeError: model JSON failed schema validation after retry. issues=%o rawSnippet=%s",
+        attemptId,
+        err.issues,
+        err.raw.slice(0, 500),
+      );
       return "grading";
     }
-    console.error("Writing grading failed for attempt %s:", attemptId, err);
+    if (err instanceof ProviderError) {
+      console.error(
+        "[grading] attempt %s — ProviderError from %s: %s",
+        attemptId,
+        err.provider,
+        err.message,
+      );
+      return "grading";
+    }
+    console.error(
+      "[grading] attempt %s — unexpected grading failure:",
+      attemptId,
+      err,
+    );
     return "unknown";
   }
 }

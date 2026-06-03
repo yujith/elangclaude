@@ -23,6 +23,9 @@ const INPUTS_PLACEHOLDER = "<<INPUTS>>";
 
 const STRICTER_RETRY_NUDGE =
   "Your previous response was not valid JSON or did not match the required schema. " +
+  "A common cause is an unescaped double quote inside a string value (e.g. wrapping an " +
+  "evidence excerpt in \" \") — every value must be a single valid JSON string, so use " +
+  "single quotes (') for any quoted words and never join phrases with \"and\". " +
   "Return ONLY a single JSON object that matches the schema. No prose, no markdown fences, no preamble.";
 
 export type SpeakingPartKey = "part1" | "part2" | "part3";

@@ -85,7 +85,9 @@ If `parts_covered` does not include all three of `"part1"`, `"part2"`, and
 # Output
 
 Return ONLY a single JSON object that matches this exact schema. No
-preamble, no markdown fences, no postamble.
+preamble, no markdown fences, no postamble. Every value must be a valid
+JSON string: never place a raw double quote (`"`) inside a string value —
+when you quote the candidate, use single quotes (`'`) as shown below.
 
 ```json
 {
@@ -119,8 +121,12 @@ Every criterion's `justification` MUST cite specific evidence in
   e.g. `"wpm=89 with 14 pauses ≥500 ms — speech is below the 110–140 wpm
   comfort range"`.
 
-No hand-wavy generic feedback. "Good vocabulary range" without a quoted
-phrase is not feedback.
+Each `evidence` value is a single plain JSON string. Quote the candidate
+with single quotes only (never double quotes), and do not join multiple
+excerpts with "and" — one citation per field keeps the JSON valid.
+
+No hand-wavy generic feedback. A bare 'Good vocabulary range' without a
+quoted phrase is not feedback.
 
 # Anti-patterns
 
