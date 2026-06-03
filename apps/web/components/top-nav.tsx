@@ -55,6 +55,12 @@ export async function TopNav() {
         <div className="flex items-center gap-2 sm:gap-3 font-heading font-bold text-sm">
           {isSignedIn ? (
             <>
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center rounded-pill bg-brand-red px-4 py-2 text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black"
+              >
+                Dashboard
+              </Link>
               <Link href="/profile" className={accountItemClass}>
                 Profile
               </Link>
