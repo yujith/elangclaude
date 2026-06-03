@@ -346,6 +346,49 @@ describe("cleanGeneratedListening", () => {
     );
   });
 
+  it("strips the layout blank when it drops a completion-blank for an ungrounded answer (no orphan slot)", () => {
+    const v = validatorFixture();
+    const q = v.questions[0]!;
+    if (q.type !== "listening-completion-blank") {
+      throw new Error("expected completion-blank at index 0");
+    }
+    const orphanKey = `${q.correct_answer.block_id}::${q.correct_answer.slot_id}`;
+    q.correct_answer.accepted = ["nonexistent-token-9999"];
+
+    const r = cleanGeneratedListening(v);
+    expect(r.droppedQuestions).toHaveLength(1);
+    expect(r.droppedQuestions[0]!.reason).toBe("answer-not-in-transcript");
+
+    // The dropped question's blank must be gone from the layout — otherwise
+    // the runner renders it as "[missing slot]".
+    const remainingSlots = new Set<string>();
+    for (const part of r.cleaned.parts) {
+      for (const block of part.completion_blocks ?? []) {
+        for (const row of block.rows) {
+          for (const cell of row.cells) {
+            for (const seg of cell) {
+              if (seg.kind === "blank") {
+                remainingSlots.add(`${block.id}::${seg.slot_id}`);
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(remainingSlots.has(orphanKey)).toBe(false);
+
+    // Every blank still in the layout is claimed by a surviving question.
+    const claimed = new Set<string>();
+    for (const cq of r.cleaned.questions) {
+      if (cq.type === "listening-completion-blank") {
+        claimed.add(`${cq.correct_answer.block_id}::${cq.correct_answer.slot_id}`);
+      }
+    }
+    for (const key of remainingSlots) {
+      expect(claimed.has(key)).toBe(true);
+    }
+  });
+
   it("drops a duplicate-slot completion-blank (keeps the first, drops the second)", () => {
     const v = validatorFixture();
     const first = v.questions[0]!;

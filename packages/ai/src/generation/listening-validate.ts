@@ -706,6 +706,21 @@ export function cleanGeneratedListening(
   const survivingPositions = new Set<number>();
   for (const q of keptQuestions) survivingPositions.add(q.position);
 
+  // The set of completion-block slots that a SURVIVING completion-blank
+  // question actually claims (`block_id::slot_id`). Any blank in a layout
+  // that isn't in here is an orphan — either the model over-declared slots,
+  // or the cleaner just dropped the question that filled it (e.g. ungrounded
+  // answer). We must strip those blanks from the layout below; otherwise the
+  // runner renders them as "[missing slot: …]". NB: this is derived from
+  // keptQuestions, not the earlier `claimedSlots`, because `claimedSlots`
+  // also contains slots of questions that were later dropped for grounding.
+  const keptSlots = new Set<string>();
+  for (const q of keptQuestions) {
+    if (q.type === "listening-completion-blank") {
+      keptSlots.add(`${q.correct_answer.block_id}::${q.correct_answer.slot_id}`);
+    }
+  }
+
   // Build cleaned parts with non-surviving positions removed from
   // each part's question_positions AND from any questions-preview
   // segments. This catches the model's "I declared 5 question slots
@@ -729,10 +744,57 @@ export function cleanGeneratedListening(
       }
       return { ...seg, question_positions: filtered };
     });
+
+    // Strip orphan blanks from the completion-block layout so the runner
+    // never shows "[missing slot]". A blank is an orphan when no surviving
+    // completion-blank question claims its (block_id, slot_id). When pruning
+    // a blank empties an answer row (a row that previously had a blank but no
+    // longer does), drop the whole row so a dangling label doesn't linger;
+    // drop a block entirely if it ends up with no rows.
+    let cleanedBlocks = part.completion_blocks;
+    if (part.completion_blocks) {
+      const blocks: typeof part.completion_blocks = [];
+      for (const block of part.completion_blocks) {
+        const rows: typeof block.rows = [];
+        for (const row of block.rows) {
+          const hadBlank = row.cells.some((cell) =>
+            cell.some((seg) => seg.kind === "blank"),
+          );
+          const cells = row.cells.map((cell) =>
+            cell.filter(
+              (seg) =>
+                seg.kind !== "blank" ||
+                keptSlots.has(`${block.id}::${seg.slot_id}`),
+            ),
+          );
+          const stillHasBlank = cells.some((cell) =>
+            cell.some((seg) => seg.kind === "blank"),
+          );
+          if (hadBlank && !stillHasBlank) {
+            didPrune = true; // answer row lost its blank → drop the row
+            continue;
+          }
+          if (cells.some((cell, ci) => cell.length !== row.cells[ci]!.length)) {
+            didPrune = true;
+          }
+          rows.push({ ...row, cells });
+        }
+        if (rows.length === 0) {
+          didPrune = true; // block emptied → drop it
+          continue;
+        }
+        blocks.push({ ...block, rows });
+      }
+      cleanedBlocks = blocks;
+    }
+
     return {
       ...part,
       question_positions: filteredPositions,
       transcript: cleanedTranscript,
+      ...(part.completion_blocks
+        ? { completion_blocks: cleanedBlocks }
+        : {}),
     };
   });
 
