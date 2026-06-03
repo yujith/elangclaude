@@ -7,6 +7,7 @@ import {
   type SpeakingContent,
 } from "@/lib/speaking/content";
 import { startSpeakingAttempt } from "@/lib/speaking/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
   title: "Speaking practice",
@@ -270,13 +271,13 @@ function TestRow({ test }: { test: DecoratedTest }) {
         </div>
         <form action={startSpeakingAttempt}>
           <input type="hidden" name="testId" value={test.id} />
-          <button
-            type="submit"
+          <SubmitButton
             disabled={!content}
+            pendingLabel="Starting…"
             className="w-full inline-flex items-center justify-center rounded-pill bg-brand-red px-5 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Start speaking test
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </li>

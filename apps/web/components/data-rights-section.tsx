@@ -12,6 +12,7 @@ import {
   requestMyErasure,
   setMyAge,
 } from "@/lib/data-rights/actions";
+import { PendingButton } from "@/components/ui/pending-button";
 
 type AgeAssurance = "Unknown" | "Adult" | "Minor";
 
@@ -102,13 +103,14 @@ function RectifyNameRow({ initialName }: { initialName: string }) {
           onChange={(e) => setName(e.target.value)}
           className="rounded-md ring-1 ring-brand-grey-200 px-4 py-2 font-body text-brand-grey-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
         />
-        <button
+        <PendingButton
           type="submit"
-          disabled={pending}
+          pending={pending}
+          pendingLabel="Saving…"
           className="rounded-pill bg-brand-red-dark px-5 py-2 font-heading font-bold text-white hover:opacity-90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
         >
-          {pending ? "Saving…" : "Save"}
-        </button>
+          Save
+        </PendingButton>
       </form>
       {status === "saved" && <Note tone="ok">Name updated.</Note>}
       {status === "error" && <Note tone="warn">Enter a name between 1 and 120 characters.</Note>}
@@ -170,9 +172,10 @@ function AgeRow({
             />
           </div>
         )}
-        <button
+        <PendingButton
           type="button"
-          disabled={pending}
+          pending={pending}
+          pendingLabel="Saving…"
           onClick={() => {
             setStatus("idle");
             start(async () => {
@@ -186,8 +189,8 @@ function AgeRow({
           }}
           className="rounded-pill border-2 border-brand-black px-5 py-2 font-heading font-bold text-brand-black hover:bg-brand-grey-50 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
         >
-          {pending ? "Saving…" : "Save"}
-        </button>
+          Save
+        </PendingButton>
       </div>
       {status === "saved" && age === "Minor" && !guardianConsentGiven && (
         <Note tone="warn">
@@ -215,9 +218,10 @@ function ErasureRow({ hasPendingErasure }: { hasPendingErasure: boolean }) {
           Your account is scheduled for deletion. You can cancel this until it
           is processed.
         </p>
-        <button
+        <PendingButton
           type="button"
-          disabled={pending}
+          pending={pending}
+          pendingLabel="Cancelling…"
           onClick={() =>
             start(async () => {
               await cancelMyErasure();
@@ -226,8 +230,8 @@ function ErasureRow({ hasPendingErasure }: { hasPendingErasure: boolean }) {
           }
           className="mt-3 rounded-pill border-2 border-brand-black px-5 py-2 font-heading font-bold text-brand-black hover:bg-brand-grey-50 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
         >
-          {pending ? "Cancelling…" : "Cancel erasure"}
-        </button>
+          Cancel erasure
+        </PendingButton>
       </div>
     );
   }
@@ -241,9 +245,10 @@ function ErasureRow({ hasPendingErasure }: { hasPendingErasure: boolean }) {
       </p>
       {confirming ? (
         <div className="mt-3 flex flex-col sm:flex-row gap-3">
-          <button
+          <PendingButton
             type="button"
-            disabled={pending}
+            pending={pending}
+            pendingLabel="Submitting…"
             onClick={() =>
               start(async () => {
                 await requestMyErasure();
@@ -253,8 +258,8 @@ function ErasureRow({ hasPendingErasure }: { hasPendingErasure: boolean }) {
             }
             className="rounded-pill bg-brand-red-dark px-5 py-2 font-heading font-bold text-white hover:opacity-90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
           >
-            {pending ? "Submitting…" : "Yes, erase my account"}
-          </button>
+            Yes, erase my account
+          </PendingButton>
           <button
             type="button"
             onClick={() => setConfirming(false)}

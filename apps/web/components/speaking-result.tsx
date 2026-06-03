@@ -18,6 +18,7 @@ import {
   type SpeakingContent,
 } from "@/lib/speaking/content";
 import { regradeSpeakingAttempt } from "@/lib/speaking/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 type GradeError = "quota" | "grading" | "unknown" | "shape" | null;
 
@@ -287,12 +288,12 @@ function GradeErrorPanel({
       {error !== "quota" ? (
         <form action={regradeSpeakingAttempt}>
           <input type="hidden" name="attemptId" value={attemptId} />
-          <button
-            type="submit"
-            className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+          <SubmitButton
+            pendingLabel="Grading…"
+            className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Try grading again
-          </button>
+          </SubmitButton>
         </form>
       ) : null}
     </article>

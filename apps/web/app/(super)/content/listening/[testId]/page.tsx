@@ -8,6 +8,7 @@ import {
   type ListeningPart,
 } from "@elc/ai";
 import { requireRole } from "@/lib/auth/context";
+import { SubmitButton } from "@/components/ui/submit-button";
 import {
   approveListeningTest,
   rejectListeningTest,
@@ -167,12 +168,12 @@ export default async function ReviewListeningTestPage({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <form action={approveListeningTest}>
                 <input type="hidden" name="testId" value={test.id} />
-                <button
-                  type="submit"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-pill bg-brand-red px-5 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+                <SubmitButton
+                  pendingLabel="Synthesising audio…"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-pill bg-brand-red px-5 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Approve & synthesise audio
-                </button>
+                </SubmitButton>
                 <p className="mt-2 font-body text-xs text-brand-grey-500">
                   Runs TTS for every speech / narration segment (~30 ElevenLabs
                   calls). 20–40 second wait.
@@ -186,12 +187,12 @@ export default async function ReviewListeningTestPage({
                   placeholder="Optional rejection note (e.g. transcript references US-only cultural detail)"
                   className="w-full rounded-md ring-1 ring-brand-grey-300 bg-white px-3 py-2 font-body text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
                 />
-                <button
-                  type="submit"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-pill bg-brand-black px-5 py-3 font-heading font-bold text-white transition-colors hover:bg-brand-grey-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+                <SubmitButton
+                  pendingLabel="Rejecting…"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-pill bg-brand-black px-5 py-3 font-heading font-bold text-white transition-colors hover:bg-brand-grey-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Reject
-                </button>
+                </SubmitButton>
               </form>
             </div>
           </div>
@@ -207,12 +208,12 @@ export default async function ReviewListeningTestPage({
             </p>
             <form action={resynthesiseListeningAudio}>
               <input type="hidden" name="testId" value={test.id} />
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              <SubmitButton
+                pendingLabel="Re-synthesising…"
+                className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Re-synthesise missing clips
-              </button>
+              </SubmitButton>
             </form>
           </div>
         ) : null}

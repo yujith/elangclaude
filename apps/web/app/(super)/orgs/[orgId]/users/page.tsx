@@ -9,6 +9,7 @@ import {
   setUserRoleFromForm,
   softDeleteUserFromForm,
 } from "@/lib/super/user-actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
   title: "Organisation users · SuperAdmin",
@@ -208,12 +209,12 @@ export default async function OrgUsersPage({
                 className="w-full rounded-md ring-1 ring-brand-grey-300 bg-white px-3 py-2 font-body text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
               />
             </Field>
-            <button
-              type="submit"
-              className="inline-flex items-center justify-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+            <SubmitButton
+              pendingLabel="Inviting…"
+              className="inline-flex items-center justify-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Invite OrgAdmin
-            </button>
+            </SubmitButton>
           </form>
         </section>
 
@@ -381,32 +382,32 @@ function UserActions({
         <input type="hidden" name="org_id" value={orgId} />
         <input type="hidden" name="user_id" value={user.id} />
         <input type="hidden" name="role" value={toggleRole} />
-        <button
-          type="submit"
-          className="inline-flex items-center rounded-pill border border-brand-grey-300 bg-brand-white px-3 py-1.5 font-heading font-bold text-xs text-brand-black hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 transition-colors"
+        <SubmitButton
+          pendingLabel="Updating…"
+          className="inline-flex items-center rounded-pill border border-brand-grey-300 bg-brand-white px-3 py-1.5 font-heading font-bold text-xs text-brand-black hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {toggleLabel}
-        </button>
+        </SubmitButton>
       </form>
       <form action={resetUserQuotaFromForm}>
         <input type="hidden" name="org_id" value={orgId} />
         <input type="hidden" name="user_id" value={user.id} />
-        <button
-          type="submit"
-          className="inline-flex items-center rounded-pill border border-brand-grey-300 bg-brand-white px-3 py-1.5 font-heading font-bold text-xs text-brand-black hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 transition-colors"
+        <SubmitButton
+          pendingLabel="Resetting…"
+          className="inline-flex items-center rounded-pill border border-brand-grey-300 bg-brand-white px-3 py-1.5 font-heading font-bold text-xs text-brand-black hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Reset quota
-        </button>
+        </SubmitButton>
       </form>
       <form action={softDeleteUserFromForm}>
         <input type="hidden" name="org_id" value={orgId} />
         <input type="hidden" name="user_id" value={user.id} />
-        <button
-          type="submit"
-          className="inline-flex items-center rounded-pill border border-brand-red/60 bg-brand-red-soft px-3 py-1.5 font-heading font-bold text-xs text-brand-grey-900 hover:bg-brand-red-soft/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 transition-colors"
+        <SubmitButton
+          pendingLabel="Removing…"
+          className="inline-flex items-center rounded-pill border border-brand-red/60 bg-brand-red-soft px-3 py-1.5 font-heading font-bold text-xs text-brand-grey-900 hover:bg-brand-red-soft/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Remove
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );

@@ -4,6 +4,7 @@ import { prisma } from "@elc/db/client";
 import { requireRole } from "@/lib/auth/context";
 import { reconcileFromCheckoutSession } from "@/lib/onboarding/reconcile";
 import { PollingRefresher } from "./polling-refresher";
+import { Spinner } from "@/components/ui/spinner";
 
 export const metadata: Metadata = {
   title: "Setting up… · eLanguage Center",
@@ -66,6 +67,9 @@ export default async function OnboardingProcessingPage({
   return (
     <section className="px-6 py-16 md:py-24">
       <div className="mx-auto max-w-xl text-center space-y-6">
+        <div className="flex justify-center">
+          <Spinner size="lg" label="Setting up your subscription" />
+        </div>
         <p className="font-body text-sm uppercase tracking-widest text-brand-red">
           Almost there
         </p>

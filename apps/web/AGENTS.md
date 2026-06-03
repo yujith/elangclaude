@@ -10,6 +10,7 @@ Project-specific notes (see also `docs/adr/0001-next16-tailwind4.md` and the roo
 - **Server Components by default.** Add `"use client"` only when you need interactivity.
 - **App Router.** All routes live in `app/`. Route groups use `(group-name)/` once we add them.
 - **Role header chrome:** `(learner)/layout.tsx`, `(admin)/layout.tsx`, and `(super)/layout.tsx` intentionally share the same rhythm: logo + role cue on the left, then a right-aligned menu ending with Profile and Sign out. Keep these plain horizontal navs aligned unless the role chrome changes everywhere. See `docs/adr/0013-org-admin-dashboard-thin-slice.md` and `docs/adr/0015-learner-home-dashboard.md`.
+- **Loading/busy feedback:** any control that waits on a Server Action or external API must show the shared spinner. Use `SubmitButton` (from `components/ui/submit-button.tsx`) in place of `<button type="submit">` inside `<form action={fn}>` — it auto-reads `useFormStatus`. Use `PendingButton` for `useTransition`/client-`fetch` flows, and `Spinner` for inline/processing waits. A bare submit button inside an `action={…}` form is a bug. Details + the do/don't list live in the `brand-system` skill ("Loading & busy states").
 
 The multi-tenancy, AI cost, and brand rules in `.claude/rules/*.md` apply here too.
 <!-- END:nextjs-agent-rules -->

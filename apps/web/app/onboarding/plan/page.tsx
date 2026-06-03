@@ -4,6 +4,7 @@ import { listPlansForCustomer } from "@elc/db";
 import { prisma } from "@elc/db/client";
 import { requireRole } from "@/lib/auth/context";
 import { selectPlanFromForm } from "@/lib/onboarding/checkout-actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
   title: "Pick your plan · eLanguage Center",
@@ -136,14 +137,14 @@ export default async function OnboardingPlanPage({
                   </dl>
                   <form action={selectPlanFromForm} className="mt-6">
                     <input type="hidden" name="plan_id" value={plan.id} />
-                    <button
-                      type="submit"
-                      className="inline-flex w-full items-center justify-center rounded-pill bg-brand-red text-white px-5 py-2.5 font-heading font-bold border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+                    <SubmitButton
+                      pendingLabel="Setting up…"
+                      className="inline-flex w-full items-center justify-center rounded-pill bg-brand-red text-white px-5 py-2.5 font-heading font-bold border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {Number(plan.amount_monthly_usd.toString()) === 0
                         ? `Start with ${plan.name}`
                         : `Continue with ${plan.name}`}
-                    </button>
+                    </SubmitButton>
                   </form>
                 </article>
               );

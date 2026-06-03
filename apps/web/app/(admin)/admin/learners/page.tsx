@@ -8,6 +8,7 @@ import {
   softDeleteLearnerFromForm,
   updateLearnerFromForm,
 } from "@/lib/admin/invite-actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
   title: "Org admin · Learners",
@@ -372,12 +373,12 @@ export default async function OrgAdminLearnersPage({
                                 name="return_to"
                                 value={currentHref}
                               />
-                              <button
-                                type="submit"
-                                className="inline-flex items-center rounded-pill border border-brand-red/60 bg-brand-red-soft px-3 py-1.5 font-heading font-bold text-xs text-brand-grey-900 hover:bg-brand-red-soft/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 transition-colors"
+                              <SubmitButton
+                                pendingLabel="Removing…"
+                                className="inline-flex items-center rounded-pill border border-brand-red/60 bg-brand-red-soft px-3 py-1.5 font-heading font-bold text-xs text-brand-grey-900 hover:bg-brand-red-soft/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                               >
                                 Remove
-                              </button>
+                              </SubmitButton>
                             </form>
                           </div>
                         </Td>

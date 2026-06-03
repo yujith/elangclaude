@@ -8,6 +8,7 @@
 // in_progress_work on submit (a race), we surface the same copy inline.
 
 import { useState, useTransition } from "react";
+import { PendingButton } from "@/components/ui/pending-button";
 import {
   updateMyTrack,
   type UpdateTrackFailureReason,
@@ -142,13 +143,15 @@ export function ProfileTrackForm({
       )}
 
       <div className="pt-2">
-        <button
+        <PendingButton
           type="submit"
+          pending={pending}
+          pendingLabel="Saving…"
           disabled={disabled || !changed}
           className="inline-flex items-center justify-center rounded-pill bg-brand-red text-white font-heading font-bold px-5 py-2 hover:bg-brand-red/90 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-white transition-colors"
         >
-          {pending ? "Saving…" : "Save preference"}
-        </button>
+          Save preference
+        </PendingButton>
       </div>
     </form>
   );

@@ -103,6 +103,30 @@ Reference: the website mockup in `Brand_Guidelines.pdf` — "SKILLS THAT OPEN DO
 
 For secondary CTAs on dark backgrounds, use the **outlined** variant: transparent fill, red border, white text. (See the website hero in `Brand_Guidelines.pdf`.)
 
+## Loading & busy states
+
+Anything that waits on a server action, an external API (Clerk, Stripe, the AI
+gateway, R2), or a long job MUST show a visible "working" cue. Don't hand-roll a
+spinner — use the shared primitives in `apps/web/components/ui/`:
+
+- **`Spinner`** — the only loading indicator. A brand-red arc (`border-t-brand-red`)
+  on a `brand-grey-200` track, `animate-spin`, with `motion-reduce:animate-none`
+  and a `role="status"` label. Sizes `sm | md | lg`. Pass `decorative` when it
+  sits next to its own visible text. Never introduce a second spinner style or a
+  non-red indicator.
+- **`SubmitButton`** — drop-in for `<button type="submit">` inside a Server-Action
+  `<form action={fn}>`. Reads `useFormStatus`, so it auto-disables + shows the
+  Spinner while the action runs. Keep the button's existing brand classes; add
+  `pendingLabel` (e.g. `"Generating…"`, `"Saving…"`) and the
+  `disabled:opacity-60 disabled:cursor-not-allowed` pair.
+- **`PendingButton`** — same look, but the caller passes `pending` (for
+  `useTransition` / client `fetch` flows where `useFormStatus` doesn't apply).
+
+Rule of thumb: a bare `<button type="submit">` inside `action={…}` is a bug —
+it gives the user no feedback during the round-trip. (Exceptions: GET/filter
+forms and buttons wired via the `form=` attribute outside their form, where
+`useFormStatus` can't report pending.)
+
 ## Logo
 
 - Wordmark "eLanguage Center" + checkered grid icon + red accent rectangle.

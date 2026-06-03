@@ -15,6 +15,7 @@
 //      (Phase 3 wires recording + transcription + Submitted/Graded).
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Spinner } from "@/components/ui/spinner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ExaminerScript } from "@elc/ai";
@@ -1026,10 +1027,7 @@ function ProcessingView({ title, body }: { title: string; body: string }) {
   return (
     <Panel>
       <div className="flex items-center gap-3">
-        <span
-          className="inline-block w-3 h-3 rounded-full bg-brand-red animate-pulse"
-          aria-hidden="true"
-        />
+        <Spinner size="md" decorative />
         <h2 className="font-heading font-bold text-xl text-brand-black">
           {title}
         </h2>

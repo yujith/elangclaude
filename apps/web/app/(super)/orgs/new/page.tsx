@@ -3,6 +3,7 @@ import Link from "next/link";
 import { listPlansAsSuperAdmin } from "@elc/db";
 import { requireRole } from "@/lib/auth/context";
 import { createOrgFromForm } from "@/lib/super/org-actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
   title: "New organisation · SuperAdmin",
@@ -171,13 +172,13 @@ export default async function NewOrgPage({
             >
               Cancel
             </Link>
-            <button
-              type="submit"
+            <SubmitButton
               disabled={selectablePlans.length === 0}
+              pendingLabel="Creating…"
               className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
             >
               Create organisation
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </div>
