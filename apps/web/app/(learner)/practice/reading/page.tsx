@@ -10,6 +10,7 @@ import {
 } from "@elc/ai";
 import { requireOrgContext } from "@/lib/auth/context";
 import { startReadingAttempt } from "@/lib/reading/actions";
+import { startReadingPaper } from "@/lib/reading/paper-session";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
@@ -106,6 +107,37 @@ export default async function ReadingPickerPage({
     me.ielts_track === "GeneralTraining" ? parseGtSection(sp.gt_section) : null;
   const part = me.ielts_track === "Academic" ? parsePart(sp.part) : null;
 
+  // Full-paper (mock) mode pulls the approved ReadingPapers for the
+  // learner's track plus any in-progress sitting to resume. ReadingPaper is
+  // global content; the session is tenant-scoped (auto org-filtered).
+  let mockData: {
+    papers: { id: string; title: string | null; partCount: number }[];
+    resumeSessionId: string | null;
+  } | null = null;
+  if (mode === "mock") {
+    const [papers, resume] = await Promise.all([
+      db.readingPaper.findMany({
+        where: { status: "Approved", track: me.ielts_track },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+        select: { id: true, title: true, _count: { select: { parts: true } } },
+      }),
+      db.readingPaperSession.findFirst({
+        where: { user_id: ctx.user_id, status: "InProgress", track: me.ielts_track },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      }),
+    ]);
+    mockData = {
+      papers: papers.map((p) => ({
+        id: p.id,
+        title: p.title,
+        partCount: p._count.parts,
+      })),
+      resumeSessionId: resume?.id ?? null,
+    };
+  }
+
   // Test is a global model — withOrg passes through unscoped, which is
   // correct: the content pool is shared across orgs.
   const tests = await db.test.findMany({
@@ -163,7 +195,11 @@ export default async function ReadingPickerPage({
         <ModeTabs current={mode} />
 
         {mode === "mock" ? (
-          <FullMockPlaceholder track={me.ielts_track} />
+          <PaperMock
+            track={me.ielts_track}
+            papers={mockData?.papers ?? []}
+            resumeSessionId={mockData?.resumeSessionId ?? null}
+          />
         ) : decorated.length === 0 ? (
           <EmptyState trackLabel={trackLabel} />
         ) : (
@@ -204,9 +240,9 @@ function ModeTabs({ current }: { current: Mode }) {
     },
     {
       key: "mock",
-      label: "Full mock",
+      label: "Full paper",
       href: "/practice/reading?mode=mock",
-      hint: "Exam-day simulation. Coming soon.",
+      hint: "Three passages, one 60-minute sitting.",
     },
   ];
   return (
@@ -237,35 +273,89 @@ function ModeTabs({ current }: { current: Mode }) {
   );
 }
 
-function FullMockPlaceholder({
+function PaperMock({
   track,
+  papers,
+  resumeSessionId,
 }: {
   track: "Academic" | "GeneralTraining";
+  papers: { id: string; title: string | null; partCount: number }[];
+  resumeSessionId: string | null;
 }) {
-  const sections =
-    track === "Academic"
-      ? "three passages back-to-back"
-      : "five short texts plus one longer text";
+  const trackLabel = track === "Academic" ? "Academic" : "General Training";
   return (
-    <div className="rounded-lg bg-brand-white p-8 ring-1 ring-brand-grey-200 space-y-3">
-      <p className="font-heading font-bold text-xl text-brand-black">
-        Full mock tests are coming.
-      </p>
-      <p className="font-body text-base text-brand-grey-700">
-        A Full Mock will combine {sections} into one 60-minute timed run, with
-        a single submit at the end. It lands in a future release once we wire
-        the cross-section attempt model.
-      </p>
-      <p className="font-body text-sm text-brand-grey-700">
-        In the meantime, drill single passages on the{" "}
-        <Link
-          href="/practice/reading?mode=section"
-          className="font-heading font-bold text-brand-red hover:underline"
-        >
-          Section practice
-        </Link>{" "}
-        tab.
-      </p>
+    <div className="space-y-6">
+      <div className="rounded-lg bg-brand-black text-white p-8 space-y-2">
+        <p className="font-heading font-bold text-xl">
+          The full Reading paper.
+        </p>
+        <p className="font-body text-base text-white/80">
+          Three passages, ~40 questions, one 60-minute sitting. Each part
+          submits on its own and you get a single combined band at the end.
+          Your timer is a soft guide — progress saves as you go.
+        </p>
+      </div>
+
+      {resumeSessionId ? (
+        <div className="rounded-lg bg-brand-white ring-1 ring-brand-red p-5 flex items-center justify-between gap-4">
+          <p className="font-body text-sm text-brand-grey-800">
+            You have a paper in progress.
+          </p>
+          <Link
+            href={`/practice/reading/paper/${resumeSessionId}`}
+            className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-sm text-white border border-brand-red transition-colors hover:bg-brand-red-dark"
+          >
+            Resume paper
+          </Link>
+        </div>
+      ) : null}
+
+      {papers.length === 0 ? (
+        <div className="rounded-lg bg-brand-white p-8 ring-1 ring-brand-grey-200 space-y-3">
+          <p className="font-heading font-bold text-lg text-brand-black">
+            No {trackLabel} papers yet.
+          </p>
+          <p className="font-body text-base text-brand-grey-700">
+            Full papers appear here once we publish a complete {trackLabel} set.
+            In the meantime, drill single passages on the{" "}
+            <Link
+              href="/practice/reading?mode=section"
+              className="font-heading font-bold text-brand-red hover:underline"
+            >
+              Section practice
+            </Link>{" "}
+            tab.
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {papers.map((p, idx) => (
+            <li
+              key={p.id}
+              className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 px-5 py-4 flex items-center justify-between gap-4"
+            >
+              <div className="min-w-0">
+                <p className="font-heading font-bold text-lg text-brand-black">
+                  {p.title || `${trackLabel} Reading paper ${papers.length - idx}`}
+                </p>
+                <p className="mt-1 font-body text-sm text-brand-grey-600">
+                  {p.partCount} passages · ~60 min · single combined band
+                </p>
+              </div>
+              <form action={startReadingPaper}>
+                <input type="hidden" name="paperId" value={p.id} />
+                <SubmitButton
+                  pendingLabel="Starting…"
+                  disabled={Boolean(resumeSessionId)}
+                  className="shrink-0 inline-flex items-center rounded-pill bg-brand-red px-5 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Start paper
+                </SubmitButton>
+              </form>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

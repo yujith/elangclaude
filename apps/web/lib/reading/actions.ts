@@ -141,6 +141,18 @@ export async function submitReadingAttempt(formData: FormData): Promise<void> {
   }
 
   await runReadingSubmit(ctx, attemptId);
+
+  // If this attempt is one leg of a full Reading paper, route back to the
+  // paper orchestrator so it can advance to the next part (or the paper
+  // result) instead of showing the single-passage result page.
+  const db = withOrg(ctx);
+  const submitted = await db.attempt.findUnique({
+    where: { id: attemptId },
+    select: { reading_paper_session_id: true },
+  });
+  if (submitted?.reading_paper_session_id) {
+    redirect(`/practice/reading/paper/${submitted.reading_paper_session_id}`);
+  }
   redirect(`/results/${attemptId}`);
 }
 

@@ -37,6 +37,7 @@ export default async function ReadingPracticeAttemptPage({
       user_id: true,
       status: true,
       started_at: true,
+      reading_paper_session_id: true,
       test: {
         select: {
           id: true,
@@ -61,6 +62,12 @@ export default async function ReadingPracticeAttemptPage({
 
   if (!attempt || attempt.user_id !== ctx.user_id) notFound();
   if (attempt.status !== "InProgress") {
+    // A finished paper leg routes back to the orchestrator (which advances
+    // to the next part or the combined result); a standalone passage goes
+    // to its own result page.
+    if (attempt.reading_paper_session_id) {
+      redirect(`/practice/reading/paper/${attempt.reading_paper_session_id}`);
+    }
     redirect(`/results/${attempt.id}`);
   }
 
