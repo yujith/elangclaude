@@ -91,7 +91,15 @@ export default async function ReadingModerationPage({
           <p className="mt-3 font-body text-base text-brand-grey-700 max-w-2xl">
             Newly generated Reading tests land here as{" "}
             <code>PendingReview</code>. Approve a test to release it to
-            learners, or reject it to keep it out of the pool.
+            learners, or reject it to keep it out of the pool. Bundle three
+            approved passages into a{" "}
+            <Link
+              href="/content/reading/papers"
+              className="font-heading font-bold text-brand-red hover:underline"
+            >
+              full Reading paper
+            </Link>
+            .
           </p>
         </header>
 

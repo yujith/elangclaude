@@ -292,6 +292,83 @@ describe("MockSession — isolation", () => {
   });
 });
 
+describe("ReadingPaperSession — isolation", () => {
+  // ReadingPaperSession joined the tenant-scoped set alongside the full
+  // Reading paper feature. It mirrors MockSession: read isolation, create
+  // org_id clamping. paper_id is a global ReadingPaper FK, so each test
+  // mints a throwaway paper first.
+  async function makePaper(track: "Academic" | "GeneralTraining" = "Academic") {
+    return prisma.readingPaper.create({
+      data: { track, status: "Approved" },
+      select: { id: true },
+    });
+  }
+
+  it("findMany returns only the caller's paper sittings", async () => {
+    const orgA = await createTestOrg("A");
+    const orgB = await createTestOrg("B");
+    const paper = await makePaper();
+    await prisma.readingPaperSession.create({
+      data: {
+        org_id: orgA.id,
+        user_id: orgA.learnerIds[0]!,
+        paper_id: paper.id,
+        track: "Academic",
+      },
+    });
+    await prisma.readingPaperSession.create({
+      data: {
+        org_id: orgB.id,
+        user_id: orgB.learnerIds[0]!,
+        paper_id: paper.id,
+        track: "Academic",
+      },
+    });
+
+    const dbA = withOrg(ctxFor(orgA));
+    const sessions = await dbA.readingPaperSession.findMany();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]!.org_id).toBe(orgA.id);
+  });
+
+  it("findUnique by an orgB session id returns null from orgA", async () => {
+    const orgA = await createTestOrg("A");
+    const orgB = await createTestOrg("B");
+    const paper = await makePaper();
+    const bSession = await prisma.readingPaperSession.create({
+      data: {
+        org_id: orgB.id,
+        user_id: orgB.learnerIds[0]!,
+        paper_id: paper.id,
+        track: "Academic",
+      },
+    });
+
+    const dbA = withOrg(ctxFor(orgA));
+    const leak = await dbA.readingPaperSession.findUnique({
+      where: { id: bSession.id },
+    });
+    expect(leak).toBeNull();
+  });
+
+  it("create clamps a smuggled org_id to ctx.org_id", async () => {
+    const orgA = await createTestOrg("A");
+    const orgB = await createTestOrg("B");
+    const paper = await makePaper();
+
+    const dbA = withOrg(ctxFor(orgA));
+    const created = await dbA.readingPaperSession.create({
+      data: {
+        org_id: orgB.id,
+        user_id: orgA.learnerIds[0]!,
+        paper_id: paper.id,
+        track: "Academic",
+      },
+    });
+    expect(created.org_id).toBe(orgA.id);
+  });
+});
+
 describe("schema/runtime drift guard", () => {
   it("TENANT_SCOPED_MODELS matches the live Prisma datamodel", () => {
     const drift = findTenantSetDrift();

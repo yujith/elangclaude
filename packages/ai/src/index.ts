@@ -89,6 +89,16 @@ export {
   passageNeedsParagraphLabels,
   readingPart,
 } from "./reading/passage";
+export {
+  READING_PAPER_SLOTS,
+  paperIsComplete,
+  validateCuration,
+} from "./reading/paper";
+export type {
+  ReadingPaperSlot,
+  CandidatePart,
+  CurationIssue,
+} from "./reading/paper";
 export type {
   ReadingPassage,
   ReadingParagraph,

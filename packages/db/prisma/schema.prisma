@@ -209,18 +209,19 @@ model Organization {
   controller_model DataControllerModel @default(CustomerControlled)
   data_region      DataResidencyRegion @default(syd1)
 
-  users           User[]
-  consentRecords     ConsentRecord[]
-  dataRightsRequests DataRightsRequest[]
-  attempts        Attempt[]
-  answers         Answer[]
-  grades          Grade[]
-  recordings      Recording[]
-  quotaUsages     QuotaUsage[]
-  activityLogs    ActivityLog[]
-  mockSessions    MockSession[]
-  aiCallLogs      AiCallLog[]
-  stripeEventLogs StripeEventLog[]
+  users                User[]
+  consentRecords       ConsentRecord[]
+  dataRightsRequests   DataRightsRequest[]
+  attempts             Attempt[]
+  answers              Answer[]
+  grades               Grade[]
+  recordings           Recording[]
+  quotaUsages          QuotaUsage[]
+  activityLogs         ActivityLog[]
+  mockSessions         MockSession[]
+  readingPaperSessions ReadingPaperSession[]
+  aiCallLogs           AiCallLog[]
+  stripeEventLogs      StripeEventLog[]
 
   @@index([plan_id])
   @@index([subscription_status])
@@ -264,8 +265,8 @@ model Plan {
 // (event_created_at, populated from Stripe's event.created). See
 // ADR-0017 D8.
 model StripeEventLog {
-  id               String   @id @default(cuid())
-  stripe_event_id  String   @unique
+  id               String        @id @default(cuid())
+  stripe_event_id  String        @unique
   event_type       String
   event_created_at DateTime
   // Organization the event applied to, if resolvable. Null for events
@@ -275,34 +276,37 @@ model StripeEventLog {
   org_id           String?
   org              Organization? @relation(fields: [org_id], references: [id], onDelete: SetNull)
   payload_summary  Json?
-  processed_at     DateTime @default(now())
+  processed_at     DateTime      @default(now())
 
   @@index([event_type, event_created_at])
   @@index([org_id])
 }
 
 model Test {
-  id          String     @id @default(cuid())
-  track       Track
-  section     Section
-  difficulty  Int        @default(5)
-  status      TestStatus @default(Draft)
-  approved_by String?
-  approver    User?      @relation("TestApprover", fields: [approved_by], references: [id], onDelete: SetNull)
+  id              String     @id @default(cuid())
+  track           Track
+  section         Section
+  difficulty      Int        @default(5)
+  status          TestStatus @default(Draft)
+  approved_by     String?
+  approver        User?      @relation("TestApprover", fields: [approved_by], references: [id], onDelete: SetNull)
   // Optional passage payload for Reading (and, later, Listening transcripts).
   // Shape parsed in packages/ai/src/reading/passage.ts. Null for Writing /
   // Speaking rows. See docs/adr/0003-reading-data-shape.md.
-  body_json   Json?
+  body_json       Json?
   // The LLM that generated this content (e.g. "gpt-4.1-mini"). Captured at
   // generation time from the gateway ChatResponse.model — i.e. the model that
   // actually served the call after any fallback, not the requested default.
   // Null for rows created before this column (and for any non-generated row).
   generated_model String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
-  questions Question[]
-  attempts  Attempt[]
+  questions   Question[]
+  attempts    Attempt[]
+  // A single passage-Test can be slotted into one or more full Reading
+  // papers (content reuse). The join row carries the slot (1/2/3).
+  paper_parts ReadingPaperPart[]
 
   @@index([track, section, status])
   @@index([approved_by])
@@ -332,23 +336,23 @@ model Question {
 // ─── Models — tenant-scoped ───────────────────────────────────────────────
 
 model User {
-  id            String       @id @default(cuid())
-  org_id        String
-  org           Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  id                  String       @id @default(cuid())
+  org_id              String
+  org                 Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
   // Clerk user id (`user_*`). Nullable so seeded users exist before they
   // first sign in via Clerk. requireOrgContext lazy-links on first sign-in
   // by matching email; the webhook keeps it in sync afterwards.
-  clerk_user_id String?
-  email         String
-  name          String?
-  role          Role         @default(Learner)
-  ielts_track   Track        @default(Academic)
+  clerk_user_id       String?
+  email               String
+  name                String?
+  role                Role         @default(Learner)
+  ielts_track         Track        @default(Academic)
   // Soft-delete timestamp. SuperAdmins can remove a user from an org
   // without losing the audit trail (Attempts / Grades / Recordings stay
   // intact). A non-null value blocks sign-in (loadOrgContext) and hides
   // the row from default rosters. Soft-deleted users still occupy a
   // seat against `Organization.seat_limit` until they are hard-purged.
-  deleted_at    DateTime?
+  deleted_at          DateTime?
   // ─── Compliance (ADR-0019) ────────────────────────────────────────────
   // Coarse age band only — we do not store full DOB (data minimisation).
   // age_assurance=Minor requires guardian_consent_at before practice access.
@@ -359,45 +363,53 @@ model User {
   // the row is soft-deleted. Distinct from deleted_at (admin removal) so we
   // can prove an erasure was fulfilled. See ADR-0019 D4.
   erased_at           DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
-  attempts         Attempt[]
-  quotaUsages      QuotaUsage[]
-  activityLogs     ActivityLog[]
-  approved_tests   Test[]         @relation("TestApprover")
-  mockSessions     MockSession[]
-  aiCallLogs       AiCallLog[]
-  billing_owner_of Organization[] @relation("BillingOwner")
-  consentRecords     ConsentRecord[]
-  dataRightsRequests DataRightsRequest[]
+  attempts                Attempt[]
+  quotaUsages             QuotaUsage[]
+  activityLogs            ActivityLog[]
+  approved_tests          Test[]                @relation("TestApprover")
+  approved_reading_papers ReadingPaper[]        @relation("ReadingPaperApprover")
+  mockSessions            MockSession[]
+  readingPaperSessions    ReadingPaperSession[]
+  aiCallLogs              AiCallLog[]
+  billing_owner_of        Organization[]        @relation("BillingOwner")
+  consentRecords          ConsentRecord[]
+  dataRightsRequests      DataRightsRequest[]
 
+  @@unique([org_id, email], name: "user_org_email")
+  @@unique([org_id, clerk_user_id], name: "user_org_clerk_user_id")
   @@index([org_id])
   @@index([org_id, createdAt])
   @@index([org_id, role])
   @@index([org_id, deleted_at])
-  @@unique([org_id, email], name: "user_org_email")
-  @@unique([org_id, clerk_user_id], name: "user_org_clerk_user_id")
 }
 
 model Attempt {
-  id              String        @id @default(cuid())
-  org_id          String
-  org             Organization  @relation(fields: [org_id], references: [id], onDelete: Cascade)
-  user_id         String
-  user            User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  test_id         String
-  test            Test          @relation(fields: [test_id], references: [id], onDelete: Cascade)
-  section         Section
-  status          AttemptStatus @default(InProgress)
-  started_at      DateTime      @default(now())
-  submitted_at    DateTime?
+  id                       String               @id @default(cuid())
+  org_id                   String
+  org                      Organization         @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  user_id                  String
+  user                     User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  test_id                  String
+  test                     Test                 @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  section                  Section
+  status                   AttemptStatus        @default(InProgress)
+  started_at               DateTime             @default(now())
+  submitted_at             DateTime?
   // Optional parent mock session. Standalone practice attempts leave
   // this null; only the mock orchestrator sets it. See ADR 0008 D2.
-  mock_session_id String?
-  mock_session    MockSession?  @relation(fields: [mock_session_id], references: [id], onDelete: SetNull)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  mock_session_id          String?
+  mock_session             MockSession?         @relation(fields: [mock_session_id], references: [id], onDelete: SetNull)
+  // Optional parent full-Reading-paper sitting. Standalone passage
+  // practice leaves this null; the paper orchestrator sets it on each of
+  // the 3 part attempts. SetNull mirrors mock_session (ADR-0008 D2): the
+  // section work is the primary record, the wrapper is metadata.
+  reading_paper_session_id String?
+  reading_paper_session    ReadingPaperSession? @relation(fields: [reading_paper_session_id], references: [id], onDelete: SetNull)
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
 
   answers   Answer[]
   grade     Grade?
@@ -408,6 +420,7 @@ model Attempt {
   @@index([org_id, createdAt])
   @@index([org_id, submitted_at])
   @@index([mock_session_id])
+  @@index([reading_paper_session_id])
 }
 
 model Answer {
@@ -516,6 +529,76 @@ model MockSession {
   @@index([org_id])
   @@index([org_id, user_id])
   @@index([org_id, status])
+}
+
+// ─── Full Reading paper (3 passages, one sitting) ─────────────────────────
+//
+// A real IELTS Reading paper is 3 passages of escalating difficulty, 40
+// questions, 60 minutes. We keep one passage = one Test (ADR-0003) and
+// model the paper as an ordered bundle of three approved passage-Tests.
+// ReadingPaper is GLOBAL content (same class as Test) — not tenant-scoped;
+// it is SuperAdmin-curated/approved and shared across all orgs. See the
+// reading-paper ADR.
+model ReadingPaper {
+  id          String     @id @default(cuid())
+  track       Track
+  // Reuses the TestStatus lifecycle: Draft → PendingReview → Approved.
+  status      TestStatus @default(Draft)
+  approved_by String?
+  approver    User?      @relation("ReadingPaperApprover", fields: [approved_by], references: [id], onDelete: SetNull)
+  title       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  parts    ReadingPaperPart[]
+  sittings ReadingPaperSession[]
+
+  @@index([track, status])
+  @@index([approved_by])
+}
+
+// Join row binding a passage-Test into slot 1/2/3 of a paper. Unique on
+// (paper_id, slot) so a paper has at most one passage per slot. Cascade
+// from the paper; cascade from the Test (a hard-deleted passage drops its
+// slot, which marks the paper incomplete — surfaced in curation/runner).
+model ReadingPaperPart {
+  id        String       @id @default(cuid())
+  paper_id  String
+  paper     ReadingPaper @relation(fields: [paper_id], references: [id], onDelete: Cascade)
+  test_id   String
+  test      Test         @relation(fields: [test_id], references: [id], onDelete: Cascade)
+  slot      Int
+  createdAt DateTime     @default(now())
+
+  @@unique([paper_id, slot])
+  @@index([test_id])
+}
+
+// Tenant-scoped parent for a learner's full-Reading-paper sitting. Mirrors
+// MockSession (ADR-0008): resumable, server-side forward-only progression
+// derived from the joined Attempt rows. Joins TENANT_SCOPED_MODELS so
+// withOrg(ctx) auto-scopes it; the tenancy fuzzer is extended to cover it.
+model ReadingPaperSession {
+  id           String       @id @default(cuid())
+  org_id       String
+  org          Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  user_id      String
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  paper_id     String
+  paper        ReadingPaper @relation(fields: [paper_id], references: [id], onDelete: Cascade)
+  track        Track
+  status       MockStatus   @default(InProgress)
+  started_at   DateTime     @default(now())
+  submitted_at DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  attempts Attempt[]
+
+  @@index([org_id])
+  @@index([org_id, user_id])
+  @@index([org_id, status])
+  @@index([paper_id])
 }
 
 // One row per successful AI gateway call (chat / realtime mint / TTS /
