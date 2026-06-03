@@ -5,6 +5,7 @@ import { parseReadingPassage } from "@elc/ai";
 import { requireRole } from "@/lib/auth/context";
 import { generateReadingTestForm } from "@/lib/reading/generate-actions";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { ApprovedList } from "@/components/content/approved-list";
 
 export const metadata: Metadata = {
   title: "Reading content moderation",
@@ -19,6 +20,7 @@ type SearchParams = {
   generated?: string;
   generate_error?: string;
   validation_issues?: string;
+  deleted?: string;
 };
 
 const PAGE_SIZE = 25;
@@ -43,9 +45,23 @@ export default async function ReadingModerationPage({
   const db = withSuperAdminContext(ctx);
   const sp = await searchParams;
 
-  const [pending, approvedCount, rejectedCount] = await Promise.all([
+  const [pending, approved, approvedCount, rejectedCount] = await Promise.all([
     db.test.findMany({
       where: { section: "Reading", status: "PendingReview" },
+      orderBy: { createdAt: "desc" },
+      take: PAGE_SIZE,
+      select: {
+        id: true,
+        track: true,
+        difficulty: true,
+        body_json: true,
+        createdAt: true,
+        generated_model: true,
+        _count: { select: { questions: true } },
+      },
+    }),
+    db.test.findMany({
+      where: { section: "Reading", status: "Approved" },
       orderBy: { createdAt: "desc" },
       take: PAGE_SIZE,
       select: {
@@ -89,6 +105,12 @@ export default async function ReadingModerationPage({
           <Banner tone="warn">
             Rejected test <code>{sp.rejected}</code>. It will not reach
             learners.
+          </Banner>
+        ) : null}
+        {sp.deleted ? (
+          <Banner tone="warn">
+            Deleted test <code>{sp.deleted}</code>. It has been permanently
+            removed.
           </Banner>
         ) : null}
         {sp.generated ? (
@@ -260,6 +282,16 @@ export default async function ReadingModerationPage({
             </ul>
           )}
         </section>
+
+        <ApprovedList
+          rows={approved}
+          totalCount={approvedCount}
+          pageSize={PAGE_SIZE}
+          basePath="/content/reading"
+          previewOf={(t) =>
+            parseReadingPassage(t.body_json)?.title ?? "(untitled passage)"
+          }
+        />
       </div>
     </section>
   );

@@ -14,6 +14,7 @@ import {
   rejectListeningTest,
   resynthesiseListeningAudio,
 } from "@/lib/listening/moderation-actions";
+import { ApprovedContentActions } from "@/components/content/approved-actions";
 
 export const metadata: Metadata = {
   title: "Review Listening section",
@@ -28,6 +29,10 @@ type SearchParams = {
   synth_error?: string;
   synth_hint?: string;
   synth_ok?: string;
+  retired?: string;
+  reopened?: string;
+  delete_blocked?: string;
+  attempts?: string;
 };
 
 export default async function ReviewListeningTestPage({
@@ -69,6 +74,10 @@ export default async function ReviewListeningTestPage({
   if (!test || test.section !== "Listening") notFound();
   const content = parseListeningContent(test.body_json);
   if (!content) notFound();
+  const attemptCount =
+    test.status === "Approved"
+      ? await db.attempt.count({ where: { test_id: test.id } })
+      : 0;
 
   const trackLabel =
     test.track === "Academic" ? "Academic" : "General Training";
@@ -135,6 +144,25 @@ export default async function ReviewListeningTestPage({
                   </span>
                 ))
               : null}
+          </Banner>
+        ) : null}
+        {sp.retired ? (
+          <Banner tone="warn">
+            This section has been retired. It is no longer served to learners.
+            Reopen and re-approve it to bring it back.
+          </Banner>
+        ) : null}
+        {sp.reopened ? (
+          <Banner tone="success">
+            This section is back in review (<code>PendingReview</code>). Approve
+            again to re-release it (audio re-synthesises on approval).
+          </Banner>
+        ) : null}
+        {sp.delete_blocked === "has_attempts" ? (
+          <Banner tone="error">
+            This section can&rsquo;t be deleted — it has{" "}
+            <code>{sp.attempts ?? "some"}</code> learner attempt(s). Retire it
+            instead to take it out of circulation without destroying history.
           </Banner>
         ) : null}
 
@@ -216,6 +244,14 @@ export default async function ReviewListeningTestPage({
               </SubmitButton>
             </form>
           </div>
+        ) : null}
+
+        {test.status === "Approved" ? (
+          <ApprovedContentActions
+            testId={test.id}
+            section="Listening"
+            attemptCount={attemptCount}
+          />
         ) : null}
 
         {content.parts.map((part) => (

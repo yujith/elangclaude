@@ -13,6 +13,7 @@ import {
   parseSpeakingIssueCodes,
   validateSpeakingReviewRecord,
 } from "@/lib/speaking/review-validation";
+import { ApprovedContentActions } from "@/components/content/approved-actions";
 
 export const metadata: Metadata = {
   title: "Review Speaking test",
@@ -26,6 +27,10 @@ type SearchParams = {
   approved?: string;
   approve_error?: string;
   validation_issues?: string;
+  retired?: string;
+  reopened?: string;
+  delete_blocked?: string;
+  attempts?: string;
 };
 
 function formatIssueCodes(issueCodes: string[]): string {
@@ -67,6 +72,10 @@ export default async function ReviewSpeakingTestPage({
     },
   });
   if (!test || test.section !== "Speaking") notFound();
+  const attemptCount =
+    test.status === "Approved"
+      ? await db.attempt.count({ where: { test_id: test.id } })
+      : 0;
 
   const content = parseSpeakingContent(test.body_json);
   const issueCodes = parseSpeakingIssueCodes(sp.validation_issues);
@@ -132,6 +141,25 @@ export default async function ReviewSpeakingTestPage({
             This test cannot be approved in its current state. Fix or reject
             it first. Issue codes:{" "}
             <code>{formatIssueCodes(currentIssueCodes)}</code>.
+          </Banner>
+        ) : null}
+        {sp.retired ? (
+          <Banner tone="warn">
+            This test has been retired. It is no longer served to learners.
+            Reopen and re-approve it to bring it back.
+          </Banner>
+        ) : null}
+        {sp.reopened ? (
+          <Banner tone="success">
+            This test is back in review (<code>PendingReview</code>). Approve
+            again to re-release it.
+          </Banner>
+        ) : null}
+        {sp.delete_blocked === "has_attempts" ? (
+          <Banner tone="error">
+            This test can&rsquo;t be deleted — it has{" "}
+            <code>{sp.attempts ?? "some"}</code> learner attempt(s). Retire it
+            instead to take it out of circulation without destroying history.
           </Banner>
         ) : null}
 
@@ -219,6 +247,13 @@ export default async function ReviewSpeakingTestPage({
           </>
         )}
 
+        {status === "Approved" ? (
+          <ApprovedContentActions
+            testId={test.id}
+            section="Speaking"
+            attemptCount={attemptCount}
+          />
+        ) : (
         <section className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6">
           <h2 className="font-heading font-bold text-xl text-brand-black mb-4">
             Decide
@@ -270,6 +305,7 @@ export default async function ReviewSpeakingTestPage({
             </div>
           )}
         </section>
+        )}
       </div>
     </section>
   );

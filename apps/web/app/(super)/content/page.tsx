@@ -26,7 +26,14 @@ type SearchParams = {
   section?: string;
   track?: string;
   difficulty?: string;
+  view?: string;
 };
+
+type View = "pending" | "approved";
+
+function parseView(raw: unknown): View {
+  return raw === "approved" ? "approved" : "pending";
+}
 
 function parseSection(raw: unknown): Section | null {
   return SECTIONS.includes(raw as Section) ? (raw as Section) : null;
@@ -90,14 +97,26 @@ function previewFor(test: {
 }
 
 function buildFilterHref(
-  current: { section: Section | null; track: Track | null; difficulty: number | null },
-  patch: Partial<{ section: Section | null; track: Track | null; difficulty: number | null }>,
+  current: {
+    section: Section | null;
+    track: Track | null;
+    difficulty: number | null;
+    view: View;
+  },
+  patch: Partial<{
+    section: Section | null;
+    track: Track | null;
+    difficulty: number | null;
+    view: View;
+  }>,
 ): string {
   const next = { ...current, ...patch };
   const params = new URLSearchParams();
   if (next.section) params.set("section", next.section);
   if (next.track) params.set("track", next.track);
   if (next.difficulty) params.set("difficulty", String(next.difficulty));
+  // `pending` is the default view, so only serialise the approved override.
+  if (next.view === "approved") params.set("view", "approved");
   const query = params.toString();
   return query ? `/content?${query}` : "/content";
 }
@@ -114,15 +133,17 @@ export default async function ContentInboxPage({
   const sectionFilter = parseSection(sp.section);
   const trackFilter = parseTrack(sp.track);
   const difficultyFilter = parseDifficulty(sp.difficulty);
+  const view = parseView(sp.view);
+  const statusFilter = view === "approved" ? "Approved" : "PendingReview";
 
   const filterWhere = {
-    status: "PendingReview" as const,
+    status: statusFilter as "Approved" | "PendingReview",
     ...(sectionFilter ? { section: sectionFilter } : {}),
     ...(trackFilter ? { track: trackFilter } : {}),
     ...(difficultyFilter ? { difficulty: difficultyFilter } : {}),
   };
 
-  const [pending, perSectionCounts] = await Promise.all([
+  const [rows, perSectionCounts] = await Promise.all([
     db.test.findMany({
       where: filterWhere,
       orderBy: { createdAt: "desc" },
@@ -145,14 +166,16 @@ export default async function ContentInboxPage({
         _count: { select: { questions: true } },
       },
     }),
+    // Per-section counts for the active view (pending or approved), so the
+    // section cards reflect whichever lifecycle stage is being browsed.
     db.test.groupBy({
       by: ["section"],
-      where: { status: "PendingReview" },
+      where: { status: statusFilter },
       _count: { _all: true },
     }),
   ]);
 
-  const pendingBySection = new Map<Section, number>(
+  const countsBySection = new Map<Section, number>(
     perSectionCounts.map((r) => [r.section, r._count._all]),
   );
 
@@ -160,6 +183,7 @@ export default async function ContentInboxPage({
     section: sectionFilter,
     track: trackFilter,
     difficulty: difficultyFilter,
+    view,
   };
 
   return (
@@ -170,18 +194,55 @@ export default async function ContentInboxPage({
             SuperAdmin
           </p>
           <h1 className="mt-2 font-display italic font-bold text-4xl md:text-5xl text-brand-black leading-tight">
-            Content queue.
+            {view === "approved" ? "Approved content." : "Content queue."}
           </h1>
           <p className="mt-3 font-body text-base text-brand-grey-700 max-w-2xl">
-            Every test currently <code>PendingReview</code> across all four
-            sections. Click <em>Review</em> on a row to open the section-specific
-            approval surface &mdash; nothing here bypasses the contract guards.
+            {view === "approved" ? (
+              <>
+                Every <code>Approved</code> test live for learners, across all
+                four sections. Click <em>Manage</em> on a row to retire, reopen,
+                or delete it &mdash; lifecycle changes still run through the
+                section guards.
+              </>
+            ) : (
+              <>
+                Every test currently <code>PendingReview</code> across all four
+                sections. Click <em>Review</em> on a row to open the
+                section-specific approval surface &mdash; nothing here bypasses
+                the contract guards.
+              </>
+            )}
           </p>
         </header>
 
+        <div
+          role="tablist"
+          aria-label="Content lifecycle stage"
+          className="inline-flex rounded-pill ring-1 ring-brand-grey-200 bg-brand-white p-1"
+        >
+          {(["pending", "approved"] as const).map((v) => {
+            const isActive = view === v;
+            return (
+              <Link
+                key={v}
+                role="tab"
+                aria-selected={isActive}
+                href={buildFilterHref(current, { view: v })}
+                className={`rounded-pill px-5 py-2 font-heading font-bold text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 ${
+                  isActive
+                    ? "bg-brand-black text-white"
+                    : "text-brand-grey-700 hover:text-brand-black"
+                }`}
+              >
+                {v === "approved" ? "Approved" : "Pending review"}
+              </Link>
+            );
+          })}
+        </div>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {SECTIONS.map((s) => {
-            const count = pendingBySection.get(s) ?? 0;
+            const count = countsBySection.get(s) ?? 0;
             const isActive = sectionFilter === s;
             return (
               <Link
@@ -214,7 +275,7 @@ export default async function ContentInboxPage({
                     isActive ? "text-brand-grey-200" : "text-brand-grey-500"
                   }`}
                 >
-                  pending
+                  {view === "approved" ? "approved" : "pending"}
                 </p>
               </Link>
             );
@@ -258,7 +319,10 @@ export default async function ContentInboxPage({
           ))}
           {sectionFilter || trackFilter || difficultyFilter ? (
             <Link
-              href="/content"
+              href={buildFilterHref(
+                { section: null, track: null, difficulty: null, view },
+                {},
+              )}
               className="ml-auto font-body text-sm text-brand-grey-700 hover:text-brand-black underline-offset-4 hover:underline"
             >
               Clear filters
@@ -289,14 +353,15 @@ export default async function ContentInboxPage({
 
         <section>
           <h2 className="font-heading font-bold text-xl text-brand-black mb-4">
-            Pending review ({pending.length}
-            {pending.length === PAGE_SIZE ? "+" : ""})
+            {view === "approved" ? "Approved" : "Pending review"} ({rows.length}
+            {rows.length === PAGE_SIZE ? "+" : ""})
           </h2>
           <div className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 overflow-hidden">
-            {pending.length === 0 ? (
+            {rows.length === 0 ? (
               <p className="px-6 py-8 font-body text-base text-brand-grey-700">
-                Nothing pending under these filters. Generate new content above
-                or clear filters to widen the view.
+                {view === "approved"
+                  ? "No approved content under these filters. Switch to Pending review or clear filters to widen the view."
+                  : "Nothing pending under these filters. Generate new content above or clear filters to widen the view."}
               </p>
             ) : (
               <table className="w-full text-left">
@@ -312,7 +377,7 @@ export default async function ContentInboxPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brand-grey-200">
-                  {pending.map((t) => {
+                  {rows.map((t) => {
                     const preview = previewFor(t);
                     return (
                     <tr key={t.id}>
@@ -329,7 +394,7 @@ export default async function ContentInboxPage({
                             </span>
                           ) : (
                             <span className="font-body text-xs italic text-brand-grey-500">
-                              (untitled — review to inspect)
+                              (untitled — open to inspect)
                             </span>
                           )}
                         </div>
@@ -371,7 +436,7 @@ export default async function ContentInboxPage({
                           href={`/content/${SECTION_PATHS[t.section]}/${t.id}`}
                           className="inline-flex items-center rounded-pill bg-brand-red px-4 py-1.5 font-heading font-bold text-xs text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
                         >
-                          Review →
+                          {view === "approved" ? "Manage →" : "Review →"}
                         </Link>
                       </Td>
                     </tr>
@@ -381,7 +446,7 @@ export default async function ContentInboxPage({
               </table>
             )}
           </div>
-          {pending.length === PAGE_SIZE ? (
+          {rows.length === PAGE_SIZE ? (
             <p className="mt-3 font-body text-xs text-brand-grey-500">
               Showing the {PAGE_SIZE} newest. Narrow with the filters above to
               see older items.

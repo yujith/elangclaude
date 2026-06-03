@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/context";
 import { parseSpeakingContent } from "@/lib/speaking/content";
 import { generateSpeakingTestForm } from "@/lib/speaking/generate-actions";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { ApprovedList } from "@/components/content/approved-list";
 
 export const metadata: Metadata = {
   title: "Speaking content moderation",
@@ -19,6 +20,7 @@ type SearchParams = {
   generated?: string;
   generate_error?: string;
   validation_issues?: string;
+  deleted?: string;
 };
 
 const PAGE_SIZE = 25;
@@ -37,7 +39,7 @@ export default async function SpeakingModerationPage({
   const db = withSuperAdminContext(ctx);
   const sp = await searchParams;
 
-  const [pending, approvedCount, rejectedCount] = await Promise.all([
+  const [pending, approved, approvedCount, rejectedCount] = await Promise.all([
     db.test.findMany({
       where: { section: "Speaking", status: "PendingReview" },
       orderBy: { createdAt: "desc" },
@@ -49,6 +51,20 @@ export default async function SpeakingModerationPage({
         createdAt: true,
         generated_model: true,
         body_json: true,
+      },
+    }),
+    db.test.findMany({
+      where: { section: "Speaking", status: "Approved" },
+      orderBy: { createdAt: "desc" },
+      take: PAGE_SIZE,
+      select: {
+        id: true,
+        track: true,
+        difficulty: true,
+        body_json: true,
+        createdAt: true,
+        generated_model: true,
+        _count: { select: { questions: true } },
       },
     }),
     db.test.count({ where: { section: "Speaking", status: "Approved" } }),
@@ -83,6 +99,12 @@ export default async function SpeakingModerationPage({
           <Banner tone="warn">
             Rejected test <code>{sp.rejected}</code>. It will not reach
             learners.
+          </Banner>
+        ) : null}
+        {sp.deleted ? (
+          <Banner tone="warn">
+            Deleted test <code>{sp.deleted}</code>. It has been permanently
+            removed.
           </Banner>
         ) : null}
         {sp.generated ? (
@@ -262,6 +284,21 @@ export default async function SpeakingModerationPage({
             </ul>
           )}
         </section>
+
+        <ApprovedList
+          rows={approved}
+          totalCount={approvedCount}
+          pageSize={PAGE_SIZE}
+          basePath="/content/speaking"
+          previewOf={(t) => {
+            const content = parseSpeakingContent(t.body_json);
+            return (
+              content?.part2.cue_card_topic ??
+              content?.topic_domain ??
+              "(speaking test)"
+            );
+          }}
+        />
       </div>
     </section>
   );

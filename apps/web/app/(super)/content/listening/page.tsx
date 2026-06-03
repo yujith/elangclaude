@@ -22,6 +22,7 @@ type SearchParams = {
   synth_error?: string;
   synth_hint?: string;
   dropped?: string;
+  deleted?: string;
 };
 
 const PAGE_SIZE = 25;
@@ -62,7 +63,7 @@ export default async function ListeningModerationPage({
     db.test.findMany({
       where: { section: "Listening", status: "Approved" },
       orderBy: { createdAt: "desc" },
-      take: 10,
+      take: PAGE_SIZE,
       select: {
         id: true,
         track: true,
@@ -104,6 +105,12 @@ export default async function ListeningModerationPage({
           <Banner tone="warn">
             Rejected test <code>{sp.rejected}</code>. It will not reach
             learners.
+          </Banner>
+        ) : null}
+        {sp.deleted ? (
+          <Banner tone="warn">
+            Deleted test <code>{sp.deleted}</code>. It has been permanently
+            removed.
           </Banner>
         ) : null}
         {sp.generated ? (

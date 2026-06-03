@@ -17,6 +17,7 @@ import {
   editWritingPrompt,
   rejectWritingTest,
 } from "@/lib/writing/moderation-actions";
+import { ApprovedContentActions } from "@/components/content/approved-actions";
 
 export const metadata: Metadata = {
   title: "Review Writing task",
@@ -32,6 +33,10 @@ type SearchParams = {
   approve_error?: string;
   edit_error?: string;
   validation_issues?: string;
+  retired?: string;
+  reopened?: string;
+  delete_blocked?: string;
+  attempts?: string;
 };
 
 function formatIssueCodes(issueCodes: string[]): string {
@@ -71,6 +76,10 @@ export default async function ReviewWritingTaskPage({
   if (!test || test.section !== "Writing") notFound();
   const question = test.questions[0];
   if (!question) notFound();
+  const attemptCount =
+    test.status === "Approved"
+      ? await db.attempt.count({ where: { test_id: test.id } })
+      : 0;
 
   const kindLabel = isWritingTaskType(question.type)
     ? taskShortLabel(question.type)
@@ -163,6 +172,25 @@ export default async function ReviewWritingTaskPage({
             <code>{formatIssueCodes(currentIssueCodes)}</code>.
           </Banner>
         ) : null}
+        {sp.retired ? (
+          <Banner tone="warn">
+            This task has been retired. It is no longer served to learners.
+            Reopen and re-approve it to bring it back.
+          </Banner>
+        ) : null}
+        {sp.reopened ? (
+          <Banner tone="success">
+            This task is back in review (<code>PendingReview</code>). Edit the
+            prompt if needed, then approve to re-release it.
+          </Banner>
+        ) : null}
+        {sp.delete_blocked === "has_attempts" ? (
+          <Banner tone="error">
+            This task can&rsquo;t be deleted — it has{" "}
+            <code>{sp.attempts ?? "some"}</code> learner attempt(s). Retire it
+            instead to take it out of circulation without destroying history.
+          </Banner>
+        ) : null}
 
         {bodyMeta.length > 0 ? (
           <article className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6">
@@ -235,6 +263,13 @@ export default async function ReviewWritingTaskPage({
           </article>
         ) : null}
 
+        {status === "Approved" ? (
+          <ApprovedContentActions
+            testId={test.id}
+            section="Writing"
+            attemptCount={attemptCount}
+          />
+        ) : (
         <section className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6">
           <h2 className="font-heading font-bold text-xl text-brand-black mb-4">
             Decide
@@ -286,6 +321,7 @@ export default async function ReviewWritingTaskPage({
             </div>
           )}
         </section>
+        )}
       </div>
     </section>
   );

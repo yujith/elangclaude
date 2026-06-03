@@ -212,6 +212,10 @@ Full schema lives in `packages/db/prisma/schema.prisma`. **That file is canonica
 
 Super-level events (org CRUD, content moderation, anything an OrgAdmin never originates) write `ActivityLog` rows under a fixed `Organization` with `id = "system"` (`SYSTEM_ORG_ID` in `@elc/db`). OrgAdmin views filter by their own `org_id` via `withOrg(ctx)` and therefore never see these rows. **Never write a `super.*` or `content.*` ActivityLog under a customer org's id.** See `packages/db/src/system-org.ts` and the migration `20260520194500_super_activity_to_system_org`.
 
+### Approved-content lifecycle (SuperAdmin)
+
+`/content` has a Pending / Approved view toggle, and each `/content/{section}` page lists approved content with a "Manage" drill-down. On the section review page, an `Approved` test can be **retired** (`Approved → Rejected` — reuses the existing status, logged `content.{section}.retired`), **reopened** (`Approved → PendingReview`, logged `content.{section}.reopened`), or **hard-deleted**. Delete is guarded: it is refused unless the test has **zero `Attempt` rows**, because `Attempt.test` cascades to `Answer`/`Grade`/`Recording` — the attempt count is taken cross-org via `withSuperAdminContext()`. The retire/reopen/delete *policy* is the pure module `packages/db/src/content-lifecycle.ts` (`planRetire`/`planReopen`/`planDelete`); the server actions live in `apps/web/lib/content/lifecycle-actions.ts`. See `docs/adr/0021-approved-content-lifecycle.md`.
+
 ## Folder layout
 
 ```

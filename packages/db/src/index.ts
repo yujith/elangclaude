@@ -9,6 +9,12 @@ export { withOrg, withSuperAdminContext, RoleRequiredError, TENANT_SCOPED_MODELS
 export type { OrgContext } from "./tenancy";
 export { SYSTEM_ORG_ID, SYSTEM_ORG_NAME } from "./system-org";
 export { firstNameFrom } from "./display-name";
+export { planRetire, planReopen, planDelete } from "./content-lifecycle";
+export type {
+  TestStatusName,
+  TransitionDecision,
+  DeleteDecision,
+} from "./content-lifecycle";
 
 export { getLearnerDashboard } from "./learner-dashboard";
 export type {
