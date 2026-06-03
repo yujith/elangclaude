@@ -76,14 +76,42 @@ export type CompletionBlock = {
 // passages leave this field unset.
 export type GtContext = "social-survival" | "workplace" | "general-reading";
 
+// The passage's position within a full IELTS Reading paper: Part 1, 2, or
+// 3. For Academic, this is an explicit label the SuperAdmin stamps at
+// generation time (the three passages escalate in difficulty). For GT the
+// canonical part is derived from `gt_context` (social-survival → 1,
+// workplace → 2, general-reading → 3) — see `readingPart()` — so GT rows
+// leave this field unset rather than store the part twice. Used by the
+// learner picker's part filter and as a hint when curating a full paper.
+export type ReadingPart = 1 | 2 | 3;
+
 export type ReadingPassage = {
   title?: string;
   paragraphs: ReadingParagraph[];
   matching_groups?: MatchingGroup[];
   completion_blocks?: CompletionBlock[];
   gt_context?: GtContext;
+  part?: ReadingPart;
   word_count?: number;
 };
+
+// Canonical Part 1/2/3 for a passage. GT derives it from gt_context so the
+// section name and the part number never disagree; Academic uses the
+// stamped `part`. Returns null when neither is set (unlabelled — shows as
+// "Part —" and only under the picker's "All parts" view).
+const GT_CONTEXT_PART: Record<GtContext, ReadingPart> = {
+  "social-survival": 1,
+  workplace: 2,
+  "general-reading": 3,
+};
+
+export function readingPart(passage: {
+  gt_context?: GtContext;
+  part?: ReadingPart;
+}): ReadingPart | null {
+  if (passage.gt_context) return GT_CONTEXT_PART[passage.gt_context];
+  return passage.part ?? null;
+}
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -244,6 +272,10 @@ function parseGtContext(raw: unknown): GtContext | undefined {
   return GT_CONTEXTS.has(raw as GtContext) ? (raw as GtContext) : undefined;
 }
 
+function parseReadingPart(raw: unknown): ReadingPart | undefined {
+  return raw === 1 || raw === 2 || raw === 3 ? raw : undefined;
+}
+
 // IELTS Reading passages only carry visible paragraph letters (A, B, C, …)
 // when the question set references them: matching-headings ("Pick a
 // heading for Paragraph B") or matching-information ("Which paragraph
@@ -290,6 +322,7 @@ export function parseReadingPassage(raw: unknown): ReadingPassage | null {
     matching_groups: groups.length > 0 ? groups : undefined,
     completion_blocks: blocks.length > 0 ? blocks : undefined,
     gt_context: parseGtContext(raw.gt_context),
+    part: parseReadingPart(raw.part),
     word_count:
       typeof raw.word_count === "number" && Number.isFinite(raw.word_count)
         ? raw.word_count

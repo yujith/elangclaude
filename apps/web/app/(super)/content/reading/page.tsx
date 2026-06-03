@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { withSuperAdminContext } from "@elc/db";
-import { parseReadingPassage } from "@elc/ai";
+import { parseReadingPassage, readingPart } from "@elc/ai";
 import { requireRole } from "@/lib/auth/context";
 import { generateReadingTestForm } from "@/lib/reading/generate-actions";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -178,6 +178,28 @@ export default async function ReadingModerationPage({
                 className="w-20 rounded-md ring-1 ring-brand-grey-300 bg-white px-3 py-2 font-body text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
               />
             </div>
+            <div>
+              <label
+                htmlFor="part"
+                className="block font-heading font-bold text-xs uppercase tracking-wide text-brand-grey-600 mb-1"
+              >
+                Part
+              </label>
+              <select
+                id="part"
+                name="part"
+                defaultValue=""
+                className="rounded-md ring-1 ring-brand-grey-300 bg-white px-3 py-2 font-body text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
+              >
+                <option value="">Any</option>
+                <option value="1">Part 1</option>
+                <option value="2">Part 2</option>
+                <option value="3">Part 3</option>
+              </select>
+              <p className="mt-1 font-body text-[11px] text-brand-grey-500">
+                Academic only — GT uses its section.
+              </p>
+            </div>
             <div className="flex-1 min-w-[16rem]">
               <label
                 htmlFor="topicHint"
@@ -221,14 +243,20 @@ export default async function ReadingModerationPage({
                 const firstPara = passage?.paragraphs[0]?.text ?? "";
                 const trackLabel =
                   t.track === "Academic" ? "Academic" : "General Training";
+                const part = passage ? readingPart(passage) : null;
                 return (
                   <li
                     key={t.id}
                     className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6 flex flex-col gap-4"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="inline-flex items-center rounded-pill bg-brand-black text-white font-heading font-bold text-xs px-3 py-1">
-                        {trackLabel}
+                      <span className="inline-flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-pill bg-brand-black text-white font-heading font-bold text-xs px-3 py-1">
+                          {trackLabel}
+                        </span>
+                        <span className="inline-flex items-center rounded-pill ring-1 ring-brand-grey-300 text-brand-grey-700 font-heading font-bold text-xs px-3 py-1">
+                          {part ? `Part ${part}` : "Part —"}
+                        </span>
                       </span>
                       <span
                         className="font-body text-xs text-brand-grey-500"

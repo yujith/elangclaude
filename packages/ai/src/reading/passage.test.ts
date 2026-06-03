@@ -3,7 +3,11 @@
 // for the label-visibility rule which the renderers depend on.
 
 import { describe, expect, it } from "vitest";
-import { passageNeedsParagraphLabels } from "./passage";
+import {
+  parseReadingPassage,
+  passageNeedsParagraphLabels,
+  readingPart,
+} from "./passage";
 
 describe("passageNeedsParagraphLabels", () => {
   it("returns true when a test contains matching-headings", () => {
@@ -61,5 +65,44 @@ describe("passageNeedsParagraphLabels", () => {
         "reading-true-false-not-given",
       ]),
     ).toBe(false);
+  });
+});
+
+describe("readingPart", () => {
+  it("uses the stamped Academic part", () => {
+    expect(readingPart({ part: 2 })).toBe(2);
+  });
+
+  it("derives the GT part from gt_context", () => {
+    expect(readingPart({ gt_context: "social-survival" })).toBe(1);
+    expect(readingPart({ gt_context: "workplace" })).toBe(2);
+    expect(readingPart({ gt_context: "general-reading" })).toBe(3);
+  });
+
+  it("prefers gt_context over a stray stamped part (GT is canonical)", () => {
+    expect(readingPart({ gt_context: "workplace", part: 1 })).toBe(2);
+  });
+
+  it("returns null when unlabelled", () => {
+    expect(readingPart({})).toBeNull();
+  });
+});
+
+describe("parseReadingPassage — part", () => {
+  const base = {
+    paragraphs: [{ label: "A", text: "Some passage text." }],
+  };
+
+  it("round-trips a valid part", () => {
+    expect(parseReadingPassage({ ...base, part: 3 })?.part).toBe(3);
+  });
+
+  it("drops an out-of-range part", () => {
+    expect(parseReadingPassage({ ...base, part: 4 })?.part).toBeUndefined();
+    expect(parseReadingPassage({ ...base, part: "2" })?.part).toBeUndefined();
+  });
+
+  it("leaves part undefined when absent", () => {
+    expect(parseReadingPassage(base)?.part).toBeUndefined();
   });
 });

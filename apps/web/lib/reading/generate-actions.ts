@@ -50,6 +50,14 @@ function parseDifficulty(raw: unknown): number | null {
   return n;
 }
 
+// Optional Academic part selector. Absent / "any" → undefined (unlabelled).
+function parsePart(raw: unknown): 1 | 2 | 3 | undefined {
+  if (raw === "1" || raw === 1) return 1;
+  if (raw === "2" || raw === 2) return 2;
+  if (raw === "3" || raw === 3) return 3;
+  return undefined;
+}
+
 // Programmatic entry — called from server-side code (Phase 6 UI, tests,
 // the form-action wrapper below). Returns a typed outcome so the caller
 // can render the failure path without throwing.
@@ -57,6 +65,10 @@ export async function generateReadingTest(input: {
   track: "Academic" | "GeneralTraining";
   difficulty: number;
   topicHint?: string;
+  // Academic-only IELTS part (1/2/3). Stamped onto body_json so learners
+  // can filter by part and a full paper can be curated. Ignored for GT,
+  // whose part is derived from gt_context.
+  part?: 1 | 2 | 3;
 }): Promise<GenerateReadingOutcome> {
   const ctx = await requireRole("SuperAdmin");
   try {
@@ -70,6 +82,7 @@ export async function generateReadingTest(input: {
       generatedById: ctx.user_id,
       difficulty: input.difficulty,
       generatedModel: result.model,
+      part: input.track === "Academic" ? input.part : undefined,
     });
     return {
       ok: true,
@@ -131,6 +144,7 @@ export async function generateReadingTestForm(formData: FormData): Promise<void>
     typeof topicRaw === "string" && topicRaw.trim().length > 0
       ? topicRaw.trim()
       : undefined;
+  const part = parsePart(formData.get("part"));
 
   // The form can be embedded on multiple SuperAdmin surfaces; the
   // `returnTo` hidden field lets each surface specify where to land. We
@@ -142,7 +156,7 @@ export async function generateReadingTestForm(formData: FormData): Promise<void>
       ? returnToRaw
       : "/content/reading";
 
-  const outcome = await generateReadingTest({ track, difficulty, topicHint });
+  const outcome = await generateReadingTest({ track, difficulty, topicHint, part });
   if (!outcome.ok) {
     const params = new URLSearchParams({ generate_error: outcome.error });
     if (outcome.error === "validation" && outcome.validationIssues) {

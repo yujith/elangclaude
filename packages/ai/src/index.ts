@@ -87,10 +87,12 @@ export type {
 export {
   parseReadingPassage,
   passageNeedsParagraphLabels,
+  readingPart,
 } from "./reading/passage";
 export type {
   ReadingPassage,
   ReadingParagraph,
+  ReadingPart,
   MatchingGroup,
   MatchingGroupKind,
   CompletionBlock,

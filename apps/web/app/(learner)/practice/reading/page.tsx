@@ -3,7 +3,9 @@ import Link from "next/link";
 import { withOrg } from "@elc/db";
 import {
   parseReadingPassage,
+  readingPart,
   type GtContext,
+  type ReadingPart,
   type ReadingPassage,
 } from "@elc/ai";
 import { requireOrgContext } from "@/lib/auth/context";
@@ -20,6 +22,7 @@ type SearchParams = {
   mode?: string;
   difficulty?: string;
   gt_section?: string;
+  part?: string;
 };
 
 type Mode = "section" | "mock";
@@ -32,6 +35,14 @@ function parseDifficulty(raw: unknown): number | null {
   if (typeof raw !== "string") return null;
   const value = Number(raw);
   return Number.isInteger(value) && value >= 1 && value <= 5 ? value : null;
+}
+
+// Academic part filter (1/2/3). GT learners filter by gt_section instead,
+// so the part filter is hidden for them.
+function parsePart(raw: unknown): ReadingPart | null {
+  return raw === "1" || raw === "2" || raw === "3"
+    ? (Number(raw) as ReadingPart)
+    : null;
 }
 
 function difficultyDots(level: number): string {
@@ -93,6 +104,7 @@ export default async function ReadingPickerPage({
 
   const gtSection =
     me.ielts_track === "GeneralTraining" ? parseGtSection(sp.gt_section) : null;
+  const part = me.ielts_track === "Academic" ? parsePart(sp.part) : null;
 
   // Test is a global model — withOrg passes through unscoped, which is
   // correct: the content pool is shared across orgs.
@@ -123,12 +135,13 @@ export default async function ReadingPickerPage({
       const section = (t.passage.gt_context ?? "uncategorised") as GtSectionKey;
       if (section !== gtSection) return false;
     }
+    if (part !== null && readingPart(t.passage) !== part) return false;
     return true;
   });
 
   const trackLabel =
     me.ielts_track === "Academic" ? "Academic" : "General Training";
-  const hasFilters = difficulty !== null || gtSection !== null;
+  const hasFilters = difficulty !== null || gtSection !== null || part !== null;
 
   return (
     <section className="px-6 py-12 md:py-16">
@@ -158,7 +171,9 @@ export default async function ReadingPickerPage({
             <ReadingFilters
               difficulty={difficulty}
               gtSection={gtSection}
+              part={part}
               showGtSection={me.ielts_track === "GeneralTraining"}
+              showPart={me.ielts_track === "Academic"}
               hasFilters={hasFilters}
               total={decorated.length}
               filtered={filtered.length}
@@ -258,14 +273,18 @@ function FullMockPlaceholder({
 function ReadingFilters({
   difficulty,
   gtSection,
+  part,
   showGtSection,
+  showPart,
   hasFilters,
   total,
   filtered,
 }: {
   difficulty: number | null;
   gtSection: GtSectionKey | null;
+  part: ReadingPart | null;
   showGtSection: boolean;
+  showPart: boolean;
   hasFilters: boolean;
   total: number;
   filtered: number;
@@ -278,7 +297,7 @@ function ReadingFilters({
       <form
         action="/practice/reading"
         method="get"
-        className="grid w-full gap-3 sm:w-auto sm:grid-cols-[minmax(9rem,0.7fr)_minmax(11rem,0.9fr)_auto_auto] sm:items-end"
+        className="grid w-full gap-3 sm:w-auto sm:grid-cols-[repeat(auto-fit,minmax(9rem,auto))] sm:items-end"
       >
         <input type="hidden" name="mode" value="section" />
         <FilterSelect
@@ -293,6 +312,18 @@ function ReadingFilters({
             </option>
           ))}
         </FilterSelect>
+        {showPart ? (
+          <FilterSelect
+            label="Part"
+            name="part"
+            value={part === null ? "" : String(part)}
+          >
+            <option value="">Any part</option>
+            <option value="1">Part 1</option>
+            <option value="2">Part 2</option>
+            <option value="3">Part 3</option>
+          </FilterSelect>
+        ) : null}
         {showGtSection ? (
           <FilterSelect
             label="GT section"
@@ -387,6 +418,9 @@ function PassageRow({
 }) {
   const firstPara = test.passage.paragraphs[0]?.text ?? "";
   const section = (test.passage.gt_context ?? "uncategorised") as GtSectionKey;
+  // Part badge is only meaningful for Academic rows — GT surfaces its
+  // section name in the metrics row instead.
+  const part = showGtSection ? null : readingPart(test.passage);
   return (
     <li className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 px-5 py-4">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_11rem] lg:items-center">
@@ -395,6 +429,11 @@ function PassageRow({
             <span className="inline-flex items-center rounded-pill bg-brand-black text-white font-heading font-bold text-xs px-3 py-1">
               Reading · {trackLabel}
             </span>
+            {part ? (
+              <span className="inline-flex items-center rounded-pill ring-1 ring-brand-grey-300 text-brand-grey-700 font-heading font-bold text-xs px-3 py-1">
+                Part {part}
+              </span>
+            ) : null}
             <span
               className="font-body text-xs text-brand-grey-500"
               aria-label={`Difficulty ${test.difficulty} of 5`}

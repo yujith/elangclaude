@@ -12,6 +12,7 @@
 
 import { Prisma } from "@elc/db";
 import type { prisma } from "@elc/db/client";
+import type { ReadingPart } from "../reading/passage";
 import type { GeneratedReading } from "./schema";
 
 // Structural slice of the production PrismaClient. Tests pass a tiny
@@ -29,7 +30,10 @@ function questionPayloadToJson(
   return q.correct_answer as unknown as Prisma.InputJsonValue;
 }
 
-function passageBodyJson(value: GeneratedReading): Prisma.InputJsonValue {
+function passageBodyJson(
+  value: GeneratedReading,
+  part: ReadingPart | undefined,
+): Prisma.InputJsonValue {
   return {
     ...(value.passage.title ? { title: value.passage.title } : {}),
     paragraphs: value.passage.paragraphs,
@@ -39,6 +43,10 @@ function passageBodyJson(value: GeneratedReading): Prisma.InputJsonValue {
     ...(value.passage.gt_context
       ? { gt_context: value.passage.gt_context }
       : {}),
+    // Part is a SuperAdmin-chosen label, stamped here rather than trusted
+    // from the model. Only meaningful for Academic — GT derives its part
+    // from gt_context (see readingPart()), so we don't store it there.
+    ...(part && !value.passage.gt_context ? { part } : {}),
   } as unknown as Prisma.InputJsonValue;
 }
 
@@ -59,6 +67,10 @@ export async function persistGeneratedReading(
     // The model that generated this content (gateway ChatResponse.model).
     // Stored on Test.generated_model so moderation can see provenance.
     generatedModel?: string;
+    // The IELTS Reading part (1/2/3) the SuperAdmin assigned. Academic
+    // only — stamped onto body_json so the learner picker can filter by
+    // part and paper curation can slot it. Ignored for GT (gt_context wins).
+    part?: ReadingPart;
   },
 ): Promise<PersistResult> {
   void opts.generatedById; // currently logged at the route layer, not here
@@ -69,7 +81,7 @@ export async function persistGeneratedReading(
       difficulty: opts.difficulty ?? value.difficulty,
       // PendingReview rows have no approver until Phase 6 promotes them.
       status: "PendingReview",
-      body_json: passageBodyJson(value),
+      body_json: passageBodyJson(value, opts.part),
       generated_model: opts.generatedModel ?? null,
     },
     select: { id: true },
