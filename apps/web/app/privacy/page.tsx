@@ -10,6 +10,7 @@ import {
   UL,
 } from "@/components/legal/legal-shell";
 import { POLICIES } from "@/lib/legal/policies";
+import { OPERATING_ENTITY } from "@/lib/legal/entity";
 
 const meta = POLICIES.privacy;
 
@@ -35,6 +36,15 @@ export default function PrivacyPage() {
       </P>
 
       <H2 id="controller">1. Who is responsible for your data</H2>
+      <P>
+        eLanguage Center is operated by{" "}
+        <strong>{OPERATING_ENTITY.legalName}</strong> (ABN{" "}
+        {OPERATING_ENTITY.abn}), a sole trader trading as{" "}
+        <A href={OPERATING_ENTITY.tradingUrl}>{OPERATING_ENTITY.tradingAs}</A>,
+        based in {OPERATING_ENTITY.jurisdiction}. References to
+        &ldquo;eLanguage Center&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo; and
+        &ldquo;our&rdquo; mean that operator.
+      </P>
       <P>
         If you signed up for eLanguage Center yourself (an individual account),
         eLanguage Center is the <strong>data controller</strong> of your

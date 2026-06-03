@@ -5,7 +5,11 @@ India's DPDP, and the SEA PDPAs. Last reviewed: 2026-06-01.
 
 ## Controller details
 
-- **Self-serve individuals:** eLanguage Center is the controller.
+- **Operating entity:** eLanguage Center is operated by Dilshika Colombage
+  (ABN 91 930 042 126), an Australian sole trader trading as MustardLabs
+  (https://www.mustardlabs.org). Not an incorporated company — no
+  "Pty Ltd"/"Inc.". Source of truth: `apps/web/lib/legal/entity.ts`.
+- **Self-serve individuals:** that operator (eLanguage Center) is the controller.
 - **Org-seat learners:** the buying Organization is the controller; eLanguage
   Center is the processor (see `Organization.controller_model`).
 - Contact: privacy@elanguagecenter.com

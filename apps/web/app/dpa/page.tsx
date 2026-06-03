@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { A, H2, LI, LegalShell, P, UL } from "@/components/legal/legal-shell";
 import { POLICIES } from "@/lib/legal/policies";
+import { OPERATING_ENTITY } from "@/lib/legal/entity";
 
 const meta = POLICIES.dpa;
 
@@ -13,8 +14,10 @@ export default function DpaPage() {
         This Data Processing Addendum (&ldquo;DPA&rdquo;) applies where an
         organisation (the &ldquo;Customer&rdquo;) uses eLanguage Center to
         process personal data of its learners. It forms part of the agreement
-        between the Customer and eLanguage Center. The Customer is the{" "}
-        <strong>controller</strong>; eLanguage Center is the{" "}
+        between the Customer and {OPERATING_ENTITY.legalName} (ABN{" "}
+        {OPERATING_ENTITY.abn}), a sole trader trading as{" "}
+        {OPERATING_ENTITY.tradingAs}, which operates eLanguage Center. The
+        Customer is the <strong>controller</strong>; eLanguage Center is the{" "}
         <strong>processor</strong>. Individual self-serve users are covered by
         the <A href="/privacy">Privacy Policy</A> instead, where eLanguage Center
         is the controller.

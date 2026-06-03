@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "./logo";
+import { OPERATING_ENTITY } from "@/lib/legal/entity";
 
 const ORG_EMAIL = "hello@elanguagecenter.com";
 
@@ -72,6 +73,18 @@ export function SiteFooter() {
           <p className="font-body text-sm text-brand-grey-400 max-w-xs">
             Built for IELTS Academic and General Training. AI-generated practice,
             AI-graded feedback.
+          </p>
+          <p className="font-body text-sm text-brand-grey-400">
+            A{" "}
+            <a
+              href={OPERATING_ENTITY.tradingUrl}
+              rel="noreferrer"
+              target="_blank"
+              className="text-white hover:text-brand-red focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black rounded-sm"
+            >
+              {OPERATING_ENTITY.tradingAs}
+            </a>{" "}
+            product.
           </p>
         </div>
         <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">

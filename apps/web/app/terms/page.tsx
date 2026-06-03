@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { A, H2, LI, LegalShell, P, UL } from "@/components/legal/legal-shell";
 import { POLICIES } from "@/lib/legal/policies";
+import { OPERATING_ENTITY } from "@/lib/legal/entity";
 
 const meta = POLICIES.terms;
 
@@ -11,10 +12,14 @@ export default function TermsPage() {
     <LegalShell title={meta.title} effectiveDate={meta.effectiveDate} version={meta.version}>
       <P>
         These Terms of Service (&ldquo;Terms&rdquo;) govern your use of
-        eLanguage Center. By creating an account or using the service you agree
-        to these Terms and to our <A href="/privacy">Privacy Policy</A>. If you
-        use eLanguage Center on behalf of an organisation, you accept these
-        Terms for that organisation.
+        eLanguage Center, which is operated by{" "}
+        <strong>{OPERATING_ENTITY.legalName}</strong> (ABN{" "}
+        {OPERATING_ENTITY.abn}), a sole trader trading as{" "}
+        <A href={OPERATING_ENTITY.tradingUrl}>{OPERATING_ENTITY.tradingAs}</A>{" "}
+        (&ldquo;we&rdquo;, &ldquo;us&rdquo;). By creating an account or using
+        the service you agree to these Terms and to our{" "}
+        <A href="/privacy">Privacy Policy</A>. If you use eLanguage Center on
+        behalf of an organisation, you accept these Terms for that organisation.
       </P>
 
       <H2 id="service">1. The service</H2>
@@ -86,10 +91,10 @@ export default function TermsPage() {
 
       <H2 id="law">8. Governing law and disputes</H2>
       <P>
-        These Terms are governed by the laws applicable to your eLanguage Center
-        contracting entity, without affecting mandatory consumer protections in
-        your country of residence. We aim to resolve disputes informally first
-        &mdash; contact us.
+        These Terms are governed by the laws of {OPERATING_ENTITY.jurisdiction},
+        without affecting mandatory consumer protections in your country of
+        residence. We aim to resolve disputes informally first &mdash; contact
+        us.
       </P>
 
       <H2 id="changes">9. Changes</H2>

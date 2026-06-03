@@ -27,8 +27,8 @@ export type PolicyMeta = {
   effectiveDate: string;
 };
 
-const VERSION = "2026-06-01";
-const EFFECTIVE = "1 June 2026";
+const VERSION = "2026-06-03";
+const EFFECTIVE = "3 June 2026";
 
 export const POLICIES: Record<PolicySlug, PolicyMeta> = {
   privacy: {
