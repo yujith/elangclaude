@@ -38,10 +38,9 @@ export default function PrivacyPage() {
       <H2 id="controller">1. Who is responsible for your data</H2>
       <P>
         eLanguage Center is operated by{" "}
-        <strong>{OPERATING_ENTITY.legalName}</strong> (ABN{" "}
-        {OPERATING_ENTITY.abn}), a sole trader trading as{" "}
-        <A href={OPERATING_ENTITY.tradingUrl}>{OPERATING_ENTITY.tradingAs}</A>,
-        based in {OPERATING_ENTITY.jurisdiction}. References to
+        <A href={OPERATING_ENTITY.tradingUrl}>{OPERATING_ENTITY.tradingAs}</A>{" "}
+        (ABN {OPERATING_ENTITY.abn}), a sole trader based in{" "}
+        {OPERATING_ENTITY.jurisdiction}. References to
         &ldquo;eLanguage Center&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo; and
         &ldquo;our&rdquo; mean that operator.
       </P>

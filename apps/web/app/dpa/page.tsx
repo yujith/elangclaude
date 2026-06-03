@@ -14,9 +14,8 @@ export default function DpaPage() {
         This Data Processing Addendum (&ldquo;DPA&rdquo;) applies where an
         organisation (the &ldquo;Customer&rdquo;) uses eLanguage Center to
         process personal data of its learners. It forms part of the agreement
-        between the Customer and {OPERATING_ENTITY.legalName} (ABN{" "}
-        {OPERATING_ENTITY.abn}), a sole trader trading as{" "}
-        {OPERATING_ENTITY.tradingAs}, which operates eLanguage Center. The
+        between the Customer and {OPERATING_ENTITY.tradingAs} (ABN{" "}
+        {OPERATING_ENTITY.abn}), a sole trader which operates eLanguage Center. The
         Customer is the <strong>controller</strong>; eLanguage Center is the{" "}
         <strong>processor</strong>. Individual self-serve users are covered by
         the <A href="/privacy">Privacy Policy</A> instead, where eLanguage Center

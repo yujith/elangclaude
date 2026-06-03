@@ -19,7 +19,14 @@ export const OPERATING_ENTITY = {
   tradingAs: "MustardLabs",
   /** Public site for the trading name. */
   tradingUrl: "https://www.mustardlabs.org",
-  /** Full legal name of the sole trader (per the Australian Business Register). */
+  /**
+   * Full legal name of the sole trader (per the Australian Business Register).
+   * INTERNAL / compliance use only (e.g. the ROPA) — intentionally NOT rendered
+   * on public pages. The operator is identified publicly by `tradingAs` + `abn`
+   * (the ABN resolves to this individual on the ABR), which satisfies the
+   * controller-identity duty without printing the personal name. Do not surface
+   * this field in Privacy / Terms / DPA copy.
+   */
   legalName: "Dilshika Colombage",
   /** Australian Business Number (formatted XX XXX XXX XXX). */
   abn: "91 930 042 126",

@@ -13,9 +13,8 @@ export default function TermsPage() {
       <P>
         These Terms of Service (&ldquo;Terms&rdquo;) govern your use of
         eLanguage Center, which is operated by{" "}
-        <strong>{OPERATING_ENTITY.legalName}</strong> (ABN{" "}
-        {OPERATING_ENTITY.abn}), a sole trader trading as{" "}
         <A href={OPERATING_ENTITY.tradingUrl}>{OPERATING_ENTITY.tradingAs}</A>{" "}
+        (ABN {OPERATING_ENTITY.abn}), a sole trader
         (&ldquo;we&rdquo;, &ldquo;us&rdquo;). By creating an account or using
         the service you agree to these Terms and to our{" "}
         <A href="/privacy">Privacy Policy</A>. If you use eLanguage Center on
