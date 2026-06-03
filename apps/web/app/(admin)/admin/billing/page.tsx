@@ -8,6 +8,7 @@ import {
 } from "@elc/db";
 import { requireRole } from "@/lib/auth/context";
 import { openBillingPortalFromForm } from "@/lib/billing/portal";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
   title: "Billing · eLanguage Center",
@@ -318,9 +319,9 @@ function BillingCta({
   return (
     <div className="flex flex-wrap items-center gap-3">
       <form action={openBillingPortalFromForm}>
-        <button
-          type="submit"
+        <SubmitButton
           disabled={!portalButtonEnabled}
+          pendingLabel="Opening…"
           title={
             !snapshot.is_billing_owner
               ? `Only ${snapshot.billing_owner?.email ?? "the billing owner"} can open the portal.`
@@ -329,7 +330,7 @@ function BillingCta({
           className="inline-flex items-center rounded-pill bg-brand-red text-white px-5 py-2.5 font-heading font-bold border border-brand-red transition-colors hover:bg-brand-red-dark disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
         >
           Manage billing
-        </button>
+        </SubmitButton>
       </form>
       {!snapshot.is_billing_owner ? (
         <p className="font-body text-sm text-brand-grey-700">

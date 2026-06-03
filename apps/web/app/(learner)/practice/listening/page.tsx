@@ -8,6 +8,7 @@ import {
 } from "@elc/ai";
 import { requireOrgContext } from "@/lib/auth/context";
 import { startListeningAttempt } from "@/lib/listening/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
   title: "Listening practice",
@@ -385,12 +386,12 @@ function SectionRow({
         </div>
         <form action={startListeningAttempt}>
           <input type="hidden" name="testId" value={test.id} />
-          <button
-            type="submit"
-            className="w-full inline-flex items-center justify-center rounded-pill bg-brand-red px-5 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+          <SubmitButton
+            pendingLabel="Starting…"
+            className="w-full inline-flex items-center justify-center rounded-pill bg-brand-red px-5 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Start listening
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </li>

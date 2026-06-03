@@ -11,6 +11,7 @@ import {
 } from "@elc/ai";
 import { requireOrgContext } from "@/lib/auth/context";
 import { readSkippedSections, submitMockSession } from "@/lib/mock/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { MOCK_SECTION_ORDER } from "@/lib/mock/constants";
 
 export const metadata: Metadata = {
@@ -165,12 +166,12 @@ export default async function MockResultPage({
         {session.status === "InProgress" ? (
           <form action={submitMockSession}>
             <input type="hidden" name="mockId" value={session.id} />
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+            <SubmitButton
+              pendingLabel="Submitting…"
+              className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Lock in this mock
-            </button>
+            </SubmitButton>
           </form>
         ) : null}
 

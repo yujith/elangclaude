@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { Spinner } from "@/components/ui/spinner";
 import type { CompletionBlock, ReadingPassage } from "@elc/ai";
 import {
   autosaveReadingAnswer,
@@ -1216,7 +1217,14 @@ function SubmitButton() {
       disabled={pending}
       className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
     >
-      {pending ? "Submitting…" : "Submit answers"}
+      {pending ? (
+        <>
+          <Spinner size="sm" decorative />
+          Submitting…
+        </>
+      ) : (
+        "Submit answers"
+      )}
     </button>
   );
 }

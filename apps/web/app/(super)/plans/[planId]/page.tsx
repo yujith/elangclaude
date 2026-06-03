@@ -14,6 +14,7 @@ import {
   updatePlanFromForm,
 } from "@/lib/super/plan-actions";
 import { planErrorMessage } from "@/lib/super/plan-errors";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
   title: "Plan · SuperAdmin",
@@ -262,12 +263,12 @@ export default async function PlanDetailPage({
             </label>
 
             <div className="flex justify-end">
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              <SubmitButton
+                pendingLabel="Saving…"
+                className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Save plan
-              </button>
+              </SubmitButton>
             </div>
           </form>
         )}
@@ -294,12 +295,12 @@ export default async function PlanDetailPage({
             </dl>
             <form action={resyncPlanFromForm} className="mt-5">
               <input type="hidden" name="plan_id" value={plan.id} />
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-pill bg-brand-white text-brand-black px-4 py-2 font-heading font-bold text-sm border border-brand-grey-300 hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              <SubmitButton
+                pendingLabel="Re-syncing…"
+                className="inline-flex items-center rounded-pill bg-brand-white text-brand-black px-4 py-2 font-heading font-bold text-sm border border-brand-grey-300 hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Re-sync to Stripe
-              </button>
+              </SubmitButton>
             </form>
           </section>
         ) : null}
@@ -317,12 +318,12 @@ export default async function PlanDetailPage({
             </p>
             <form action={archivePlanFromForm} className="mt-5">
               <input type="hidden" name="plan_id" value={plan.id} />
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-pill bg-brand-white text-brand-black px-4 py-2 font-heading font-bold text-sm border border-brand-grey-300 hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              <SubmitButton
+                pendingLabel="Archiving…"
+                className="inline-flex items-center rounded-pill bg-brand-white text-brand-black px-4 py-2 font-heading font-bold text-sm border border-brand-grey-300 hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Archive plan
-              </button>
+              </SubmitButton>
             </form>
           </section>
         ) : null}
@@ -339,12 +340,12 @@ export default async function PlanDetailPage({
             </p>
             <form action={reactivatePlanFromForm} className="mt-5">
               <input type="hidden" name="plan_id" value={plan.id} />
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-pill bg-brand-red text-white px-4 py-2 font-heading font-bold text-sm border border-brand-red hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              <SubmitButton
+                pendingLabel="Reactivating…"
+                className="inline-flex items-center rounded-pill bg-brand-red text-white px-4 py-2 font-heading font-bold text-sm border border-brand-red hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Reactivate plan
-              </button>
+              </SubmitButton>
             </form>
           </section>
         ) : null}

@@ -11,6 +11,7 @@ import {
   abandonMockSession,
 } from "@/lib/mock/actions";
 import { MOCK_SECTION_ORDER } from "@/lib/mock/constants";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
   title: "Full Mock — in progress",
@@ -202,21 +203,21 @@ function NoTestPanel({
           <form action={skipMockSection}>
             <input type="hidden" name="mockId" value={mockId} />
             <input type="hidden" name="section" value={section} />
-            <button
-              type="submit"
-              className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+            <SubmitButton
+              pendingLabel="Skipping…"
+              className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Skip {section} and continue
-            </button>
+            </SubmitButton>
           </form>
           <form action={abandonMockSession}>
             <input type="hidden" name="mockId" value={mockId} />
-            <button
-              type="submit"
-              className="inline-flex items-center rounded-pill bg-brand-grey-100 px-5 py-2.5 font-heading font-bold text-brand-grey-800 hover:bg-brand-grey-200"
+            <SubmitButton
+              pendingLabel="Abandoning…"
+              className="inline-flex items-center rounded-pill bg-brand-grey-100 px-5 py-2.5 font-heading font-bold text-brand-grey-800 hover:bg-brand-grey-200 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Abandon mock
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>

@@ -11,6 +11,7 @@ import {
   type CsvInviteResult,
   type InviteFailureReason,
 } from "@/lib/admin/invite-actions";
+import { PendingButton } from "@/components/ui/pending-button";
 
 type SingleStatus =
   | { kind: "idle" }
@@ -123,13 +124,14 @@ export function InvitePanel() {
               placeholder="Asha Perera"
             />
           </label>
-          <button
+          <PendingButton
             type="submit"
-            disabled={pending}
+            pending={pending}
+            pendingLabel="Inviting…"
             className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {pending ? "Inviting…" : "Invite learner"}
-          </button>
+            Invite learner
+          </PendingButton>
         </form>
         {singleStatus.kind === "ok" ? (
           <p
@@ -175,13 +177,14 @@ export function InvitePanel() {
               placeholder={"email,name\nasha@example.com,Asha P\nben@example.com,Ben K"}
             />
           </label>
-          <button
+          <PendingButton
             type="submit"
-            disabled={pending}
+            pending={pending}
+            pendingLabel="Inviting…"
             className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {pending ? "Inviting…" : "Invite all"}
-          </button>
+            Invite all
+          </PendingButton>
         </form>
         {csvStatus.kind === "ok" ? (
           <CsvSummary result={csvStatus.result} />

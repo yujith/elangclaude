@@ -9,6 +9,7 @@ import { prisma } from "@elc/db/client";
 import { Logo } from "@/components/logo";
 import { SignOutControl } from "@/components/sign-out-control";
 import { selfServeProvisionFromForm } from "@/lib/onboarding/self-serve-actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
   title: "Name your school · eLanguage Center",
@@ -137,14 +138,14 @@ export default async function SignupOrgContinuePage({
               >
                 Change plan
               </Link>
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-pill bg-brand-red text-white px-5 py-2.5 font-heading font-bold border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              <SubmitButton
+                pendingLabel="Setting up…"
+                className="inline-flex items-center rounded-pill bg-brand-red text-white px-5 py-2.5 font-heading font-bold border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {Number(plan.amount_monthly_usd.toString()) === 0
                   ? "Create my workspace"
                   : "Continue to Checkout"}
-              </button>
+              </SubmitButton>
             </div>
           </form>
         </div>

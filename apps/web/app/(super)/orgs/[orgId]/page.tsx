@@ -7,6 +7,7 @@ import {
   setOrgStatusFromForm,
   updateOrgSettingsFromForm,
 } from "@/lib/super/org-actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
   title: "Organisation · SuperAdmin",
@@ -253,12 +254,12 @@ export default async function OrgDetailPage({
               </Field>
             </div>
             <div className="flex justify-end">
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              <SubmitButton
+                pendingLabel="Saving…"
+                className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Save settings
-              </button>
+              </SubmitButton>
             </div>
           </form>
         </section>
@@ -409,8 +410,7 @@ function StatusButton({
     <form action={setOrgStatusFromForm}>
       <input type="hidden" name="org_id" value={orgId} />
       <input type="hidden" name="status" value={targetStatus} />
-      <button
-        type="submit"
+      <SubmitButton
         disabled={isCurrent}
         aria-pressed={isCurrent}
         className={`inline-flex items-center rounded-pill px-4 py-2 font-heading font-bold text-sm border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 ${
@@ -420,7 +420,7 @@ function StatusButton({
         }`}
       >
         {isCurrent ? `${label} (current)` : label}
-      </button>
+      </SubmitButton>
     </form>
   );
 }

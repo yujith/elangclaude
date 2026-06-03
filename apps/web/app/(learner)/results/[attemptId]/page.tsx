@@ -16,6 +16,7 @@ import { parseSpeakingContent } from "@/lib/speaking/content";
 import { regradeAttempt } from "@/lib/attempts/actions";
 import { regradeListeningAttempt } from "@/lib/listening/actions";
 import { regradeReadingAttempt } from "@/lib/reading/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { GradeSummary } from "@/components/grade-summary";
 import { TaskVisual } from "@/components/task-visual";
 import { ListeningResult } from "@/components/listening-result";
@@ -145,7 +146,12 @@ export default async function ResultsPage({
           attempt.grade ? null : (
             <form action={regradeReadingAttempt}>
               <input type="hidden" name="attemptId" value={attempt.id} />
-              <RetryButton />
+              <SubmitButton
+                pendingLabel="Grading…"
+                className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Try grading again
+              </SubmitButton>
             </form>
           )
         }
@@ -173,7 +179,12 @@ export default async function ResultsPage({
           attempt.grade ? null : (
             <form action={regradeListeningAttempt}>
               <input type="hidden" name="attemptId" value={attempt.id} />
-              <RetryButton />
+              <SubmitButton
+                pendingLabel="Grading…"
+                className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Try grading again
+              </SubmitButton>
             </form>
           )
         }
@@ -293,12 +304,12 @@ export default async function ResultsPage({
             <div className="flex flex-wrap gap-3">
               <form action={regradeAttempt}>
                 <input type="hidden" name="attemptId" value={attempt.id} />
-                <button
-                  type="submit"
-                  className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+                <SubmitButton
+                  pendingLabel="Grading…"
+                  className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Try grading again
-                </button>
+                </SubmitButton>
               </form>
               <Link
                 href="/practice/writing"
@@ -352,17 +363,6 @@ function FailureCard({
         </div>
       </div>
     </section>
-  );
-}
-
-function RetryButton() {
-  return (
-    <button
-      type="submit"
-      className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
-    >
-      Try grading again
-    </button>
   );
 }
 

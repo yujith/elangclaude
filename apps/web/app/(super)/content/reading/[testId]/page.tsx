@@ -10,6 +10,7 @@ import {
   type ReadingQuestionPayload,
 } from "@elc/ai";
 import { requireRole } from "@/lib/auth/context";
+import { SubmitButton } from "@/components/ui/submit-button";
 import {
   approveReadingTest,
   rejectReadingTest,
@@ -246,13 +247,13 @@ export default async function ReviewReadingTestPage({
             <div className="flex flex-wrap gap-3 items-start">
               <form action={approveReadingTest}>
                 <input type="hidden" name="testId" value={test.id} />
-                <button
-                  type="submit"
+                <SubmitButton
                   disabled={approvalBlocked}
+                  pendingLabel="Approving…"
                   className="inline-flex items-center rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-brand-red"
                 >
                   Approve — release to learners
-                </button>
+                </SubmitButton>
               </form>
               <form
                 action={rejectReadingTest}
@@ -275,12 +276,12 @@ export default async function ReviewReadingTestPage({
                     className="w-72 rounded-md ring-1 ring-brand-grey-300 bg-white px-3 py-2 font-body text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
                   />
                 </div>
-                <button
-                  type="submit"
-                  className="inline-flex items-center rounded-pill bg-brand-black px-6 py-3 font-heading font-bold text-white transition-colors hover:bg-brand-grey-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+                <SubmitButton
+                  pendingLabel="Rejecting…"
+                  className="inline-flex items-center rounded-pill bg-brand-black px-6 py-3 font-heading font-bold text-white transition-colors hover:bg-brand-grey-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Reject
-                </button>
+                </SubmitButton>
               </form>
             </div>
           )}

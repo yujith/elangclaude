@@ -30,6 +30,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { Spinner } from "@/components/ui/spinner";
 // Deep import — `@elc/ai` (the barrel) transitively loads the generation
 // prompt loader, which calls node:fs. That dependency is fine on the
 // server but breaks Turbopack's client chunking. Bypass via the
@@ -1863,6 +1864,7 @@ function SubmitBar({
 
 function SubmitButton({ autoFiring }: { autoFiring: boolean }) {
   const { pending } = useFormStatus();
+  const busy = pending || autoFiring;
   const label = autoFiring
     ? "Auto-submitting…"
     : pending
@@ -1871,9 +1873,10 @@ function SubmitButton({ autoFiring }: { autoFiring: boolean }) {
   return (
     <button
       type="submit"
-      disabled={pending || autoFiring}
+      disabled={busy}
       className="inline-flex items-center gap-2 rounded-pill bg-brand-red px-6 py-3 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black"
     >
+      {busy ? <Spinner size="sm" decorative /> : null}
       {label}
     </button>
   );

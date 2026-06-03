@@ -6,6 +6,7 @@ import {
 } from "@elc/db";
 import { requireRole } from "@/lib/auth/context";
 import { syncAllPaidPlansFromForm } from "@/lib/super/plan-actions";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { planErrorMessage } from "@/lib/super/plan-errors";
 
 export const metadata: Metadata = {
@@ -76,12 +77,12 @@ export default async function PlansListPage({
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <form action={syncAllPaidPlansFromForm}>
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-pill bg-brand-white text-brand-black px-4 py-2.5 font-heading font-bold border border-brand-grey-300 hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2"
+              <SubmitButton
+                pendingLabel="Syncing to Stripe…"
+                className="inline-flex items-center rounded-pill bg-brand-white text-brand-black px-4 py-2.5 font-heading font-bold border border-brand-grey-300 hover:bg-brand-grey-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Sync all to Stripe
-              </button>
+              </SubmitButton>
             </form>
             <Link
               href="/plans/new"
