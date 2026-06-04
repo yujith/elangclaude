@@ -394,7 +394,7 @@ function ReadingFilters({
       <form
         action="/practice/reading"
         method="get"
-        className="grid w-full gap-3 sm:w-auto sm:grid-cols-[repeat(auto-fit,minmax(9rem,auto))] sm:items-end"
+        className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-end"
       >
         <input type="hidden" name="mode" value="section" />
         <FilterSelect
@@ -466,7 +466,7 @@ function FilterSelect({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block">
+    <label className="block w-full sm:w-44">
       <span className="block font-heading font-bold text-xs uppercase tracking-wide text-brand-grey-600 mb-1">
         {label}
       </span>
