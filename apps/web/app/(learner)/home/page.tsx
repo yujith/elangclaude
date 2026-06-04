@@ -50,7 +50,9 @@ export default async function LearnerHomePage() {
         </section>
 
         <ResumeStrip
-          mockSession={dash.resume.mockSession}
+          // Full Mock is temporarily hidden (see learner-nav.tsx), so don't
+          // surface a "continue your mock" link to a gated section.
+          mockSession={null}
           attempt={dash.resume.attempt}
         />
 

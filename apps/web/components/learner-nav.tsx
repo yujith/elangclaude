@@ -12,14 +12,13 @@ const ITEMS = [
   { label: "Listening", href: "/practice/listening" },
   { label: "Writing", href: "/practice/writing" },
   { label: "Speaking", href: "/practice/speaking" },
-  { label: "Mock", href: "/mock" },
+  // Full Mock is temporarily hidden while its design is reworked — the
+  // routes are gated by app/(learner)/mock/layout.tsx. Restore this item
+  // (and remove that layout) to bring the section back.
   { label: "Profile", href: "/profile" },
 ] as const;
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/mock") {
-    return pathname === "/mock" || pathname.startsWith("/mock/");
-  }
   if (href === "/profile") {
     return pathname === "/profile" || pathname.startsWith("/profile/");
   }
