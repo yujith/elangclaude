@@ -10,6 +10,7 @@ import {
   skipMockSection,
   abandonMockSession,
 } from "@/lib/mock/actions";
+import { ensureMockReadingPaper } from "@/lib/reading/paper-session";
 import { MOCK_SECTION_ORDER } from "@/lib/mock/constants";
 import { SubmitButton } from "@/components/ui/submit-button";
 
@@ -38,7 +39,7 @@ const SECTION_COPY: Record<
   },
   Reading: {
     time: "60 min",
-    hint: "One passage per attempt at this scale — start when you're ready.",
+    hint: "A full 3-passage paper — Part 1, 2, and 3 back-to-back.",
   },
   Writing: {
     time: "60 min",
@@ -90,6 +91,25 @@ export default async function MockOrchestratorPage({
         mockId={state.mockId}
         sections={decoratedSections}
         track={state.track}
+      />
+    );
+  }
+
+  // Reading is delivered as a full 3-passage paper sitting, not a single
+  // passage. Route to the paper orchestrator (which runs the parts and
+  // bounces back here when done). Falls back to the skip affordance when no
+  // approved paper exists.
+  if (currentSection === "Reading") {
+    const ensuredPaper = await ensureMockReadingPaper(ctx, mockId);
+    if (ensuredPaper.ok) {
+      redirect(`/practice/reading/paper/${ensuredPaper.sessionId}`);
+    }
+    return (
+      <NoTestPanel
+        mockId={state.mockId}
+        section="Reading"
+        track={state.track}
+        sections={decoratedSections}
       />
     );
   }

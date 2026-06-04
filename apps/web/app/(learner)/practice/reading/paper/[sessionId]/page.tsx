@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { requireOrgContext } from "@/lib/auth/context";
 import {
+  finalizePaperSession,
   readPaperSessionState,
   startReadingPaperPart,
 } from "@/lib/reading/paper-session";
@@ -25,8 +26,15 @@ export default async function ReadingPaperOrchestratorPage({
   const state = await readPaperSessionState(ctx, sessionId);
   if (!state.ok) notFound();
 
-  // Every part graded → straight to the combined result.
+  // Every part graded → finalize and route to the result. When this sitting
+  // is a mock's Reading leg, bounce back to the mock orchestrator instead so
+  // it can advance to Writing; the combined Reading band lands on the mock
+  // aggregate, not a standalone paper result.
   if (state.allGraded) {
+    await finalizePaperSession(ctx, sessionId);
+    if (state.mockSessionId) {
+      redirect(`/mock/${state.mockSessionId}`);
+    }
     redirect(`/practice/reading/paper/${sessionId}/result`);
   }
 

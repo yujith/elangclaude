@@ -157,6 +157,13 @@ export async function readMockState(
           status: true,
         },
       },
+      // The Reading leg is a full 3-passage paper sitting, not a single
+      // attempt. Its state drives the Reading section below.
+      readingPaperSessions: {
+        select: { id: true, status: true },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
     },
   });
   if (!session || session.user_id !== ctx.user_id) return null;
@@ -179,7 +186,23 @@ export async function readMockState(
     }
   }
 
+  // Reading is delivered as a full paper sitting (3 passages). Its section
+  // state comes from the linked ReadingPaperSession, not a single attempt:
+  // "graded" only once the whole paper is Submitted, "in-progress" while any
+  // part remains. paperSession.id stands in for attemptId (display only).
+  const readingPaper = session.readingPaperSessions[0] ?? null;
+
   const sections: MockSectionState[] = MOCK_SECTION_ORDER.map((section) => {
+    if (section === "Reading") {
+      if (!readingPaper) return { section, state: "not-started", attemptId: null };
+      if (readingPaper.status === "Submitted") {
+        return { section, state: "graded", attemptId: readingPaper.id };
+      }
+      if (readingPaper.status === "Abandoned") {
+        return { section, state: "skipped", attemptId: null };
+      }
+      return { section, state: "in-progress", attemptId: readingPaper.id };
+    }
     const a = bySection.get(section);
     if (!a) return { section, state: "not-started", attemptId: null };
     if (a.status === "Graded") {

@@ -524,7 +524,8 @@ model MockSession {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  attempts Attempt[]
+  attempts             Attempt[]
+  readingPaperSessions ReadingPaperSession[]
 
   @@index([org_id])
   @@index([org_id, user_id])
@@ -579,19 +580,26 @@ model ReadingPaperPart {
 // derived from the joined Attempt rows. Joins TENANT_SCOPED_MODELS so
 // withOrg(ctx) auto-scopes it; the tenancy fuzzer is extended to cover it.
 model ReadingPaperSession {
-  id           String       @id @default(cuid())
-  org_id       String
-  org          Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
-  user_id      String
-  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  paper_id     String
-  paper        ReadingPaper @relation(fields: [paper_id], references: [id], onDelete: Cascade)
-  track        Track
-  status       MockStatus   @default(InProgress)
-  started_at   DateTime     @default(now())
-  submitted_at DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id              String       @id @default(cuid())
+  org_id          String
+  org             Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  user_id         String
+  user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  paper_id        String
+  paper           ReadingPaper @relation(fields: [paper_id], references: [id], onDelete: Cascade)
+  track           Track
+  status          MockStatus   @default(InProgress)
+  // When this sitting IS the Reading leg of a 4-section Full Mock, it
+  // links back to that mock. Null for standalone full-paper practice. The
+  // mock's Reading section state is derived from this sitting's status, and
+  // the leg's part Attempts also carry mock_session_id so the mock result
+  // can aggregate them.
+  mock_session_id String?
+  mock_session    MockSession? @relation(fields: [mock_session_id], references: [id], onDelete: SetNull)
+  started_at      DateTime     @default(now())
+  submitted_at    DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   attempts Attempt[]
 
@@ -599,6 +607,7 @@ model ReadingPaperSession {
   @@index([org_id, user_id])
   @@index([org_id, status])
   @@index([paper_id])
+  @@index([mock_session_id])
 }
 
 // One row per successful AI gateway call (chat / realtime mint / TTS /

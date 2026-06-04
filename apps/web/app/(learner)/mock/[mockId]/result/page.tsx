@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { withOrg } from "@elc/db";
 import type { Section } from "@elc/db";
 import {
+  bandFromPartial,
   parseListeningGrade,
   parseReadingGrade,
   speakingGradeSchema,
@@ -27,6 +28,9 @@ type SectionBand = {
   state: "graded" | "missing" | "skipped";
   band: number | null;
   attemptId: string | null;
+  // Overrides the default /results/[attemptId] detail link. Reading uses
+  // the paper result page since one mock Reading leg spans three attempts.
+  detailHref: string | null;
 };
 
 export default async function MockResultPage({
@@ -56,16 +60,59 @@ export default async function MockResultPage({
           },
         },
       },
+      readingPaperSessions: {
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
     },
   });
   if (!session || session.user_id !== ctx.user_id) notFound();
 
   const skipped = await readSkippedSections(ctx, mockId);
 
+  // Reading is a 3-passage paper: aggregate the three attempts into one band
+  // off the true 40-question curve, scaled to the paper's question count.
+  const readingAttempts = session.attempts.filter(
+    (a) => a.section === "Reading",
+  );
+  const readingCounts = readingAttempts.reduce(
+    (acc, a) => {
+      const g = parseReadingGrade(a.grade?.criteria_scores_json);
+      return g
+        ? { c: acc.c + g.raw_correct, t: acc.t + g.raw_total }
+        : acc;
+    },
+    { c: 0, t: 0 },
+  );
+  const readingHasGrade = readingAttempts.some((a) => a.grade);
+  const readingBand = readingHasGrade
+    ? bandFromPartial(session.track, readingCounts.c, readingCounts.t)
+    : null;
+  const readingPaperSessionId = session.readingPaperSessions[0]?.id ?? null;
+  const readingDetailHref = readingPaperSessionId
+    ? `/practice/reading/paper/${readingPaperSessionId}/result`
+    : null;
+
   const bands: SectionBand[] = MOCK_SECTION_ORDER.map((section) => {
+    if (section === "Reading") {
+      if (skipped.has("Reading") && readingAttempts.length === 0) {
+        return { section, state: "skipped", band: null, attemptId: null, detailHref: null };
+      }
+      if (!readingHasGrade) {
+        return { section, state: "missing", band: null, attemptId: null, detailHref: null };
+      }
+      return {
+        section,
+        state: "graded",
+        band: readingBand,
+        attemptId: null,
+        detailHref: readingDetailHref,
+      };
+    }
     const attempt = session.attempts.find((a) => a.section === section);
     if (skipped.has(section) && !attempt) {
-      return { section, state: "skipped", band: null, attemptId: null };
+      return { section, state: "skipped", band: null, attemptId: null, detailHref: null };
     }
     if (!attempt || !attempt.grade) {
       return {
@@ -73,6 +120,7 @@ export default async function MockResultPage({
         state: "missing",
         band: null,
         attemptId: attempt?.id ?? null,
+        detailHref: null,
       };
     }
     const band = readSectionBand(section, attempt.grade.criteria_scores_json);
@@ -81,6 +129,7 @@ export default async function MockResultPage({
       state: "graded",
       band,
       attemptId: attempt.id,
+      detailHref: null,
     };
   });
 
@@ -149,9 +198,9 @@ export default async function MockResultPage({
                   <p className="font-display italic font-bold text-2xl text-brand-black">
                     {b.band !== null ? b.band.toFixed(1) : "—"}
                   </p>
-                  {b.attemptId ? (
+                  {b.detailHref ?? (b.attemptId ? `/results/${b.attemptId}` : null) ? (
                     <Link
-                      href={`/results/${b.attemptId}`}
+                      href={b.detailHref ?? `/results/${b.attemptId}`}
                       className="inline-flex items-center rounded-pill bg-brand-black text-white font-heading font-bold text-xs px-3 py-1.5 hover:bg-brand-grey-900"
                     >
                       Section detail

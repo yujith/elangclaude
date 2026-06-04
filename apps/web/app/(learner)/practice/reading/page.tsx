@@ -123,7 +123,14 @@ export default async function ReadingPickerPage({
         select: { id: true, title: true, _count: { select: { parts: true } } },
       }),
       db.readingPaperSession.findFirst({
-        where: { user_id: ctx.user_id, status: "InProgress", track: me.ielts_track },
+        // Standalone sittings only — a mock's Reading leg (mock_session_id
+        // set) is resumed from the mock, not here.
+        where: {
+          user_id: ctx.user_id,
+          status: "InProgress",
+          track: me.ielts_track,
+          mock_session_id: null,
+        },
         orderBy: { createdAt: "desc" },
         select: { id: true },
       }),

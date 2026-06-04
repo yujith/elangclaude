@@ -32,6 +32,8 @@ export type PaperSessionState =
       sessionId: string;
       track: "Academic" | "GeneralTraining";
       status: "InProgress" | "Submitted" | "Abandoned";
+      // Set when this sitting is the Reading leg of a 4-section Full Mock.
+      mockSessionId: string | null;
       parts: PaperPartState[];
       // First not-graded part, or null when every part is graded.
       currentSlot: ReadingPaperSlot | null;
@@ -51,6 +53,7 @@ export async function readPaperSessionState(
       user_id: true,
       track: true,
       status: true,
+      mock_session_id: true,
       paper: {
         select: {
           parts: {
@@ -101,6 +104,7 @@ export async function readPaperSessionState(
     sessionId: session.id,
     track: session.track,
     status: session.status,
+    mockSessionId: session.mock_session_id,
     parts,
     currentSlot: current ? current.slot : null,
     allGraded,
@@ -143,7 +147,13 @@ export async function startReadingPaper(formData: FormData): Promise<void> {
   // Resume an existing in-progress sitting for this paper rather than
   // spawning duplicates.
   const existing = await db.readingPaperSession.findFirst({
-    where: { user_id: ctx.user_id, paper_id: paper.id, status: "InProgress" },
+    // Standalone sittings only — never resume a mock's Reading leg here.
+    where: {
+      user_id: ctx.user_id,
+      paper_id: paper.id,
+      status: "InProgress",
+      mock_session_id: null,
+    },
     select: { id: true },
     orderBy: { createdAt: "desc" },
   });
@@ -197,6 +207,7 @@ async function ensurePaperPartAttempt(
       id: true,
       user_id: true,
       status: true,
+      mock_session_id: true,
       paper: {
         select: {
           parts: {
@@ -236,10 +247,73 @@ async function ensurePaperPartAttempt(
       section: "Reading",
       status: "InProgress",
       reading_paper_session_id: session.id,
+      // When the sitting is a mock's Reading leg, tag the part attempt with
+      // the mock too so the mock result page can aggregate the three parts.
+      mock_session_id: session.mock_session_id,
     },
     select: { id: true },
   });
   return attempt.id;
+}
+
+// ─── Mock integration ─────────────────────────────────────────────────────
+
+export type EnsureMockReadingResult =
+  | { ok: true; sessionId: string }
+  | { ok: false; error: "no-paper-available" | "mock-not-found" };
+
+// Finds or creates the ReadingPaperSession that backs a 4-section mock's
+// Reading leg. Mirrors mock/actions.ensureMockSectionAttempt but produces a
+// full paper sitting instead of a single passage attempt. The mock
+// orchestrator routes the learner to the paper orchestrator with the
+// returned sessionId.
+export async function ensureMockReadingPaper(
+  ctx: OrgContext,
+  mockId: string,
+): Promise<EnsureMockReadingResult> {
+  const db = withOrg(ctx);
+  const mock = await db.mockSession.findUnique({
+    where: { id: mockId },
+    select: {
+      id: true,
+      user_id: true,
+      track: true,
+      readingPaperSessions: {
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+    },
+  });
+  if (!mock || mock.user_id !== ctx.user_id) {
+    return { ok: false, error: "mock-not-found" };
+  }
+  // Reuse the existing leg sitting if one was already created.
+  if (mock.readingPaperSessions[0]) {
+    return { ok: true, sessionId: mock.readingPaperSessions[0].id };
+  }
+
+  // Pick an approved paper for the mock's track. ReadingPaper is global —
+  // withOrg passes it through unscoped.
+  const paper = await db.readingPaper.findFirst({
+    where: { status: "Approved", track: mock.track },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!paper) return { ok: false, error: "no-paper-available" };
+
+  const session = await db.readingPaperSession.create({
+    data: {
+      org_id: ctx.org_id,
+      user_id: ctx.user_id,
+      paper_id: paper.id,
+      track: mock.track,
+      status: "InProgress",
+      mock_session_id: mock.id,
+    },
+    select: { id: true },
+  });
+  return { ok: true, sessionId: session.id };
 }
 
 // Flip a fully-graded sitting to Submitted. Idempotent; called by the
