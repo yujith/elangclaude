@@ -286,22 +286,26 @@ export async function deleteReadingPaper(formData: FormData): Promise<void> {
     select: { id: true, _count: { select: { sittings: true } } },
   });
   if (!paper) throw new Error("Paper not found.");
-  // Refuse if learners have taken it — the sittings (and their attempts)
-  // are the primary record. Retire instead in a later iteration.
-  if (paper._count.sittings > 0) {
-    redirect(`/content/reading/papers?paper_error=has_sittings`);
-  }
 
-  // Deleting the paper cascades the ReadingPaperPart join rows; the
-  // underlying passage-Tests are untouched (they may be in other papers
-  // or used for standalone practice).
+  // Deletion is always allowed — unlike a Test (whose delete cascades to
+  // Answer/Grade and is therefore guarded), deleting a ReadingPaper only
+  // cascades the ReadingPaperPart join rows and the sitting *wrappers*
+  // (ReadingPaperSession). Each sitting's part Attempts survive: their
+  // reading_paper_session_id is set null (onDelete: SetNull), so learner
+  // work and grades are preserved as standalone reading attempts. The
+  // underlying passage-Tests are untouched (they may be in other papers or
+  // used for standalone practice). The confirm dialog warns when sittings
+  // exist; the sitting count is recorded on the ActivityLog for audit.
   await db.readingPaper.delete({ where: { id: paper.id } });
   await db.activityLog.create({
     data: {
       org_id: SYSTEM_ORG_ID,
       user_id: ctx.user_id,
       action: "content.reading_paper.deleted",
-      metadata: { paper_id: paperId } as Prisma.InputJsonValue,
+      metadata: {
+        paper_id: paperId,
+        sittings_detached: paper._count.sittings,
+      } as Prisma.InputJsonValue,
     },
   });
 

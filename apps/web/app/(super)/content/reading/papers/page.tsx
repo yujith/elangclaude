@@ -4,6 +4,7 @@ import { withSuperAdminContext } from "@elc/db";
 import { parseReadingPassage, paperIsComplete, readingPart } from "@elc/ai";
 import { requireRole } from "@/lib/auth/context";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { ConfirmSubmitButton } from "@/components/ui/confirm-submit-button";
 import {
   approveReadingPaper,
   curateReadingPaperForm,
@@ -241,17 +242,22 @@ export default async function ReadingPapersPage({
                           </SubmitButton>
                         </form>
                       ) : null}
-                      {p._count.sittings === 0 ? (
-                        <form action={deleteReadingPaper}>
-                          <input type="hidden" name="paperId" value={p.id} />
-                          <SubmitButton
-                            pendingLabel="Deleting…"
-                            className="inline-flex items-center rounded-pill px-4 py-2 font-heading font-bold text-sm text-brand-grey-700 ring-1 ring-brand-grey-300 transition-colors hover:text-brand-black"
-                          >
-                            Delete
-                          </SubmitButton>
-                        </form>
-                      ) : null}
+                      <form action={deleteReadingPaper}>
+                        <input type="hidden" name="paperId" value={p.id} />
+                        <ConfirmSubmitButton
+                          pendingLabel="Deleting…"
+                          confirmMessage={
+                            p._count.sittings > 0
+                              ? `Delete this paper? ${p._count.sittings} learner sitting${p._count.sittings === 1 ? "" : "s"} will be detached — their reading attempts and grades are kept, but the sitting wrapper is removed.`
+                              : "Delete this paper? The three passages stay in the pool."
+                          }
+                          className="inline-flex items-center rounded-pill px-4 py-2 font-heading font-bold text-sm text-brand-grey-700 ring-1 ring-brand-grey-300 transition-colors hover:text-brand-black"
+                        >
+                          {p._count.sittings > 0
+                            ? `Delete (${p._count.sittings} sitting${p._count.sittings === 1 ? "" : "s"})`
+                            : "Delete"}
+                        </ConfirmSubmitButton>
+                      </form>
                     </div>
                   </li>
                 );
@@ -431,8 +437,6 @@ function paperErrorMessage(code: string, sp: SearchParams): string {
       return `Paper can't be approved yet — all three parts must be Approved passages of the right track${issues}.`;
     case "generate_failed":
       return `Generation failed at Part ${sp.failed_slot ?? "?"} (${sp.generate_error ?? "unknown"}). Any earlier passages were kept in the queue.`;
-    case "has_sittings":
-      return "Can't delete a paper that learners have already taken.";
     case "bad_request":
       return "Missing or invalid input.";
     default:
