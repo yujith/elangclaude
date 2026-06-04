@@ -4,7 +4,7 @@ import { withSuperAdminContext } from "@elc/db";
 import { parseReadingPassage, readingPart } from "@elc/ai";
 import { requireRole } from "@/lib/auth/context";
 import { generateReadingTestForm } from "@/lib/reading/generate-actions";
-import { SubmitButton } from "@/components/ui/submit-button";
+import { ReadingGenerateForm } from "@/components/content/reading-generate-form";
 import { ApprovedList } from "@/components/content/approved-list";
 
 export const metadata: Metadata = {
@@ -144,92 +144,18 @@ export default async function ReadingModerationPage({
         </div>
 
         <section className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6">
-          <h2 className="font-heading font-bold text-lg text-brand-black mb-3">
+          <h2 className="font-heading font-bold text-lg text-brand-black mb-1">
             Generate a new passage
           </h2>
-          <form
+          <p className="font-body text-sm text-brand-grey-600 mb-3">
+            Part labels the Academic passage 1–3 for the learner filter and
+            paper curation. General Training passages take their part from the
+            section, so the Part picker only shows for Academic.
+          </p>
+          <ReadingGenerateForm
             action={generateReadingTestForm}
-            className="flex flex-wrap items-end gap-4"
-          >
-            <input type="hidden" name="returnTo" value="/content/reading" />
-            <div>
-              <label
-                htmlFor="track"
-                className="block font-heading font-bold text-xs uppercase tracking-wide text-brand-grey-600 mb-1"
-              >
-                Track
-              </label>
-              <select
-                id="track"
-                name="track"
-                defaultValue="Academic"
-                className="rounded-md ring-1 ring-brand-grey-300 bg-white px-3 py-2 font-body text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
-              >
-                <option value="Academic">Academic</option>
-                <option value="GeneralTraining">General Training</option>
-              </select>
-            </div>
-            <div>
-              <label
-                htmlFor="difficulty"
-                className="block font-heading font-bold text-xs uppercase tracking-wide text-brand-grey-600 mb-1"
-              >
-                Difficulty
-              </label>
-              <input
-                id="difficulty"
-                name="difficulty"
-                type="number"
-                min={1}
-                max={5}
-                defaultValue={5}
-                className="w-20 rounded-md ring-1 ring-brand-grey-300 bg-white px-3 py-2 font-body text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="part"
-                className="block font-heading font-bold text-xs uppercase tracking-wide text-brand-grey-600 mb-1"
-              >
-                Part
-              </label>
-              <select
-                id="part"
-                name="part"
-                defaultValue=""
-                className="rounded-md ring-1 ring-brand-grey-300 bg-white px-3 py-2 font-body text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
-              >
-                <option value="">Any</option>
-                <option value="1">Part 1</option>
-                <option value="2">Part 2</option>
-                <option value="3">Part 3</option>
-              </select>
-              <p className="mt-1 font-body text-[11px] text-brand-grey-500">
-                Academic only — GT uses its section.
-              </p>
-            </div>
-            <div className="flex-1 min-w-[16rem]">
-              <label
-                htmlFor="topicHint"
-                className="block font-heading font-bold text-xs uppercase tracking-wide text-brand-grey-600 mb-1"
-              >
-                Topic hint (optional)
-              </label>
-              <input
-                id="topicHint"
-                name="topicHint"
-                type="text"
-                placeholder="e.g. the history of refrigeration"
-                className="w-full rounded-md ring-1 ring-brand-grey-300 bg-white px-3 py-2 font-body text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red"
-              />
-            </div>
-            <SubmitButton
-              pendingLabel="Generating…"
-              className="inline-flex items-center rounded-pill bg-brand-red px-5 py-2.5 font-heading font-bold text-white border border-brand-red transition-colors hover:bg-brand-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              Generate
-            </SubmitButton>
-          </form>
+            returnTo="/content/reading"
+          />
         </section>
 
         <section>
