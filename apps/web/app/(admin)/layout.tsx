@@ -120,6 +120,12 @@ export default async function OrgAdminLayout({
               Billing
             </Link>
             <Link
+              href="/admin/branding"
+              className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"
+            >
+              Branding
+            </Link>
+            <Link
               href="/profile"
               className="font-heading font-bold text-sm text-white hover:text-brand-red transition-colors"
             >

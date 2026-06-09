@@ -32,7 +32,8 @@ import { requireRole } from "@/lib/auth/context";
 export type { BrandingFailureReason } from "@elc/db/branding";
 export type { SaveBrandingResult } from "@elc/db/org-branding";
 
-export const MAX_LOGO_BYTES = 1024 * 1024; // 1 MB
+// Not exported: "use server" modules may only export async functions.
+const MAX_LOGO_BYTES = 1024 * 1024; // 1 MB
 
 export type LogoUploadResult =
   | { ok: true }
@@ -123,6 +124,24 @@ export async function uploadLogo(
 
   revalidateBrandedSurfaces();
   return { ok: true };
+}
+
+// ─── Form-action adapters ──────────────────────────────────────────────────
+
+/** useActionState adapter so the upload panel can surface failure reasons. */
+export async function uploadLogoAction(
+  _prev: LogoUploadResult | null,
+  formData: FormData,
+): Promise<LogoUploadResult> {
+  return uploadLogo(formData);
+}
+
+export async function resetBrandingFromForm(): Promise<void> {
+  await resetBranding();
+}
+
+export async function removeLogoFromForm(): Promise<void> {
+  await removeLogo();
 }
 
 export async function removeLogo(): Promise<{ ok: true }> {

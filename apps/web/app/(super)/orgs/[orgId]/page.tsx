@@ -2,11 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SYSTEM_ORG_ID, withSuperAdminContext } from "@elc/db";
+import { BRANDING_FONTS, type BrandingFontKey } from "@elc/db/branding";
+import { getBrandingForOrgAsSuperAdmin } from "@elc/db/org-branding";
 import { requireRole } from "@/lib/auth/context";
+import { resetOrgBrandingFromForm } from "@/lib/super/branding-actions";
 import {
   setOrgStatusFromForm,
   updateOrgSettingsFromForm,
 } from "@/lib/super/org-actions";
+import { ConfirmSubmitButton } from "@/components/ui/confirm-submit-button";
 import { SubmitButton } from "@/components/ui/submit-button";
 
 export const metadata: Metadata = {
@@ -20,6 +24,7 @@ type SearchParams = {
   created?: string;
   saved?: string;
   status_changed?: string;
+  branding_reset?: string;
   error?: string;
 };
 
@@ -88,6 +93,8 @@ export default async function OrgDetailPage({
     },
   });
   if (!org) notFound();
+
+  const branding = await getBrandingForOrgAsSuperAdmin(ctx, orgId);
 
   const [learnerCount, adminCount, quotaSum, activity] = await Promise.all([
     db.user.count({ where: { org_id: orgId, role: "Learner" } }),
@@ -292,6 +299,68 @@ export default async function OrgDetailPage({
               label="Archive"
             />
           </div>
+        </section>
+
+        <section className="rounded-lg bg-brand-white ring-1 ring-brand-grey-200 p-6">
+          <h2 className="font-heading font-bold text-lg text-brand-black">
+            Branding
+          </h2>
+          {sp.branding_reset ? (
+            <p
+              role="status"
+              className="mt-2 font-body text-sm text-brand-grey-700"
+            >
+              Branding reset to the platform default.
+            </p>
+          ) : null}
+          {branding.customised && branding.row ? (
+            <div className="mt-4 flex flex-wrap items-center gap-6">
+              <div className="flex items-center gap-2">
+                <span
+                  className="h-6 w-6 rounded-full ring-1 ring-brand-grey-200"
+                  style={{ background: branding.theme.primary_color }}
+                  title={`Accent ${branding.theme.primary_color}`}
+                />
+                <span
+                  className="h-6 w-6 rounded-full ring-1 ring-brand-grey-200"
+                  style={{ background: branding.theme.surface_dark_color }}
+                  title={`Surface ${branding.theme.surface_dark_color}`}
+                />
+                <span className="font-body text-sm text-brand-grey-700">
+                  {branding.theme.primary_color} ·{" "}
+                  {branding.theme.surface_dark_color}
+                </span>
+              </div>
+              <p className="font-body text-sm text-brand-grey-700">
+                Font:{" "}
+                <strong>
+                  {BRANDING_FONTS[branding.theme.font_key as BrandingFontKey]
+                    ?.label ?? branding.theme.font_key}
+                </strong>
+              </p>
+              <p className="font-body text-sm text-brand-grey-700">
+                Logo:{" "}
+                <strong>
+                  {branding.row.logo_object_key ? "uploaded" : "none"}
+                </strong>
+              </p>
+              <form action={resetOrgBrandingFromForm}>
+                <input type="hidden" name="org_id" value={org.id} />
+                <ConfirmSubmitButton
+                  confirmMessage={`Reset ${org.name}'s branding to the platform default? Their logo will be deleted.`}
+                  pendingLabel="Resetting…"
+                  className="font-heading font-bold text-sm text-brand-red hover:text-brand-red-dark transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red rounded-sm disabled:opacity-60"
+                >
+                  Reset branding
+                </ConfirmSubmitButton>
+              </form>
+            </div>
+          ) : (
+            <p className="mt-2 font-body text-sm text-brand-grey-700">
+              Platform default — this organisation hasn&apos;t customised its
+              branding.
+            </p>
+          )}
         </section>
 
         <section>
