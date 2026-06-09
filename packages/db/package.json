@@ -11,7 +11,9 @@
     "./org-learner-admin": "./src/org-learner-admin.ts",
     "./super-user-admin": "./src/super-user-admin.ts",
     "./super-metrics": "./src/super-metrics.ts",
-    "./clerk-seed": "./src/clerk-seed.ts"
+    "./clerk-seed": "./src/clerk-seed.ts",
+    "./branding": "./src/branding.ts",
+    "./org-branding": "./src/org-branding.ts"
   },
   "scripts": {
     "db:generate": "prisma generate",

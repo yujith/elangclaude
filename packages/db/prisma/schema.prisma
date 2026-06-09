@@ -222,9 +222,30 @@ model Organization {
   readingPaperSessions ReadingPaperSession[]
   aiCallLogs           AiCallLog[]
   stripeEventLogs      StripeEventLog[]
+  branding             OrgBranding?
 
   @@index([plan_id])
   @@index([subscription_status])
+}
+
+// Per-org white-label theming (ADR-0023). At most one row per org; absence
+// (or enabled=false) means the platform default brand. Colours are hex
+// strings and font_key is an allowlist key — both are validated by
+// validateBranding() in packages/db/src/branding.ts before every write, so
+// rows here are trusted by the theme renderer. The logo lives in R2 under
+// the org-prefixed key in logo_object_key (raster only, never SVG).
+model OrgBranding {
+  id                 String       @id @default(cuid())
+  org_id             String       @unique
+  org                Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  enabled            Boolean      @default(true)
+  primary_color      String
+  surface_dark_color String
+  font_key           String
+  logo_object_key    String?
+  logo_updated_at    DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 }
 
 // Subscription plan catalogue. Global model (NOT tenant-scoped) — managed
