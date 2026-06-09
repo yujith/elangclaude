@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { OrganizationSwitcher } from "@clerk/nextjs";
-import { Logo } from "@/components/logo";
+import { OrgLogo } from "@/components/org-logo";
 import { OrgThemeAssets } from "@/components/org-theme-assets";
 import { SignOutControl } from "@/components/sign-out-control";
 import {
@@ -66,7 +66,7 @@ export default async function OrgAdminLayout({
             href="/admin"
             className="flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 focus-visible:ring-offset-brand-black rounded-sm"
           >
-            <Logo variant="on-dark" height={40} />
+            <OrgLogo height={40} />
             <span className="font-body text-xs uppercase tracking-widest text-brand-grey-200">
               Org admin
             </span>

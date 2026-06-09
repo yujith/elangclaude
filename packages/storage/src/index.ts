@@ -40,3 +40,24 @@ export type {
   PutAudioObjectArgs,
   SignedAudioDownloadArgs,
 } from "./r2";
+
+export {
+  brandingLogoKey,
+  assertBrandingLogoKey,
+  logoExtensionForMimeType,
+} from "./keys";
+export type { BrandingLogoKeyParts, LogoExtension } from "./keys";
+
+export { sniffImageType } from "./image-sniff";
+export type { SniffedImageType } from "./image-sniff";
+
+export {
+  putBrandingLogo,
+  signedBrandingLogoUrl,
+  deleteBrandingLogo,
+} from "./r2";
+export type {
+  PutBrandingLogoArgs,
+  SignedBrandingLogoArgs,
+  DeleteBrandingLogoArgs,
+} from "./r2";

@@ -68,6 +68,64 @@ export function extensionForMimeType(
   return null;
 }
 
+// ─── Org branding logo keys (ADR-0023) ──────────────────────────────────
+//
+// Org logos are tenant data exactly like recordings: org-prefixed key,
+// signed URLs only. Raster formats only — SVG is rejected at every layer
+// (it can embed script, and these bytes are served back to learners'
+// browsers).
+
+export type LogoExtension = "png" | "jpg" | "webp";
+
+const ALLOWED_LOGO_EXTENSIONS: ReadonlySet<LogoExtension> = new Set([
+  "png",
+  "jpg",
+  "webp",
+]);
+
+export type BrandingLogoKeyParts = {
+  org_id: string;
+  extension: LogoExtension;
+};
+
+// branding/{org_id}/logo.{png|jpg|webp}
+export function brandingLogoKey(parts: BrandingLogoKeyParts): string {
+  assertIdSafe("org_id", parts.org_id);
+  if (!ALLOWED_LOGO_EXTENSIONS.has(parts.extension)) {
+    throw new Error(`Unsupported logo extension: ${parts.extension}`);
+  }
+  return `branding/${parts.org_id}/logo.${parts.extension}`;
+}
+
+// Maps an upload's MIME type to the extension we store under. SVG (and
+// anything else) returns null — the caller surfaces a friendly error.
+export function logoExtensionForMimeType(mime: string): LogoExtension | null {
+  const base = mime.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (base === "image/png") return "png";
+  if (base === "image/jpeg") return "jpg";
+  if (base === "image/webp") return "webp";
+  return null;
+}
+
+// Structural org guard for branding-logo code paths — the logo twin of
+// assertKeyBelongsToOrg. Every branding R2 op in r2.ts runs this first.
+export function assertBrandingLogoKey(key: string, org_id: string): void {
+  assertIdSafe("org_id", org_id);
+  const prefix = `branding/${org_id}/`;
+  if (!key.startsWith(prefix)) {
+    throw new Error(
+      `Storage key ${JSON.stringify(key)} is not a branding key for org ${org_id}.`,
+    );
+  }
+  const tail = key.slice(prefix.length);
+  const match = /^logo\.([a-z0-9]+)$/.exec(tail);
+  if (!match || !ALLOWED_LOGO_EXTENSIONS.has(match[1] as LogoExtension)) {
+    throw new Error(
+      `Storage key ${JSON.stringify(key)} is not a valid branding logo key.`,
+    );
+  }
+}
+
 // Guards against signing a key from one org under another org's ctx. Every
 // signed-URL / download call in r2.ts runs this first.
 export function assertKeyBelongsToOrg(key: string, org_id: string): void {

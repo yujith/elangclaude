@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   assertAudioKey,
+  assertBrandingLogoKey,
   assertKeyBelongsToOrg,
   audioExtensionForMimeType,
   audioKey,
+  brandingLogoKey,
   extensionForMimeType,
+  logoExtensionForMimeType,
   recordingKey,
 } from "./keys";
 
@@ -217,5 +220,78 @@ describe("audioExtensionForMimeType", () => {
     expect(audioExtensionForMimeType("audio/flac")).toBeNull();
     expect(audioExtensionForMimeType("text/plain")).toBeNull();
     expect(audioExtensionForMimeType("")).toBeNull();
+  });
+});
+
+describe("brandingLogoKey", () => {
+  it("builds the org-prefixed logo key", () => {
+    expect(brandingLogoKey({ org_id: "org_1", extension: "png" })).toBe(
+      "branding/org_1/logo.png",
+    );
+    expect(brandingLogoKey({ org_id: "org_1", extension: "webp" })).toBe(
+      "branding/org_1/logo.webp",
+    );
+  });
+
+  it("rejects unsafe org ids", () => {
+    expect(() =>
+      brandingLogoKey({ org_id: "../other", extension: "png" }),
+    ).toThrow(/Unsafe org_id/);
+    expect(() =>
+      brandingLogoKey({ org_id: "a/b", extension: "png" }),
+    ).toThrow(/Unsafe org_id/);
+  });
+
+  it("rejects unsupported extensions (svg above all)", () => {
+    expect(() =>
+      // @ts-expect-error — deliberately wrong extension
+      brandingLogoKey({ org_id: "org_1", extension: "svg" }),
+    ).toThrow(/Unsupported logo extension/);
+  });
+});
+
+describe("assertBrandingLogoKey", () => {
+  it("accepts a key under the caller's org", () => {
+    expect(() =>
+      assertBrandingLogoKey("branding/org_1/logo.png", "org_1"),
+    ).not.toThrow();
+  });
+
+  it("rejects another org's key", () => {
+    expect(() =>
+      assertBrandingLogoKey("branding/org_1/logo.png", "org_2"),
+    ).toThrow(/not a branding key for org org_2/);
+  });
+
+  it("rejects recording and audio keys outright", () => {
+    expect(() =>
+      assertBrandingLogoKey("recordings/org_1/u/a.webm", "org_1"),
+    ).toThrow(/not a branding key/);
+    expect(() =>
+      assertBrandingLogoKey(`audio/${"a".repeat(64)}.mp3`, "org_1"),
+    ).toThrow(/not a branding key/);
+  });
+
+  it("rejects non-logo shapes under the branding prefix", () => {
+    expect(() =>
+      assertBrandingLogoKey("branding/org_1/evil.html", "org_1"),
+    ).toThrow(/not a valid branding logo key/);
+    expect(() =>
+      assertBrandingLogoKey("branding/org_1/logo.svg", "org_1"),
+    ).toThrow(/not a valid branding logo key/);
+  });
+});
+
+describe("logoExtensionForMimeType", () => {
+  it("maps the three raster types", () => {
+    expect(logoExtensionForMimeType("image/png")).toBe("png");
+    expect(logoExtensionForMimeType("image/jpeg")).toBe("jpg");
+    expect(logoExtensionForMimeType("image/webp")).toBe("webp");
+  });
+
+  it("rejects SVG and everything else", () => {
+    expect(logoExtensionForMimeType("image/svg+xml")).toBeNull();
+    expect(logoExtensionForMimeType("image/gif")).toBeNull();
+    expect(logoExtensionForMimeType("text/html")).toBeNull();
   });
 });

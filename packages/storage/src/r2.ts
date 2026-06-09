@@ -21,7 +21,11 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { requireEnv } from "./env";
-import { assertAudioKey, assertKeyBelongsToOrg } from "./keys";
+import {
+  assertAudioKey,
+  assertBrandingLogoKey,
+  assertKeyBelongsToOrg,
+} from "./keys";
 
 const DEFAULT_EXPIRY_SECONDS = 15 * 60;
 
@@ -203,6 +207,70 @@ export async function signedAudioDownloadUrl(
     client(),
     new GetObjectCommand({ Bucket: bucket(), Key: args.key }),
     { expiresIn: args.expiresInSeconds ?? DEFAULT_EXPIRY_SECONDS },
+  );
+}
+
+// ─── Org branding logo operations (ADR-0023) ─────────────────────────────
+//
+// Logos are tenant-scoped like recordings (org-prefixed key, signed GET
+// only) but uploaded server-side like audio: the branding server action
+// validates magic bytes + size first, so the bytes never reach R2 via a
+// client-controlled presigned PUT. Every op runs the structural
+// assertBrandingLogoKey guard, so a recording or audio key can never be
+// smuggled through this path — and vice versa.
+
+export type PutBrandingLogoArgs = {
+  key: string;
+  org_id: string;
+  bytes: Uint8Array;
+  contentType: string;
+};
+
+export async function putBrandingLogo(args: PutBrandingLogoArgs): Promise<void> {
+  assertBrandingLogoKey(args.key, args.org_id);
+  await client().send(
+    new PutObjectCommand({
+      Bucket: bucket(),
+      Key: args.key,
+      Body: args.bytes,
+      ContentType: args.contentType,
+    }),
+  );
+}
+
+export type SignedBrandingLogoArgs = {
+  key: string;
+  org_id: string;
+  expiresInSeconds?: number;
+};
+
+// Short-lived URL for rendering the org logo in chrome. Minted per request
+// by /api/branding/logo, which derives org_id from the session ctx.
+export async function signedBrandingLogoUrl(
+  args: SignedBrandingLogoArgs,
+): Promise<string> {
+  assertBrandingLogoKey(args.key, args.org_id);
+  return getSignedUrl(
+    client(),
+    new GetObjectCommand({ Bucket: bucket(), Key: args.key }),
+    { expiresIn: args.expiresInSeconds ?? DEFAULT_EXPIRY_SECONDS },
+  );
+}
+
+export type DeleteBrandingLogoArgs = {
+  key: string;
+  org_id: string;
+};
+
+// Removes a replaced/reset logo. org_id comes from the caller's ctx for
+// OrgAdmin flows; the SuperAdmin reset passes the target org's id read off
+// its own DB row (never from a request param).
+export async function deleteBrandingLogo(
+  args: DeleteBrandingLogoArgs,
+): Promise<void> {
+  assertBrandingLogoKey(args.key, args.org_id);
+  await client().send(
+    new DeleteObjectCommand({ Bucket: bucket(), Key: args.key }),
   );
 }
 
