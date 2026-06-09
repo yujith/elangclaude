@@ -177,19 +177,17 @@ test.describe("learner home dashboard", () => {
       "Listening",
       "Writing",
       "Speaking",
-      "Mock",
       "Profile",
     ]) {
       await expect(nav.getByRole("link", { name: label })).toBeVisible();
     }
+    // Full Mock is temporarily hidden (e5a4aec) — assert it stays hidden so
+    // this spec tracks the nav, not the aspiration. Restore the Mock-link
+    // walk when the section returns.
+    await expect(nav.getByRole("link", { name: "Mock" })).toHaveCount(0);
     await expect(
       page.locator("header").getByRole("button", { name: "Sign out" }),
     ).toBeVisible();
-
-    // Clicking Mock in the nav takes us to /mock.
-    await nav.getByRole("link", { name: "Mock" }).click();
-    await page.waitForURL("**/mock");
-    expect(page.url()).toContain("/mock");
   });
 
   test("Resume strip surfaces an in-progress attempt and deep-links to it", async ({
