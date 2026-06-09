@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { OrganizationSwitcher } from "@clerk/nextjs";
 import { Logo } from "@/components/logo";
+import { OrgThemeAssets } from "@/components/org-theme-assets";
 import { SignOutControl } from "@/components/sign-out-control";
 import {
   ForbiddenError,
@@ -11,6 +12,7 @@ import {
   devLoginReturnPath,
   requireRole,
 } from "@/lib/auth/context";
+import { getOrgTheme, orgThemeStyle } from "@/lib/branding/org-theme";
 
 const SIGN_IN_PATH = "/sign-in";
 
@@ -48,8 +50,16 @@ export default async function OrgAdminLayout({
   // single-org admins keep the existing chrome unchanged.
   const multiOrg = process.env.MULTI_ORG_ENABLED === "1";
 
+  // Org custom branding (ADR-0023): CSS-var override scoped to this frame —
+  // never :root — so public/marketing surfaces stay platform-branded.
+  const theme = await getOrgTheme();
+
   return (
-    <div className="min-h-screen flex flex-col bg-brand-grey-50">
+    <div
+      className="min-h-screen flex flex-col bg-brand-grey-50"
+      style={orgThemeStyle(theme)}
+    >
+      <OrgThemeAssets theme={theme} />
       <header className="bg-brand-black text-white">
         <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between gap-4">
           <Link
@@ -68,7 +78,7 @@ export default async function OrgAdminLayout({
                 afterSelectOrganizationUrl="/post-signin"
                 afterLeaveOrganizationUrl="/post-signin"
                 appearance={{
-                  variables: { colorPrimary: "#EE2346" },
+                  variables: { colorPrimary: theme.primary_color },
                   elements: {
                     // Org creation must run through /signup-org or /orgs/new
                     // so it lands on a Plan + billing — hide the in-switcher
