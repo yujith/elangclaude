@@ -262,7 +262,7 @@ export function BrandingEditor({ initial }: Props) {
                 >
                   Welcome back, Amara.
                 </p>
-                <p className="text-sm" style={{ color: "#404040" }}>
+                <p className="text-sm text-brand-grey-700">
                   Your Coherence band rose from 5.5 to 6.5 in 4 weeks. Keep
                   the streak going.
                 </p>
@@ -276,11 +276,8 @@ export function BrandingEditor({ initial }: Props) {
                   Continue practice
                 </span>
                 <div
-                  className="rounded-md px-4 py-2 text-xs"
-                  style={{
-                    background: "var(--brand-red-soft)",
-                    color: "#171717",
-                  }}
+                  className="rounded-md px-4 py-2 text-xs text-brand-grey-900"
+                  style={{ background: "var(--brand-red-soft)" }}
                 >
                   Mock test unlocked — 3 sections to go.
                 </div>

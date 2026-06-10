@@ -13,6 +13,7 @@ import { prisma } from "./client";
 import { SYSTEM_ORG_ID } from "./system-org";
 import { withOrg, withSuperAdminContext, type OrgContext } from "./tenancy";
 import {
+  DEFAULT_BRANDING,
   resolveBrandingTheme,
   validateBranding,
   type BrandingFailureReason,
@@ -148,10 +149,10 @@ export async function setOrgLogoForOrg(
       where: { org_id: ctx.org_id },
       create: {
         org_id: ctx.org_id,
-        enabled: true,
-        primary_color: "#EE2346",
-        surface_dark_color: "#0A0A0A",
-        font_key: "rubik",
+        enabled: DEFAULT_BRANDING.enabled,
+        primary_color: DEFAULT_BRANDING.primary_color,
+        surface_dark_color: DEFAULT_BRANDING.surface_dark_color,
+        font_key: DEFAULT_BRANDING.font_key,
         logo_object_key: input.logo_object_key,
         logo_updated_at: new Date(),
       },
