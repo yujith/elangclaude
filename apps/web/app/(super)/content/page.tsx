@@ -348,6 +348,12 @@ export default async function ContentInboxPage({
                 Generate {s} →
               </Link>
             ))}
+            <Link
+              href="/content/automation"
+              className="inline-flex items-center rounded-pill bg-brand-black px-4 py-1.5 font-heading font-bold text-xs text-white border border-brand-black hover:bg-brand-grey-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-red focus-visible:ring-offset-2 transition-colors"
+            >
+              Automation →
+            </Link>
           </div>
         </section>
 

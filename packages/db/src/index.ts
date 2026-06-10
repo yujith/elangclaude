@@ -16,6 +16,18 @@ export type {
   DeleteDecision,
 } from "./content-lifecycle";
 
+export {
+  isScheduleDue,
+  isValidTimeZone,
+  localDateKey,
+  localDateTimeToUtc,
+  localParts,
+} from "./automation-schedule";
+export type {
+  DueCheckSchedule,
+  LocalParts,
+} from "./automation-schedule";
+
 export { getLearnerDashboard } from "./learner-dashboard";
 export type {
   LearnerDashboardData,

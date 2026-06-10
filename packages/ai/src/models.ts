@@ -17,7 +17,8 @@ export type ChatPurpose =
   | "writing-generate"
   | "reading-generate"
   | "listening-generate"
-  | "speaking-cue-generate";
+  | "speaking-cue-generate"
+  | "content-review";
 
 // Non-chat AI purposes. These do NOT have a chat-model allowlist — they hit
 // fixed provider endpoints (see adapters/openai.ts and adapters/elevenlabs.ts)
@@ -171,6 +172,16 @@ const REGISTRY: Record<
       OPENROUTER_LLAMA_3_70B,
       OPENROUTER_MISTRAL_LARGE,
     ],
+  },
+  // Automated content review (ADR-0024). The ONE sanctioned Sonnet purpose
+  // outside grading: the reviewer verdict replaces the human moderation gate
+  // for auto-published tests, so it needs rubric-grade reasoning — and a
+  // different model family from the gpt-4.1-mini generator, so the reviewer
+  // doesn't share the generator's blind spots. Volume is schedule-bound and
+  // capped by the automation orchestrator, never learner-triggered.
+  "content-review": {
+    default: ANTHROPIC_SONNET,
+    allowed: [ANTHROPIC_SONNET],
   },
 };
 

@@ -75,6 +75,12 @@ export default async function WritingModerationPage({
         createdAt: true,
         generated_model: true,
         _count: { select: { questions: true } },
+        // ADR-0024 audit badge: was this test published by automation?
+        run_items: {
+          where: { outcome: "Published" },
+          select: { id: true },
+          take: 1,
+        },
         questions: {
           select: { prompt: true },
           orderBy: { position: "asc" },

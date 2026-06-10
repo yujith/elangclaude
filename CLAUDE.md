@@ -161,6 +161,27 @@ SuperAdmin reset on `/orgs/[id]` logs `super.branding.reset` under
 `SYSTEM_ORG_ID`. Clerk emails + Stripe surfaces stay platform-branded;
 learners see the org theme from first sign-in (no pre-auth branding — D7).
 
+## Content automation: live (ADR-0024)
+
+Scheduled generation with a model-reviews-model gate shipped 2026-06-10.
+SuperAdmin schedules batches at `/content/automation` (one-off date or
+Daily/Weekly recurring, **timezone-aware** — wall-clock in the schedule's
+IANA zone, default `Australia/Sydney`); an hourly Vercel Cron hits
+`/api/cron/content-generation` (`CRON_SECRET` bearer). Per slot:
+gpt-4.1-mini generates → **Claude Sonnet reviews** (`content-review`
+purpose, prompts in `prompts/review/*.md`) → reject regenerates with the
+reviewer's feedback (max 3 generations) → approve publishes straight to
+learners **only when the auto-publish toggle is on** (off → pre-screened
+`PendingReview`). Two server-side kill switches live in the
+`AutomationSettings` singleton. Runs execute as the schedule's creator
+under **`SYSTEM_ORG_ID`** — quota (system org `quota_daily` = 2000) and
+`AiCallLog` cost attribution stay inside the normal gateway gate, no
+bypass. Audit: `GenerationRun`/`GenerationRunItem` keep every verdict;
+machine approvals have `approved_by = null` + an "Auto" badge; rollback
+is the ADR-0021 retire action. Engine: `packages/ai/src/automation/engine.ts`
+(pure, tested); wiring: `apps/web/lib/automation/runner.ts`; due-check
+policy (DST-tested): `packages/db/src/automation-schedule.ts`.
+
 ## Hard rules — non-negotiable
 
 <important if="touching any database query or API route">

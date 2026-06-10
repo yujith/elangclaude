@@ -80,6 +80,23 @@ export class GenerationValidationError extends Error {
   }
 }
 
+// ADR-0024 — automated content review.
+//
+//   ReviewShapeError → the reviewer's verdict JSON didn't parse / didn't
+//     match the verdict schema after the retry budget. The automation
+//     orchestrator treats this as "no verdict": the candidate is NEVER
+//     published, the run item is marked failed.
+
+export class ReviewShapeError extends Error {
+  constructor(
+    public readonly issues: unknown,
+    public readonly raw: string,
+  ) {
+    super(`Review verdict failed schema validation.`);
+    this.name = "ReviewShapeError";
+  }
+}
+
 function describeCause(cause: unknown): string {
   if (cause instanceof Error) return cause.message;
   if (typeof cause === "string") return cause;

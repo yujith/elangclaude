@@ -25,6 +25,7 @@ import {
   loadGenerationPrompt,
   type GenerationPromptLoader,
 } from "./prompts";
+import { seedMessages, type GenerationRevision } from "./revision";
 import {
   parseGeneratedListening,
   type GeneratedListening,
@@ -57,6 +58,10 @@ export type GenerateListeningRequest = {
   // Optional topic hint passed to the model. Useful when re-rolling to
   // avoid generating two sections on the same broad theme.
   topicHint?: string;
+  // ADR-0024 automation: when the content reviewer rejected a previous
+  // unit, seed the conversation with that unit + the reviewer's feedback
+  // so the regeneration is a targeted fix rather than a blind re-roll.
+  revision?: GenerationRevision;
 };
 
 export type GenerateListeningResult = {
@@ -180,9 +185,7 @@ export function createListeningGenerator(deps: ListeningGeneratorDeps) {
     ): Promise<GenerateListeningResult> {
       const system = deps.loadPrompt("listening");
       const turn1 = userTurn(req);
-      const messages: { role: "user" | "assistant"; content: string }[] = [
-        { role: "user", content: turn1 },
-      ];
+      const messages = seedMessages(turn1, req.revision);
       let last:
         | {
             text: string;

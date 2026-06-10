@@ -46,6 +46,7 @@ export {
   ModelNotAllowedError,
   ProviderError,
   QuotaExceededError,
+  ReviewShapeError,
 } from "./errors";
 
 export { parseWritingGrade, writingGradeSchema } from "./grading/schema";
@@ -419,6 +420,35 @@ export type {
   PersistGeneratedSpeakingDb,
   PersistSpeakingResult,
 } from "./generation/speaking-persist";
+
+// ─── Content automation engine (ADR-0024) ───────────────────────────────
+export {
+  AUTOMATION_MAX_COUNT_PER_RUN,
+  AUTOMATION_MAX_GENERATIONS,
+  runAutomationItem,
+  summarizeRunOutcomes,
+} from "./automation/engine";
+export type {
+  AttemptVerdict,
+  AutomationGenerateResult,
+  AutomationItemDeps,
+  AutomationItemOutcome,
+  AutomationItemResult,
+  AutomationParams,
+} from "./automation/engine";
+export type { GenerationRevision } from "./generation/revision";
+
+// ─── Automated content review (ADR-0024) ────────────────────────────────
+export { createContentReviewer, contentReviewer } from "./review/reviewer";
+export type {
+  ContentReviewerDeps,
+  ReviewContentRequest,
+  ReviewContentResult,
+} from "./review/reviewer";
+export { parseReviewVerdict, reviewVerdictSchema } from "./review/schema";
+export type { ReviewIssue, ReviewVerdict } from "./review/schema";
+export { loadReviewPrompt } from "./review/prompts";
+export type { ReviewPromptLoader, ReviewSection } from "./review/prompts";
 
 // ─── Speaking examiner (realtime session instruction builder) ───────────
 export {

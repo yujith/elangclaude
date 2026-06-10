@@ -16,6 +16,10 @@ export type ApprovedRow = {
   // Present for sections whose row label comes from the first question prompt
   // (Writing / Speaking) rather than body_json (Reading / Listening).
   questions?: { prompt: string }[];
+  // ADR-0024 audit affordance: non-empty when an automation run published
+  // this test (GenerationRunItem outcome=Published). Callers select it
+  // filtered + take 1; rows without it just omit the badge.
+  run_items?: { id: string }[];
 };
 
 function difficultyDots(level: number): string {
@@ -69,6 +73,14 @@ export function ApprovedList({
                   >
                     {difficultyDots(t.difficulty)}
                   </span>
+                  {t.run_items && t.run_items.length > 0 ? (
+                    <span
+                      className="inline-flex items-center rounded-pill border border-brand-grey-300 bg-brand-grey-50 px-2.5 py-0.5 font-heading font-bold text-xs text-brand-grey-700"
+                      title="Published by automation — reviewer-model approved, no human review"
+                    >
+                      Auto
+                    </span>
+                  ) : null}
                   <span className="font-body text-sm text-brand-grey-700 truncate max-w-xs">
                     {previewOf(t)}
                   </span>

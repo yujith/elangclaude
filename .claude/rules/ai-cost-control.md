@@ -40,10 +40,13 @@ The gateway:
 | TTS for Listening audio | ElevenLabs (variety of accents) | Cache aggressively |
 | Writing grading | Claude Sonnet | Rubric reasoning matters |
 | Speaking grading (transcript pass) | Claude Sonnet | Rubric reasoning matters |
+| Automated content review (`content-review`) | Claude Sonnet | Replaces the human moderation gate (ADR-0024); cross-vendor check on the gpt-4.1-mini generator. The ONE sanctioned Sonnet purpose outside grading — schedule-bound volume, never learner-triggered |
 | Speaking transcription | Whisper | Standard |
 | Speaking realtime conversation | OpenAI Realtime API | Lowest viable latency |
 
 Never call the premium tier (Sonnet) for bulk generation. Never call the cheap tier for grading. The gateway enforces this with a `purpose → allowed-models` allowlist (`packages/ai/src/models.ts`). The four generation purposes default to OpenAI `gpt-4.1-mini`; OpenRouter models stay on the allowlist so a re-roll can fall back via an explicit `model` override.
+
+Background automation (ADR-0024) is the answered case of "calling an LLM from a background job": runs execute under `SYSTEM_ORG_ID` with a dedicated `quota_daily` (2000) through the NORMAL gateway gate — never add a quota-bypass path for automation.
 
 ## Caching strategy
 

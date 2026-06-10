@@ -27,6 +27,7 @@ import {
   loadGenerationPrompt,
   type GenerationPromptLoader,
 } from "./prompts";
+import { seedMessages, type GenerationRevision } from "./revision";
 import {
   parseGeneratedWriting,
   type GeneratedWriting,
@@ -52,6 +53,10 @@ export type GenerateWritingRequest = {
   // Optional topic hint passed to the model. Useful when re-rolling to
   // avoid generating two tasks on the same subject.
   topicHint?: string;
+  // ADR-0024 automation: when the content reviewer rejected a previous
+  // unit, seed the conversation with that unit + the reviewer's feedback
+  // so the regeneration is a targeted fix rather than a blind re-roll.
+  revision?: GenerationRevision;
 };
 
 export type GenerateWritingResult = {
@@ -168,12 +173,13 @@ export function createWritingGenerator(deps: WritingGeneratorDeps) {
       const track = resolveTrack(req);
       const system = deps.loadPrompt("writing");
       const turn1 = userTurn(req, track);
+      const baseMessages = seedMessages(turn1, req.revision);
 
       const first = await deps.ai.chat({
         ctx: req.ctx,
         purpose: "writing-generate",
         system,
-        messages: [{ role: "user", content: turn1 }],
+        messages: baseMessages,
         maxTokens: MAX_OUTPUT_TOKENS,
       });
 
@@ -189,7 +195,7 @@ export function createWritingGenerator(deps: WritingGeneratorDeps) {
           purpose: "writing-generate",
           system,
           messages: [
-            { role: "user", content: turn1 },
+            ...baseMessages,
             { role: "assistant", content: first.text },
             { role: "user", content: STRICTER_RETRY_NUDGE },
           ],

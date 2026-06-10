@@ -25,6 +25,7 @@ import {
   loadGenerationPrompt,
   type GenerationPromptLoader,
 } from "./prompts";
+import { seedMessages, type GenerationRevision } from "./revision";
 import {
   parseGeneratedSpeaking,
   type GeneratedSpeaking,
@@ -47,6 +48,10 @@ export type GenerateSpeakingRequest = {
   // Optional topic-domain hint. Useful when re-rolling to avoid generating
   // two tests on the same subject.
   topicHint?: string;
+  // ADR-0024 automation: when the content reviewer rejected a previous
+  // unit, seed the conversation with that unit + the reviewer's feedback
+  // so the regeneration is a targeted fix rather than a blind re-roll.
+  revision?: GenerationRevision;
 };
 
 export type GenerateSpeakingResult = {
@@ -107,12 +112,13 @@ export function createSpeakingGenerator(deps: SpeakingGeneratorDeps) {
     ): Promise<GenerateSpeakingResult> {
       const system = deps.loadPrompt("speaking");
       const turn1 = userTurn(req);
+      const baseMessages = seedMessages(turn1, req.revision);
 
       const first = await deps.ai.chat({
         ctx: req.ctx,
         purpose: "speaking-cue-generate",
         system,
-        messages: [{ role: "user", content: turn1 }],
+        messages: baseMessages,
         maxTokens: MAX_OUTPUT_TOKENS,
       });
 
@@ -128,7 +134,7 @@ export function createSpeakingGenerator(deps: SpeakingGeneratorDeps) {
           purpose: "speaking-cue-generate",
           system,
           messages: [
-            { role: "user", content: turn1 },
+            ...baseMessages,
             { role: "assistant", content: first.text },
             { role: "user", content: STRICTER_RETRY_NUDGE },
           ],

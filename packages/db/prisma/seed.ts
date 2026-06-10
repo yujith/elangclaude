@@ -29,14 +29,20 @@ async function upsertSystemOrg() {
   // Singleton parent for SuperAdmin-level ActivityLog rows (content
   // moderation, org CRUD). Status is Archived so it can never accidentally
   // hold real users; the /orgs SuperAdmin list filters this id out.
+  //
+  // quota_daily is the budget backstop for scheduled content automation
+  // (ADR-0024): cron-driven generation/review/TTS calls run under
+  // SYSTEM_ORG_ID and go through the normal gateway quota gate — no
+  // bypass code path. 2000 units/day covers ~10× the largest sane
+  // nightly batch while still strangling a runaway loop.
   return prisma.organization.upsert({
     where: { id: SYSTEM_ORG_ID },
-    update: { name: SYSTEM_ORG_NAME, status: "Archived" },
+    update: { name: SYSTEM_ORG_NAME, status: "Archived", quota_daily: 2000 },
     create: {
       id: SYSTEM_ORG_ID,
       name: SYSTEM_ORG_NAME,
       seat_limit: 0,
-      quota_daily: 0,
+      quota_daily: 2000,
       quota_monthly: 0,
       status: "Archived",
     },

@@ -105,6 +105,47 @@ enum ProvisionedVia {
   self_serve
 }
 
+// ─── Content automation enums (ADR-0024) ──────────────────────────────────
+
+// When a GenerationSchedule fires: once at `run_at`, or repeatedly per
+// `frequency` + `run_hour` (+ `weekday`) in the schedule's timezone.
+enum ScheduleMode {
+  OneOff
+  Recurring
+}
+
+enum ScheduleFrequency {
+  Daily
+  Weekly
+}
+
+enum GenerationRunTrigger {
+  Scheduled
+  Manual
+}
+
+// Run-level rollup. PartialFailure = at least one item published/pended
+// AND at least one failed.
+enum GenerationRunStatus {
+  Running
+  Succeeded
+  PartialFailure
+  Failed
+}
+
+// Where one generated candidate ended up.
+//   Published          — reviewer approved + auto-publish on → learners see it.
+//   PendingHumanReview — reviewer approved with auto-publish off, or the
+//                        retry budget exhausted; sits in the normal
+//                        /content moderation queue.
+//   Failed             — no publishable candidate (generation/review/publish
+//                        error). Any persisted candidate stays PendingReview.
+enum RunItemOutcome {
+  Published
+  PendingHumanReview
+  Failed
+}
+
 // ─── Compliance enums (ADR-0019) ──────────────────────────────────────────
 
 // Who is the data controller for an Org's learners (GDPR Art 4 / DPDP).
@@ -328,6 +369,8 @@ model Test {
   // A single passage-Test can be slotted into one or more full Reading
   // papers (content reuse). The join row carries the slot (1/2/3).
   paper_parts ReadingPaperPart[]
+  // Automation audit: which auto-generation run item produced this test.
+  run_items   GenerationRunItem[]
 
   @@index([track, section, status])
   @@index([approved_by])
@@ -351,6 +394,115 @@ model Question {
 
   answers Answer[]
 
+  @@index([test_id])
+}
+
+// ─── Content automation (ADR-0024) — global, SuperAdmin-managed ──────────
+//
+// Like Test/Question these carry no org_id: they belong to the global
+// content pool. All access is through requireRole("SuperAdmin") server
+// actions or the CRON_SECRET-authed /api/cron/content-generation route.
+
+// Singleton row (id = "global"): the two SuperAdmin kill switches.
+// `generation_enabled` gates scheduled cron runs (manual "Run now" still
+// works when off). `auto_publish_enabled` decides whether reviewer-approved
+// tests go straight to Approved or land in PendingReview pre-screened.
+// Both are checked server-side at execution time, never only in the UI.
+model AutomationSettings {
+  id                   String   @id @default("global")
+  generation_enabled   Boolean  @default(false)
+  auto_publish_enabled Boolean  @default(false)
+  // Audit pointer (User.id of the last SuperAdmin to flip a toggle).
+  updated_by           String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model GenerationSchedule {
+  id          String             @id @default(cuid())
+  section     Section
+  track       Track
+  difficulty  Int                @default(3)
+  // Academic Reading IELTS part (1|2|3); null = unlabelled / non-Reading.
+  part        Int?
+  // Writing only: which task kind to generate (WritingTaskKind in @elc/ai).
+  task_kind   String?
+  topic_hint  String?
+  // Tests per run. Capped (AUTOMATION_MAX_COUNT_PER_RUN) in app code.
+  count       Int                @default(1)
+  mode        ScheduleMode
+  // IANA zone the SuperAdmin scheduled in. run_at is stored as a UTC
+  // instant (converted at save time); run_hour/weekday are LOCAL to this
+  // zone and converted at due-check time (DST-safe via Intl).
+  timezone    String             @default("Australia/Sydney")
+  run_at      DateTime?          // OneOff: UTC instant
+  frequency   ScheduleFrequency? // Recurring
+  weekday     Int?               // 0 (Sunday) – 6 (Saturday), schedule-local
+  run_hour    Int?               // 0–23, schedule-local
+  enabled     Boolean            @default(true)
+  last_run_at DateTime?
+  // The SuperAdmin who created the schedule. Scheduled runs execute as
+  // this user (gateway ctx user_id, AiCallLog attribution) — a schedule
+  // whose creator was deleted fails its runs until re-owned.
+  created_by  String?
+  creator     User?              @relation("GenerationScheduleCreator", fields: [created_by], references: [id], onDelete: SetNull)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  runs GenerationRun[]
+
+  @@index([enabled, mode])
+}
+
+model GenerationRun {
+  id              String               @id @default(cuid())
+  schedule_id     String?
+  schedule        GenerationSchedule?  @relation(fields: [schedule_id], references: [id], onDelete: SetNull)
+  trigger         GenerationRunTrigger
+  status          GenerationRunStatus  @default(Running)
+  section         Section
+  track           Track
+  difficulty      Int
+  requested_count Int
+  published_count Int                  @default(0)
+  pending_count   Int                  @default(0)
+  failed_count    Int                  @default(0)
+  // Snapshot of auto_publish_enabled at execution time, so run history
+  // reads correctly after the toggle is flipped.
+  auto_publish    Boolean
+  // Run-level fatal error (e.g. schedule creator deleted). Item-level
+  // errors live on GenerationRunItem.error.
+  error           String?
+  started_at      DateTime             @default(now())
+  finished_at     DateTime?
+  // Audit pointer (acting user id), no FK — survives user deletion.
+  created_by      String?
+
+  items GenerationRunItem[]
+
+  @@index([started_at])
+  @@index([schedule_id])
+}
+
+model GenerationRunItem {
+  id        String         @id @default(cuid())
+  run_id    String
+  run       GenerationRun  @relation(fields: [run_id], references: [id], onDelete: Cascade)
+  // The final candidate Test (published or pending). Null when generation
+  // itself failed, or the test was later hard-deleted.
+  test_id   String?
+  test      Test?          @relation(fields: [test_id], references: [id], onDelete: SetNull)
+  outcome   RunItemOutcome
+  // Generation cycles consumed (1–3).
+  attempts  Int
+  // Per-attempt reviewer verdicts: [{ attempt, verdict, issues,
+  // feedback_for_regeneration, reviewer_model }]. The audit trail that
+  // stands in for the human moderator's judgment.
+  verdicts  Json?
+  error     String?
+  createdAt DateTime       @default(now())
+
+  @@index([run_id])
   @@index([test_id])
 }
 
@@ -398,6 +550,7 @@ model User {
   billing_owner_of        Organization[]        @relation("BillingOwner")
   consentRecords          ConsentRecord[]
   dataRightsRequests      DataRightsRequest[]
+  generation_schedules    GenerationSchedule[]  @relation("GenerationScheduleCreator")
 
   @@unique([org_id, email], name: "user_org_email")
   @@unique([org_id, clerk_user_id], name: "user_org_clerk_user_id")
