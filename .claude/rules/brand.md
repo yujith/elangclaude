@@ -35,6 +35,21 @@ in lockstep when changing it.
 - **Do not** alter colors, proportions, or add effects (drop shadow, gradient, outline).
 - B/W version: monochromatic — symbol matches the wordmark color, never mixed.
 
+## Org custom branding is the ONE sanctioned exception (ADR-0023)
+
+Org-scoped surfaces (`(learner)` + `(admin)` layouts) may be retoned by a
+customer org's `OrgBranding` row — accent, dark surface, and a font from the
+vetted allowlist in `packages/db/src/branding.ts`. This works ONLY through
+the CSS-variable override on the role layout's root div; the rules below
+still bind every platform surface (marketing, legal, `(super)`, suspended,
+emails) and all *default* styling. Never widen the exception: no arbitrary
+CSS, no un-vetted fonts, no skipping `validateBranding()`.
+
+Contrast correction from the ADR-0023 axe gate: brand red `#EE2346` on
+white is **4.23:1** — fine for large/bold text and UI components (≥3:1),
+but **14px red text on light backgrounds fails AA**. Use `--brand-red-dark`
+(`#CC1239`, 5.7:1 on white) for small red text.
+
 ## Don't
 
 - ❌ Introduce a new accent color. If a feature "needs" a green or blue, it doesn't — use the red sparingly and let neutrals do the work.

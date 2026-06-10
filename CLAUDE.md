@@ -141,6 +141,26 @@ PDPAs. The old `mailto:` footer links are retired.
 - **Operational records:** `docs/compliance/` (sub-processors, ROPA, breach
   runbook). New env: `CRON_SECRET` (cron auth), `CONSENT_IP_SALT` (IP hashing).
 
+## Org custom branding: live (ADR-0023)
+
+Pulled forward from Phase 2 (2026-06-10). OrgAdmins self-serve at
+`/admin/branding` on every plan: one accent colour, one dark surface, a font
+from a 9-face self-hosted allowlist, and a raster logo (≤1 MB; SVG refused —
+script risk). Everything else is derived/validated in the pure module
+`packages/db/src/branding.ts` — saves that fail the WCAG gates are rejected
+server-side, so unreadable themes are unrepresentable. Delivery is a
+CSS-variable override inlined on the `(learner)`/`(admin)` layout root divs
+(never `:root` — public/`(super)` surfaces stay platform-branded), which
+works because Tailwind 4 utilities resolve through `:root` vars in
+`packages/ui/src/tokens.css`. **Consequence for UI work: in org-scoped
+surfaces always use the `brand-*` utilities, never hardcoded hexes, or the
+surface won't theme.** Logos: `branding/{org_id}/logo.{ext}` in R2, served
+via `GET /api/branding/logo` (session-ctx org only, 302 to 15-min signed
+URL). DB helpers in `packages/db/src/org-branding.ts` (all `withOrg`);
+SuperAdmin reset on `/orgs/[id]` logs `super.branding.reset` under
+`SYSTEM_ORG_ID`. Clerk emails + Stripe surfaces stay platform-branded;
+learners see the org theme from first sign-in (no pre-auth branding — D7).
+
 ## Hard rules — non-negotiable
 
 <important if="touching any database query or API route">
@@ -187,6 +207,8 @@ Organization (id, name, seat_limit, quota_daily, quota_monthly, status,
                subscription_status, trial_end, current_period_end,
                billing_owner_user_id, provisioned_via,
                controller_model, data_region)              -- ADR-0019 compliance
+├─ OrgBranding (id, org_id @unique, enabled, primary_color,
+│               surface_dark_color, font_key, logo_object_key)  -- ADR-0023 white-label
 └─ User (id, org_id, role, ielts_track, deleted_at,        -- soft-delete: deleted_at != null hides + blocks sign-in
          age_assurance, guardian_email, guardian_consent_at, erased_at)  -- ADR-0019
    └─ Attempt (id, user_id, test_id, section, started_at, submitted_at)
@@ -246,7 +268,7 @@ All 4 sections, both tracks, section practice + full mock, AI grading only (no h
 
 ## What's OUT of MVP v1 (don't build yet)
 
-Reviewer/human grading workflow → Phase 2. Native mobile apps → Phase 3. Other languages → Phase 3+. SSO → Phase 2. Custom org branding → Phase 2. Cohort analytics → Phase 2. Live tutors → not on roadmap. Stripe self-serve → Phase 2.
+Reviewer/human grading workflow → Phase 2. Native mobile apps → Phase 3. Other languages → Phase 3+. SSO → Phase 2. ~~Custom org branding → Phase 2~~ shipped early, see ADR-0023. Cohort analytics → Phase 2. Live tutors → not on roadmap. ~~Stripe self-serve → Phase 2~~ shipped, see ADR-0017.
 
 ## When in doubt
 

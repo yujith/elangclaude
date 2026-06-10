@@ -144,6 +144,19 @@ forms and buttons wired via the `form=` attribute outside their form, where
 
 Avoid: corporate banking voice, ed-tech kindergarten voice, Silicon Valley bro voice. Aim for: confident teacher who actually likes their students.
 
+## Org custom branding (ADR-0023)
+
+Customer orgs may retone the `(learner)` and `(admin)` surfaces via
+`OrgBranding` (accent + dark surface + vetted font). Mechanics: a
+CSS-variable override (`--brand-red`, `--brand-black`, `--brand-font-*`)
+inlined on the role layout's root div — never `:root` — so every
+`bg-brand-red`-style utility retones automatically and platform surfaces
+stay locked. When building org-scoped UI, keep using the brand utilities;
+NEVER hardcode `#EE2346`/`#0A0A0A` hexes in JSX, or the surface won't theme.
+Derived shades and WCAG gates live in `packages/db/src/branding.ts`; org
+fonts are self-hosted in `apps/web/public/fonts/` (allowlist only, SVG logos
+refused). The platform defaults below still govern everything else.
+
 ## Quick checklist before shipping any new surface
 
 - [ ] Only red, black, white, and the grey scale used.
@@ -152,7 +165,11 @@ Avoid: corporate banking voice, ed-tech kindergarten voice, Silicon Valley bro v
 - [ ] Logo with proper clear space.
 - [ ] Body type ≥ 16px, line-height 1.5.
 - [ ] Focus rings visible on all interactive elements (`focus-visible:ring-brand-red`).
-- [ ] Contrast checked: red on white ≥ 4.5:1, white on black ≥ 4.5:1, never red on red.
+- [ ] Contrast checked: white on black ≥ 4.5:1, never red on red. **Red on
+      white is 4.23:1** — fine for large/bold text and components (≥3:1),
+      but use `--brand-red-dark` for red text under ~19px on light
+      backgrounds (the old "red on white ≥ 4.5" line here was wrong; an axe
+      gate caught it — ADR-0023).
 - [ ] Tested at 320px, 768px, 1280px, 1920px viewports.
 
 ## Don't

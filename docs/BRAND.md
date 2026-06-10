@@ -81,3 +81,18 @@ Print/digital surfaces, in order of brand prominence:
 4. Test-result feedback page
 5. Admin console
 6. Internal/SuperAdmin tooling (least visible — function over polish)
+
+## Org custom branding (ADR-0023)
+
+Customer orgs may white-label the learner + org-admin surfaces: one accent,
+one dark surface, a font from the vetted SIL-OFL allowlist, and a raster
+logo (always shown on a white plate in dark chrome). Derived shades and
+WCAG contrast gates are enforced in `packages/db/src/branding.ts` — themes
+that would be unreadable cannot be saved. Platform surfaces (marketing,
+legal, sign-in, SuperAdmin console, emails, Stripe) always keep the
+eLanguage Center brand on this page's terms.
+
+Contrast note (caught by the ADR-0023 axe gate): `#EE2346` on white is
+4.23:1 — passes for large/bold text and UI components (≥3:1), fails AA for
+small text. Use `--brand-red-dark` (`#CC1239`) for red text under ~19px on
+light backgrounds.
