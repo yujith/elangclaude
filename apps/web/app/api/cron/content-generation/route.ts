@@ -1,7 +1,17 @@
 // GET /api/cron/content-generation — scheduled content automation (ADR-0024).
 //
-// Runs hourly (see vercel.json). For every due GenerationSchedule it
-// executes the generate → review → publish loop via the automation runner.
+// Tick cadence (see vercel.json): designed for hourly, but Vercel Hobby
+// only allows once-per-day crons (a faster expression FAILS THE WHOLE
+// DEPLOYMENT), so the schedule is daily at 08:00 UTC (≈18:00 Sydney,
+// ±59 min Hobby precision). The due-check's catch-up semantics make this
+// degrade gracefully: every schedule whose local run time has passed
+// fires at the tick. Consequence: recurring run_hours later than the
+// tick's local hour never fire — keep run hours before ~18:00 Sydney,
+// and restore `0 * * * *` on a Pro plan (or drive this endpoint hourly
+// from an external scheduler with the same bearer).
+//
+// For every due GenerationSchedule it executes the generate → review →
+// publish loop via the automation runner.
 //
 // Auth: the shared CRON_SECRET bearer token, exactly like /api/cron/retention.
 //

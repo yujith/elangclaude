@@ -71,9 +71,15 @@ approval, mirroring the human path). Rollback story is ADR-0021 retire.
 unit-tested across both Sydney DST boundaries). Recurring: Daily/Weekly
 with schedule-local `run_hour`/`weekday`, evaluated by `isScheduleDue`
 with catch-up semantics (a missed tick fires later the same local day;
-at most one run per local day). Cron: hourly Vercel Cron →
+at most one run per local day). Cron: Vercel Cron →
 `/api/cron/content-generation`, `CRON_SECRET` bearer (retention
-pattern). Concurrency: schedules are claimed with an optimistic
+pattern). Designed for an hourly tick; **Vercel Hobby allows only
+once-per-day crons** (a faster expression fails the whole deployment),
+so the shipped schedule is daily at 08:00 UTC (≈18:00 Sydney). The
+catch-up due-check degrades gracefully — every schedule whose local
+run time has passed fires at the tick — but recurring `run_hour`s
+later than the tick's local hour never fire. Restore `0 * * * *` on
+Pro, or drive the endpoint hourly from an external scheduler. Concurrency: schedules are claimed with an optimistic
 `updateMany` guard on `last_run_at` before any work — overlapping
 invocations lose the claim. One-offs disable themselves in the claim
 write. Throughput guards: ≤2 schedules per tick, ≤10 tests per run

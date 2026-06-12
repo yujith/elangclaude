@@ -175,7 +175,11 @@ export default async function AutomationPage({
             currently{" "}
             {String(nowSydney.hour).padStart(2, "0")}:
             {String(nowSydney.minute).padStart(2, "0")} there). One-off
-            schedules disable themselves after running.
+            schedules disable themselves after running. The scheduler
+            currently ticks once a day around 18:00 Sydney (hosting-plan
+            limit): schedules fire at the first tick after their time, so
+            pick run hours before 18:00 — later hours won&rsquo;t fire until
+            the plan allows hourly ticks.
           </p>
           <form
             action={createGenerationSchedule}

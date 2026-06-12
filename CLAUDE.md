@@ -166,8 +166,12 @@ learners see the org theme from first sign-in (no pre-auth branding — D7).
 Scheduled generation with a model-reviews-model gate shipped 2026-06-10.
 SuperAdmin schedules batches at `/content/automation` (one-off date or
 Daily/Weekly recurring, **timezone-aware** — wall-clock in the schedule's
-IANA zone, default `Australia/Sydney`); an hourly Vercel Cron hits
-`/api/cron/content-generation` (`CRON_SECRET` bearer). Per slot:
+IANA zone, default `Australia/Sydney`); a Vercel Cron hits
+`/api/cron/content-generation` (`CRON_SECRET` bearer) — **daily at
+08:00 UTC, not hourly**: Vercel Hobby rejects sub-daily cron
+expressions at deploy time. The due-check catches up, but recurring
+run hours after ~18:00 Sydney won't fire until the plan allows
+hourly ticks. Per slot:
 gpt-4.1-mini generates → **Claude Sonnet reviews** (`content-review`
 purpose, prompts in `prompts/review/*.md`) → reject regenerates with the
 reviewer's feedback (max 3 generations) → approve publishes straight to
